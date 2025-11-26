@@ -8,14 +8,14 @@ interface RegistrationFormProps {
   onBack: () => void;
   schools: SchoolType[];
   config: AppSettings;
+  showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config }) => {
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config, showNotification }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   
-  // Simulated Progress State
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState('');
 
@@ -36,7 +36,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [coachName, setCoachName] = useState('');
   const [coachPhone, setCoachPhone] = useState('');
 
-  // 3. Players (Fixed 7 slots as per PDF)
+  // 3. Players
   const [players, setPlayers] = useState(Array(7).fill(null).map((_, i) => ({
     sequence: i + 1,
     name: '',
@@ -66,6 +66,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     }
   }, [slipFile]);
 
+  const notify = (title: string, msg: string, type: 'success' | 'error' | 'info') => {
+      if (showNotification) showNotification(title, msg, type);
+      else alert(`${title}: ${msg}`);
+  };
+
   const updatePlayer = (index: number, field: string, value: any) => {
     const newPlayers = [...players];
     if (field === 'photoFile' && value) {
@@ -90,11 +95,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
 
   const handleSubmit = async () => {
     if (!documentFile || !slipFile) {
-        alert("กรุณาแนบเอกสารและหลักฐานการโอนเงิน");
+        notify("ข้อมูลไม่ครบ", "กรุณาแนบเอกสารและหลักฐานการโอนเงิน", "error");
         return;
     }
     if (!schoolName) {
-        alert("กรุณาระบุชื่อโรงเรียน");
+        notify("ข้อมูลไม่ครบ", "กรุณาระบุชื่อโรงเรียน", "error");
         return;
     }
 
@@ -147,7 +152,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       setIsSuccess(true);
     } catch (error) {
       console.error(error);
-      alert("เกิดข้อผิดพลาดในการส่งข้อมูล");
+      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +176,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   return (
     <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 my-8 relative">
       
-      {/* Progress Overlay */}
       {isSubmitting && (
           <div className="absolute inset-0 z-[60] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-8">
               <div className="w-full max-w-md space-y-4">
@@ -180,10 +184,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                       <span>{uploadProgress}%</span>
                   </div>
                   <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-indigo-600 transition-all duration-500 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
+                      <div className="h-full bg-indigo-600 transition-all duration-500 ease-out" style={{ width: `${uploadProgress}%` }}></div>
                   </div>
                   <p className="text-center text-sm text-slate-400">กรุณาอย่าปิดหน้าต่างนี้ จนกว่าการบันทึกจะเสร็จสิ้น</p>
               </div>
@@ -402,7 +403,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                 <h3>4. เอกสารหลักฐาน</h3>
             </div>
 
-            {/* Bank Info Display from Settings */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
                 <CreditCard className="w-6 h-6 text-blue-600 mt-1 shrink-0" />
                 <div>
@@ -445,7 +445,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
            </div>
         )}
 
-        {/* Navigation */}
         <div className="flex justify-between mt-10 pt-6 border-t border-slate-100">
             {step > 1 ? (
                 <button onClick={() => setStep(step - 1)} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition">

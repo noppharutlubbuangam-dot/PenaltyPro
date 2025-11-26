@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Team, Match } from '../types';
 import { Trophy, Edit2, Check, ArrowRight, UserX, ShieldAlert, Sparkles, GripVertical, PlayCircle, AlertCircle, Lock, Eraser, MapPin, Clock, Calendar, RefreshCw, Minimize2, Maximize2 } from 'lucide-react';
@@ -12,14 +13,14 @@ interface TournamentViewProps {
   onRefresh: () => void;
   onLoginClick: () => void;
   isLoading?: boolean;
+  showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelectMatch, onBack, isAdmin, onRefresh, onLoginClick, isLoading }) => {
+const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelectMatch, onBack, isAdmin, onRefresh, onLoginClick, isLoading, showNotification }) => {
   const [editMode, setEditMode] = useState(false);
   const [localMatches, setLocalMatches] = useState<Match[]>([]);
   const [isLargeBracket, setIsLargeBracket] = useState(false);
   
-  // Modal for Bye/Walkover
   const [walkoverModal, setWalkoverModal] = useState<{match: Match, label: string} | null>(null);
 
   useEffect(() => {
@@ -29,7 +30,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
   }, [teams.length]);
 
   useEffect(() => {
-      // Match sync logic (same as before)
       const savedLayout = localStorage.getItem('bracket_layout_backup');
       let cachedMatches: Match[] = [];
       if (savedLayout) {
@@ -78,14 +78,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
 
   const getScheduledMatch = (label: string) => localMatches.find(m => m.roundLabel === label);
 
-  // Drag & Drop handlers (Same as before)
   const handleDragStart = (e: React.DragEvent, name: string) => {
       e.dataTransfer.setData('text/plain', name);
       e.dataTransfer.effectAllowed = 'copyMove';
   };
 
   const handleDrop = async (teamName: string, roundLabel: string, slot: 'A' | 'B') => {
-      // ... existing drop logic ...
       let updatedMatch: Match | null = null;
       setLocalMatches(prev => {
           const newMatches = [...prev];
@@ -122,7 +120,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
   };
 
   const handleMatchDetailsUpdate = async (match: Match, updates: Partial<Match>) => {
-      // ... existing update details logic ...
       const updatedMatch = { ...match, ...updates };
       setLocalMatches(prev => prev.map(m => m.id === match.id ? updatedMatch : m));
       const teamA = typeof updatedMatch.teamA === 'object' ? updatedMatch.teamA.name : updatedMatch.teamA;
@@ -132,7 +129,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
   };
 
   const handleWalkover = async (winner: string) => {
-     // ... existing walkover logic ...
      if (!walkoverModal) return;
      const matchId = walkoverModal.match.id || `M_${walkoverModal.label}_${Date.now()}`;
      const dummyMatch: any = {
@@ -147,12 +143,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
      const payload = { ...dummyMatch, roundLabel: walkoverModal.label };
      await saveMatchToSheet(payload, "ชนะบาย (Walkover) / สละสิทธิ์");
      setWalkoverModal(null);
+     if (showNotification) showNotification("เรียบร้อย", "บันทึกผลชนะบายแล้ว", "success");
      onRefresh();
   };
 
   const approvedTeams = teams.filter(t => t.status === 'Approved');
 
-  // ROUND ARRAYS
   const round32_A = Array(8).fill(null).map((_, i) => ({ label: `R32-${i+1}`, title: `R32 คู่ที่ ${i+1}` }));
   const round16_A = Array(4).fill(null).map((_, i) => ({ label: `R16-${i+1}`, title: `R16 คู่ที่ ${i+1}` }));
   const quarters_A = Array(2).fill(null).map((_, i) => ({ label: `QF${i+1}`, title: `QF คู่ที่ ${i+1}` }));
@@ -165,7 +161,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
 
   return (
     <div className="w-full max-w-[98%] mx-auto p-2 md:p-4 min-h-screen flex flex-col">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 sticky top-0 z-30">
          <div className="w-full md:w-auto">
              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -194,11 +189,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
 
       <div className="flex flex-col lg:flex-row gap-6 flex-1 items-start relative">
           
-          {/* Sidebar */}
           {editMode && isAdmin && (
             <div className="lg:w-64 w-full bg-white rounded-xl shadow-lg border border-slate-200 p-4 lg:sticky top-28 max-h-[300px] lg:max-h-[calc(100vh-120px)] overflow-y-auto z-40">
                 <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2"><UserX className="w-4 h-4" /> ทีม</h3>
-                {/* ... Drag Items ... */}
                 <div className="mb-4 pb-4 border-b border-slate-100">
                     <div draggable onDragStart={(e) => handleDragStart(e, "Wildcard")} className="p-3 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg cursor-grab text-sm font-bold flex gap-2 mb-2"><Sparkles className="w-4 h-4" /> Wildcard</div>
                     <div draggable onDragStart={(e) => handleDragStart(e, "CLEAR_SLOT")} className="p-2 bg-red-50 border border-red-200 text-red-500 rounded-lg cursor-grab text-xs text-center"><Eraser className="w-3 h-3 inline" /> ล้างช่อง</div>
@@ -211,16 +204,13 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
             </div>
           )}
 
-          {/* Bracket Container - Mobile Optimized */}
           <div className="flex-1 w-full overflow-x-auto pb-10 custom-scrollbar -webkit-overflow-scrolling-touch">
-             {/* Visual Hint for scrolling on mobile */}
              <div className="md:hidden text-center text-slate-400 text-xs mb-2 flex items-center justify-center gap-2 opacity-50">
                  <ArrowRight className="w-3 h-3" /> เลื่อนเพื่อดูสายการแข่งขัน <ArrowRight className="w-3 h-3" />
              </div>
 
              <div className={`flex flex-col gap-8 ${isLargeBracket ? 'min-w-[1400px]' : 'min-w-[1100px]'}`}>
                  
-                 {/* Line A */}
                  <div className="bg-blue-50/50 p-4 md:p-6 rounded-3xl border border-blue-100 shadow-inner">
                      <div className="mb-6 flex items-center gap-2 text-blue-800 font-bold uppercase tracking-wider border-b border-blue-200 pb-2">
                         <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs shadow-sm">Line A</span> สายบน
@@ -229,38 +219,36 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
                         {isLargeBracket && (
                             <>
                                 <BracketColumn title="รอบ 32" color="border-slate-300">
-                                    {isLoading ? <BracketSkeleton count={8} /> : round32_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                                    {isLoading ? <BracketSkeleton count={8} /> : round32_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                                 </BracketColumn>
                                 <ArrowRight className="text-slate-300 w-4" />
                             </>
                         )}
                         <BracketColumn title="รอบ 16" color="border-slate-300">
-                             {isLoading ? <BracketSkeleton count={4} /> : round16_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={4} /> : round16_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                         <ArrowRight className="text-blue-200 w-6" />
                         <BracketColumn title="รอบ 8" color="border-indigo-300">
-                             {isLoading ? <BracketSkeleton count={2} /> : quarters_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={2} /> : quarters_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                          <ArrowRight className="text-indigo-200 w-6" />
                         <BracketColumn title="รอบรองฯ" color="border-orange-300">
-                             {isLoading ? <BracketSkeleton count={1} /> : semis_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={1} /> : semis_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                      </div>
                  </div>
 
-                 {/* Final */}
                  <div className="flex justify-end pr-20 -my-4 relative z-10">
                      <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-8 w-0.5 bg-slate-300"></div>
                         <div className="bg-gradient-to-b from-yellow-50 to-yellow-100 p-6 rounded-xl border-2 border-yellow-400 shadow-xl relative transform scale-110">
                              <h3 className="text-center font-black text-yellow-700 text-lg mb-2 uppercase tracking-widest flex items-center justify-center gap-2"><Trophy className="w-5 h-5" /> Final</h3>
-                             {isLoading ? <BracketSkeleton count={1} /> : final.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} isFinal />)}
+                             {isLoading ? <BracketSkeleton count={1} /> : final.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} isFinal showNotification={showNotification} />)}
                         </div>
                         <div className="h-8 w-0.5 bg-slate-300"></div>
                      </div>
                  </div>
 
-                 {/* Line B */}
                  <div className="bg-red-50/50 p-4 md:p-6 rounded-3xl border border-red-100 shadow-inner">
                      <div className="mb-6 flex items-center gap-2 text-red-800 font-bold uppercase tracking-wider border-b border-red-200 pb-2">
                         <span className="bg-red-600 text-white px-3 py-1 rounded-full text-xs shadow-sm">Line B</span> สายล่าง
@@ -269,21 +257,21 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
                         {isLargeBracket && (
                             <>
                                 <BracketColumn title="รอบ 32" color="border-slate-300">
-                                    {isLoading ? <BracketSkeleton count={8} /> : round32_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                                    {isLoading ? <BracketSkeleton count={8} /> : round32_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                                 </BracketColumn>
                                 <ArrowRight className="text-slate-300 w-4" />
                             </>
                         )}
                         <BracketColumn title="รอบ 16" color="border-slate-300">
-                             {isLoading ? <BracketSkeleton count={4} /> : round16_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={4} /> : round16_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                         <ArrowRight className="text-red-200 w-6" />
                         <BracketColumn title="รอบ 8" color="border-indigo-300">
-                             {isLoading ? <BracketSkeleton count={2} /> : quarters_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={2} /> : quarters_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                          <ArrowRight className="text-indigo-200 w-6" />
                         <BracketColumn title="รอบรองฯ" color="border-orange-300">
-                             {isLoading ? <BracketSkeleton count={1} /> : semis_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} />)}
+                             {isLoading ? <BracketSkeleton count={1} /> : semis_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                      </div>
                  </div>
@@ -292,13 +280,47 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
           </div>
       </div>
       
-      {/* Modals... */}
-      {walkoverModal && ( /* ... same ... */ <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-xl p-6"><p>Walkover Logic Here</p><button onClick={() => setWalkoverModal(null)}>Close</button></div></div>)}
+      {walkoverModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in duration-200">
+                  <div className="flex items-center gap-3 text-orange-600 mb-4 border-b pb-2">
+                      <ShieldAlert className="w-6 h-6" />
+                      <h3 className="font-bold text-lg">บันทึกผลชนะบาย / ปรับแพ้</h3>
+                  </div>
+                  <p className="text-slate-600 mb-6">กรุณาเลือกทีมที่ <b>ชนะ</b> (ทีมอีกฝ่ายจะถูกปรับแพ้ 0-3)</p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                      {walkoverModal.match.teamA && (
+                          <button 
+                            onClick={() => handleWalkover(typeof walkoverModal.match.teamA === 'object' ? walkoverModal.match.teamA.name : walkoverModal.match.teamA as string)}
+                            className="p-4 bg-slate-50 hover:bg-green-50 border border-slate-200 hover:border-green-500 rounded-xl transition group"
+                          >
+                              <span className="font-bold block text-lg mb-1 group-hover:text-green-700">
+                                {typeof walkoverModal.match.teamA === 'object' ? walkoverModal.match.teamA.name : walkoverModal.match.teamA}
+                              </span>
+                              <span className="text-xs text-slate-400 group-hover:text-green-600">ชนะผ่าน</span>
+                          </button>
+                      )}
+                      {walkoverModal.match.teamB && (
+                          <button 
+                            onClick={() => handleWalkover(typeof walkoverModal.match.teamB === 'object' ? walkoverModal.match.teamB.name : walkoverModal.match.teamB as string)}
+                            className="p-4 bg-slate-50 hover:bg-green-50 border border-slate-200 hover:border-green-500 rounded-xl transition group"
+                          >
+                              <span className="font-bold block text-lg mb-1 group-hover:text-green-700">
+                                {typeof walkoverModal.match.teamB === 'object' ? walkoverModal.match.teamB.name : walkoverModal.match.teamB}
+                              </span>
+                              <span className="text-xs text-slate-400 group-hover:text-green-600">ชนะผ่าน</span>
+                          </button>
+                      )}
+                  </div>
+                  <button onClick={() => setWalkoverModal(null)} className="w-full mt-6 py-2 text-slate-400 hover:text-slate-600 border rounded-lg">ยกเลิก</button>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
 
-// SKELETON
 const BracketSkeleton: React.FC<{count: number}> = ({count}) => (
     <>
         {Array(count).fill(0).map((_, i) => (
@@ -311,8 +333,6 @@ const BracketSkeleton: React.FC<{count: number}> = ({count}) => (
     </>
 );
 
-// Helper Components (BracketColumn, BracketNode) - Keeping imports clean by relying on the fact they are defined in this file in previous iterations. 
-// *NOTE to AI*: In a real file, ensure BracketColumn and BracketNode are defined below or imported. I will assume they exist as per previous context.
 const BracketColumn: React.FC<{title: string, children: React.ReactNode, color: string}> = ({ title, children, color }) => (
     <div className={`flex flex-col gap-4 min-w-[260px] border-l-4 ${color} pl-6 py-2`}>
         <h4 className="font-bold text-slate-400 uppercase text-xs tracking-widest mb-2">{title}</h4>
@@ -322,11 +342,21 @@ const BracketColumn: React.FC<{title: string, children: React.ReactNode, color: 
     </div>
 );
 
-const BracketNode: React.FC<BracketNodeProps> = ({ slot, match, isEditing, isAdmin, onDrop, onPlay, fullTeams, onWalkover, onUpdateDetails, isFinal }) => {
-    // ... (Implementation identical to previous version, just ensure it's present) ...
-    // For brevity in this response, assuming the component logic persists.
-    // If logic is needed, please ask to reprint the full BracketNode.
-    // START SHORTENED FOR RESPONSE LIMITS - BUT FULL LOGIC IS IMPLIED
+interface BracketNodeProps {
+    slot: { label: string, title: string };
+    match?: Match;
+    isEditing: boolean;
+    isAdmin: boolean;
+    onDrop: (teamName: string, roundLabel: string, slot: 'A' | 'B') => void;
+    onPlay: (teamA: Team, teamB: Team, matchId: string) => void;
+    fullTeams: Team[];
+    onWalkover: (match: Match) => void;
+    onUpdateDetails: (match: Match, updates: Partial<Match>) => void;
+    isFinal?: boolean;
+    showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+}
+
+const BracketNode: React.FC<BracketNodeProps> = ({ slot, match, isEditing, isAdmin, onDrop, onPlay, fullTeams, onWalkover, onUpdateDetails, isFinal, showNotification }) => {
     const [isDragOverA, setIsDragOverA] = useState(false);
     const [isDragOverB, setIsDragOverB] = useState(false);
     const teamA_Name = typeof match?.teamA === 'object' ? match.teamA.name : match?.teamA;
@@ -335,7 +365,7 @@ const BracketNode: React.FC<BracketNodeProps> = ({ slot, match, isEditing, isAdm
     const resolveTeamDisplay = (name: string | undefined) => {
         if (!name) return null;
         if (name === 'Wildcard') return { name: 'Wildcard', style: 'bg-purple-50 text-purple-700 border-purple-300 border-dashed', isWildcard: true };
-        const realTeam = fullTeams.find(t => t.name === name);
+        const realTeam = fullTeams.find((t: Team) => t.name === name);
         if (realTeam) return { name: realTeam.name, style: 'bg-white border-slate-200 text-slate-800 shadow-sm', logo: realTeam.logoUrl, isWildcard: false };
         return { name: name, style: 'bg-white border-slate-200 text-slate-800 shadow-sm', isWildcard: false };
     };
@@ -362,7 +392,7 @@ const BracketNode: React.FC<BracketNodeProps> = ({ slot, match, isEditing, isAdm
              </div>
              {match && (match.venue || match.scheduledTime) && !isEditing && (<div className="px-3 py-2 bg-indigo-50 border-t border-indigo-100 flex flex-col gap-1">{match.venue && <div className="flex items-center gap-1.5 text-indigo-700 text-[10px] font-bold"><MapPin className="w-3 h-3" /> {match.venue}</div>}{match.scheduledTime && <div className="flex items-center gap-1.5 text-indigo-600 text-[10px]"><Calendar className="w-3 h-3" /> {new Date(match.scheduledTime).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} <span className="mx-0.5">|</span><Clock className="w-3 h-3" />{new Date(match.scheduledTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>}</div>)}
              {isEditing && match && (tA || tB) && (<div className="px-3 py-2 bg-slate-100 border-t border-slate-200 space-y-2"><input type="text" placeholder="สนาม" className="w-full p-1 text-xs border rounded" defaultValue={match.venue || ''} onBlur={(e) => onUpdateDetails(match, { venue: e.target.value })} /><input type="datetime-local" className="w-full p-1 text-xs border rounded" defaultValue={match.scheduledTime ? new Date(match.scheduledTime).toISOString().slice(0, 16) : ''} onBlur={(e) => onUpdateDetails(match, { scheduledTime: e.target.value })} /></div>)}
-             {!isEditing && tA && tB && !match?.winner && (<div className="absolute inset-0 bg-white/80 opacity-0 hover:opacity-100 flex items-center justify-center gap-3 transition backdrop-blur-sm z-10"><button onClick={() => { const objA = fullTeams.find(t => t.name === tA.name) || { id: 'tempA', name: tA.name, color: '#2563EB' } as any; const objB = fullTeams.find(t => t.name === tB.name) || { id: 'tempB', name: tB.name, color: '#E11D48' } as any; if(tA.isWildcard || tB.isWildcard) { alert("ใช้ Wildcard ไม่ได้"); return; } onPlay(objA, objB, match?.id || `M_${slot.label}_${Date.now()}`); }} className="p-3 bg-indigo-600 text-white rounded-full hover:scale-110 transition shadow-lg hover:bg-indigo-700"><PlayCircle className="w-8 h-8" /></button>{isAdmin && <button onClick={() => match && onWalkover(match)} className="p-3 bg-orange-100 text-orange-600 rounded-full hover:scale-110 transition shadow-sm border border-orange-200"><AlertCircle className="w-6 h-6" /></button>}</div>)}
+             {!isEditing && tA && tB && !match?.winner && (<div className="absolute inset-0 bg-white/80 opacity-0 hover:opacity-100 flex items-center justify-center gap-3 transition backdrop-blur-sm z-10"><button onClick={() => { const objA = fullTeams.find((t: any) => t.name === tA.name) || { id: 'tempA', name: tA.name, color: '#2563EB' } as any; const objB = fullTeams.find((t: any) => t.name === tB.name) || { id: 'tempB', name: tB.name, color: '#E11D48' } as any; if(tA.isWildcard || tB.isWildcard) { if (showNotification) showNotification("แจ้งเตือน", "ใช้ Wildcard ไม่ได้", "warning"); else alert("ใช้ Wildcard ไม่ได้"); return; } onPlay(objA, objB, match?.id || `M_${slot.label}_${Date.now()}`); }} className="p-3 bg-indigo-600 text-white rounded-full hover:scale-110 transition shadow-lg hover:bg-indigo-700"><PlayCircle className="w-8 h-8" /></button>{isAdmin && <button onClick={() => match && onWalkover(match)} className="p-3 bg-orange-100 text-orange-600 rounded-full hover:scale-110 transition shadow-sm border border-orange-200"><AlertCircle className="w-6 h-6" /></button>}</div>)}
         </div>
     );
 };

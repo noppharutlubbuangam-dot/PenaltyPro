@@ -11,9 +11,10 @@ interface AdminDashboardProps {
   onLogout: () => void;
   onRefresh: () => void;
   news?: NewsItem[];
+  showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, players: initialPlayers, settings, onLogout, onRefresh, news = [] }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, players: initialPlayers, settings, onLogout, onRefresh, news = [], showNotification }) => {
   const [activeTab, setActiveTab] = useState<'teams' | 'settings' | 'news'>('teams');
   
   // Local state for UI updates
@@ -96,19 +97,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       return age;
   };
 
+  const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
+      if (showNotification) showNotification(title, msg, type);
+      else alert(`${title}: ${msg}`);
+  };
+
   const handleStatusUpdate = async (teamId: string, status: 'Approved' | 'Rejected') => {
-    // Use current editForm team if available, else find in localTeams
     const currentTeam = editForm?.team || localTeams.find(t => t.id === teamId);
     if (!currentTeam) return;
     
     let rejectReason = '';
     if (status === 'Rejected') {
         const reason = prompt("กรุณาระบุเหตุผลที่ไม่อนุมัติ (เพื่อให้ทีมแก้ไข):");
-        if (reason === null) return; // Cancelled
+        if (reason === null) return;
         rejectReason = reason;
     }
 
-    // Optimistically update UI
     setIsSavingTeam(true);
     const updatedTeam = { ...currentTeam, status, rejectReason };
     
@@ -117,13 +121,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
     
     try {
         await updateTeamStatus(teamId, status, updatedTeam.group, rejectReason);
-        alert(status === 'Approved' ? "อนุมัติทีมเรียบร้อย" : "บันทึกการไม่อนุมัติเรียบร้อย");
-        // Close modal if successful? Or stay to see status change? Let's stay.
+        notify("สำเร็จ", status === 'Approved' ? "อนุมัติทีมเรียบร้อย" : "บันทึกการไม่อนุมัติเรียบร้อย", "success");
         onRefresh();
     } catch (e) {
         console.error(e);
-        alert("บันทึกสถานะไม่สำเร็จ กรุณาลองใหม่");
-        // Revert optimistic update on error
+        notify("ผิดพลาด", "บันทึกสถานะไม่สำเร็จ", "error");
         setLocalTeams(initialTeams); 
     } finally {
         setIsSavingTeam(false);
@@ -135,10 +137,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
     await saveSettings(configForm);
     await onRefresh();
     setIsSavingSettings(false);
-    alert('บันทึกการตั้งค่าเรียบร้อย');
+    notify("สำเร็จ", "บันทึกการตั้งค่าเรียบร้อย", "success");
   };
 
-  // Team Editing Logic
   const handleEditFieldChange = (field: keyof Team, value: string) => {
       if (editForm) {
           setEditForm({ ...editForm, team: { ...editForm.team, [field]: value } });
@@ -209,11 +210,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setSelectedTeam(teamToSave); 
           setIsEditingTeam(false);
           
-          alert("บันทึกผลการแก้ไขแล้ว");
+          notify("สำเร็จ", "บันทึกผลการแก้ไขแล้ว", "success");
           onRefresh();
       } catch (error) {
           console.error(error);
-          alert("เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่");
+          notify("ผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก", "error");
       } finally {
           setIsSavingTeam(false);
       }
@@ -235,7 +236,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
   const handleSaveNews = async () => {
       if(!newsForm.title || !newsForm.content) {
-          alert("กรุณาระบุหัวข้อและเนื้อหาข่าว");
+          notify("ข้อมูลไม่ครบ", "กรุณาระบุหัวข้อและเนื้อหาข่าว", "warning");
           return;
       }
       setIsSavingNews(true);
@@ -259,10 +260,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
         
         setNewsForm({ id: null, title: '', content: '', imageFile: null, imagePreview: null, docFile: null });
         setIsEditingNews(false);
-        alert(isEditingNews ? "แก้ไขข่าวเรียบร้อย" : "เพิ่มข่าวเรียบร้อย");
+        notify("สำเร็จ", isEditingNews ? "แก้ไขข่าวเรียบร้อย" : "เพิ่มข่าวเรียบร้อย", "success");
         await onRefresh();
       } catch (e) {
-         alert("เกิดข้อผิดพลาด: " + e);
+         notify("ผิดพลาด", "เกิดข้อผิดพลาด: " + e, "error");
       } finally {
         setIsSavingNews(false);
       }
@@ -278,8 +279,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
         await manageNews('delete', { id: deleteNewsId });
         await onRefresh();
         setDeleteNewsId(null);
+        notify("สำเร็จ", "ลบข่าวเรียบร้อย", "success");
       } catch (e) {
-          alert("ลบข่าวไม่สำเร็จ");
+          notify("ผิดพลาด", "ลบข่าวไม่สำเร็จ", "error");
       }
   };
 
@@ -322,13 +324,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("CSV Download Error:", e);
-      alert("เกิดข้อผิดพลาดในการดาวน์โหลด CSV");
+      notify("ผิดพลาด", "ดาวน์โหลด CSV ไม่สำเร็จ", "error");
     }
   };
 
   const copyToClipboard = (text: string) => {
       navigator.clipboard.writeText(text);
-      alert(`คัดลอก "${text}" แล้ว`);
+      notify("คัดลอกแล้ว", text, "info");
   };
 
   return (
@@ -432,7 +434,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
             </div>
         )}
 
-        {/* NEWS TAB & SETTINGS TAB (Content Omitted for Brevity - Same as before) */}
+        {/* NEWS TAB & SETTINGS TAB */}
         {activeTab === 'news' && (
             <div className="animate-in fade-in duration-300 max-w-4xl mx-auto">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
