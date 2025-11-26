@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Team, Standing } from '../types';
 import { Trophy, ArrowLeft, Calendar, LayoutGrid } from 'lucide-react';
@@ -7,10 +6,27 @@ interface StandingsViewProps {
   matches: any[]; 
   teams: Team[];
   onBack: () => void;
+  isLoading?: boolean;
 }
 
-const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack }) => {
+const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, isLoading }) => {
   
+  if (isLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8 pb-24">
+            <div className="max-w-5xl mx-auto animate-pulse">
+                <div className="h-8 w-64 bg-slate-200 rounded mb-8"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                    <div className="h-64 bg-slate-200 rounded-2xl"></div>
+                    <div className="h-64 bg-slate-200 rounded-2xl"></div>
+                </div>
+                <div className="h-96 bg-slate-200 rounded-2xl"></div>
+            </div>
+        </div>
+      );
+  }
+
+  // ... Existing Logic ...
   const standings: Record<string, Standing> = {};
   
   teams.forEach(t => {
@@ -28,7 +44,6 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack })
     };
   });
 
-  // Process matches
   matches.forEach(m => {
     if (!m.winner || m.winner === '') return; 
 
@@ -36,15 +51,10 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack })
     const teamB = standings[m.teamB];
     
     if (teamA && teamB) {
-        // Only count stats if it's a group match or if we treat all matches as stats
-        // For now, we count all matches towards the table of their assigned group
-        
         teamA.played++;
         teamB.played++;
-        
         const scoreA = parseInt(m.scoreA || '0');
         const scoreB = parseInt(m.scoreB || '0');
-
         teamA.goalsFor += scoreA;
         teamA.goalsAgainst += scoreB;
         teamB.goalsFor += scoreB;
@@ -62,7 +72,6 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack })
     }
   });
 
-  // Group standings by Group Label (A, B, C...)
   const groupedStandings: Record<string, Standing[]> = {};
   Object.values(standings).forEach(s => {
       const g = s.group || 'Unassigned';
@@ -70,7 +79,6 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack })
       groupedStandings[g].push(s);
   });
 
-  // Sort each group
   Object.keys(groupedStandings).forEach(key => {
       groupedStandings[key].sort((a, b) => {
           if (b.points !== a.points) return b.points - a.points;
