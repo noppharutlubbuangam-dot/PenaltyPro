@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NewsItem } from '../types';
-import { Calendar, Bell, X, FileText, Download } from 'lucide-react';
+import { Calendar, Bell, X, FileText, Download, Share2 } from 'lucide-react';
+import { shareNews } from '../services/liffService';
 
 interface NewsFeedProps {
   news: NewsItem[];
@@ -9,6 +10,11 @@ interface NewsFeedProps {
 
 const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  const handleShare = (e: React.MouseEvent, item: NewsItem) => {
+      e.stopPropagation();
+      shareNews(item);
+  };
 
   if (isLoading) {
     return (
@@ -35,7 +41,6 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
 
   if (!news || news.length === 0) return null;
 
-  // Sort by date descending
   const sortedNews = [...news].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
@@ -50,7 +55,7 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
            {sortedNews.map(item => (
                <div 
                   key={item.id} 
-                  className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition group cursor-pointer"
+                  className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition group cursor-pointer relative"
                   onClick={() => setSelectedNews(item)}
                >
                    {item.imageUrl && (
@@ -63,9 +68,12 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
                        </div>
                    )}
                    <div className="p-5">
-                       <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
-                           <Calendar className="w-3 h-3" />
-                           {new Date(item.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                       <div className="flex justify-between items-start mb-2">
+                           <div className="flex items-center gap-2 text-xs text-slate-400">
+                               <Calendar className="w-3 h-3" />
+                               {new Date(item.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                           </div>
+                           <button onClick={(e) => handleShare(e, item)} className="text-indigo-600 hover:text-indigo-800 p-1 rounded-full hover:bg-indigo-50"><Share2 className="w-4 h-4" /></button>
                        </div>
                        <h4 className="font-bold text-slate-800 text-lg mb-2 line-clamp-2 group-hover:text-indigo-600 transition">{item.title}</h4>
                        <p className="text-slate-600 text-sm line-clamp-3 whitespace-pre-line">{item.content}</p>
@@ -80,7 +88,6 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
         </div>
       </div>
 
-      {/* News Detail Modal */}
       {selectedNews && (
         <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8">
@@ -97,9 +104,12 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
                 </div>
                 
                 <div className="p-6 md:p-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(selectedNews.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(selectedNews.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <button onClick={(e) => handleShare(e, selectedNews)} className="flex items-center gap-1 text-indigo-600 font-bold text-sm hover:bg-indigo-50 px-3 py-1 rounded-lg"><Share2 className="w-4 h-4" /> แชร์</button>
                     </div>
                     
                     <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-6 leading-tight">

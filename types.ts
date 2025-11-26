@@ -9,13 +9,14 @@ export enum KickResult {
 
 export interface AppSettings {
   competitionName: string;
-  competitionLogo: string; // New Field
+  competitionLogo: string; 
   bankName: string;
   bankAccount: string;
   accountName: string;
   locationName: string;
   locationLink: string;
   announcement: string;
+  adminPin?: string; // New Field for Secure Recording
 }
 
 export interface NewsItem {
@@ -23,7 +24,7 @@ export interface NewsItem {
   title: string;
   content: string;
   imageUrl?: string;
-  documentUrl?: string; // New: For PDF/Docs
+  documentUrl?: string; 
   timestamp: number;
 }
 
@@ -36,19 +37,17 @@ export interface School {
 
 export interface Team {
   id: string;
-  name: string; // School Name
+  name: string; 
   shortName: string;
   color: string;
   logoUrl: string;
   status?: 'Pending' | 'Approved' | 'Rejected';
-  group?: string; // New Field for Round Robin (e.g. "A", "B")
-  rejectReason?: string; // Reason for rejection
+  group?: string; 
+  rejectReason?: string; 
   
-  // Documents
   docUrl?: string;
   slipUrl?: string;
 
-  // New Fields from PDF
   district?: string;
   province?: string;
   directorName?: string;
@@ -62,10 +61,10 @@ export interface Player {
   id: string;
   teamId: string;
   name: string;
-  number: string; // Used as Sequence Number (1-7)
+  number: string; 
   position: string;
   photoUrl: string;
-  birthDate?: string; // DD/MM/YYYY
+  birthDate?: string; 
 }
 
 export interface Kick {
@@ -80,18 +79,18 @@ export interface Kick {
 
 export interface Match {
   id: string;
-  teamA: Team | string; // Object or Name
+  teamA: Team | string; 
   teamB: Team | string;
   scoreA: number;
   scoreB: number;
-  winner: 'A' | 'B' | string | null; // 'A', 'B' or TeamName
+  winner: 'A' | 'B' | string | null; 
   date: string;
   summary?: string;
   kicks?: Kick[];
-  roundLabel?: string; // e.g. "QF1", "SF1", "Group A"
+  roundLabel?: string; 
   status?: 'Scheduled' | 'Finished' | 'Walkover';
-  venue?: string; // e.g. "สนาม A"
-  scheduledTime?: string; // ISO string or Time string
+  venue?: string; 
+  scheduledTime?: string; 
 }
 
 export interface MatchState {
@@ -108,35 +107,25 @@ export interface MatchState {
   roundLabel?: string;
 }
 
-// Updated Registration Data based on PDF
 export interface RegistrationData {
-  // School Info
   schoolName: string;
   district: string;
   province: string;
   phone: string;
-  
-  // Personnel
   directorName: string;
   managerName: string;
   managerPhone: string;
   coachName: string;
   coachPhone: string;
-  
-  // Team Assets
   color: string;
-  logoFile: string | null; // Base64
-  
-  // Documents
-  documentFile: string | null; // Base64
-  slipFile: string | null; // Base64
-  
-  // Players (Exactly 7)
+  logoFile: string | null; 
+  documentFile: string | null; 
+  slipFile: string | null; 
   players: {
-    sequence: number; // 1-7
+    sequence: number; 
     name: string;
-    birthDate: string; // Day/Month/Year
-    photoFile: string | null; // Base64
+    birthDate: string; 
+    photoFile: string | null; 
   }[];
 }
 
@@ -144,11 +133,11 @@ export interface Standing {
   teamId: string;
   teamName: string;
   logoUrl: string;
-  group: string; // Added for grouping
+  group: string; 
   played: number;
   won: number;
   lost: number;
-  goalsFor: number; // Successful Penalties
-  goalsAgainst: number; // Penalties Conceded
-  points: number; // Added for Round Robin ranking (Win = 3, Loss = 0)
+  goalsFor: number; 
+  goalsAgainst: number; 
+  points: number; 
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Team, Standing } from '../types';
 import { Trophy, ArrowLeft, Calendar, LayoutGrid } from 'lucide-react';
@@ -26,7 +27,6 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
       );
   }
 
-  // ... Existing Logic ...
   const standings: Record<string, Standing> = {};
   
   teams.forEach(t => {
@@ -34,7 +34,7 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
       teamId: t.id,
       teamName: t.name,
       logoUrl: t.logoUrl,
-      group: t.group || 'General', // Default group if none assigned
+      group: t.group || 'General', 
       played: 0,
       won: 0,
       lost: 0,
@@ -46,6 +46,11 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
 
   matches.forEach(m => {
     if (!m.winner || m.winner === '') return; 
+    
+    // STRICT FILTER FOR GROUP STAGE
+    // Check if the round label contains "Group" (case insensitive) or "กลุ่ม" or "สาย"
+    const label = m.roundLabel || '';
+    if (!label.toLowerCase().match(/group|กลุ่ม|สาย/)) return;
 
     const teamA = standings[m.teamA];
     const teamB = standings[m.teamB];

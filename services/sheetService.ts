@@ -1,6 +1,5 @@
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem } from '../types';
 
-// HARDCODED URL AS REQUESTED
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
 export const getStoredScriptUrl = (): string | null => {
@@ -40,7 +39,10 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
         teams: data.teams || [],
         players: data.players || [],
         matches: data.matches || [],
-        config: data.config || {},
+        config: {
+            ...data.config,
+            adminPin: data.config.adminPin || '1234' // Ensure fallback or mapped from sheet
+        } || {},
         schools: data.schools || [],
         news: data.news || []
     };
@@ -50,6 +52,7 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
+// ... (Rest of the functions remain unchanged) ...
 export const manageNews = async (actionType: 'add' | 'delete' | 'edit', newsItem: Partial<NewsItem>) => {
     try {
       await fetch(API_URL, {
@@ -57,16 +60,10 @@ export const manageNews = async (actionType: 'add' | 'delete' | 'edit', newsItem
         mode: 'no-cors',
         redirect: 'follow',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ 
-            action: 'manageNews', 
-            subAction: actionType,
-            newsItem 
-        })
+        body: JSON.stringify({ action: 'manageNews', subAction: actionType, newsItem })
       });
       return true;
-    } catch (error) {
-      return false;
-    }
+    } catch (error) { return false; }
 };
 
 export const updateTeamStatus = async (teamId: string, status: string, group?: string, reason?: string) => {
@@ -79,31 +76,20 @@ export const updateTeamStatus = async (teamId: string, status: string, group?: s
       body: JSON.stringify({ action: 'updateStatus', teamId, status, group, reason })
     });
     return true;
-  } catch (error) {
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const updateTeamData = async (team: Partial<Team>, players: Partial<Player>[]) => {
-  const payload = {
-    action: 'updateTeamData',
-    team,
-    players
-  };
-  
   try {
     await fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ action: 'updateTeamData', team, players })
     });
     return true;
-  } catch (error) {
-    console.error("Failed to update team:", error);
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const saveSettings = async (settings: AppSettings) => {
@@ -116,9 +102,7 @@ export const saveSettings = async (settings: AppSettings) => {
       body: JSON.stringify({ action: 'saveSettings', settings })
     });
     return true;
-  } catch (error) {
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const scheduleMatch = async (matchId: string, teamA: string, teamB: string, roundLabel: string, venue?: string, scheduledTime?: string) => {
@@ -128,20 +112,10 @@ export const scheduleMatch = async (matchId: string, teamA: string, teamB: strin
       mode: 'no-cors',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ 
-          action: 'scheduleMatch', 
-          matchId, 
-          teamA, 
-          teamB, 
-          roundLabel,
-          venue: venue || '',
-          scheduledTime: scheduledTime || ''
-      })
+      body: JSON.stringify({ action: 'scheduleMatch', matchId, teamA, teamB, roundLabel, venue: venue || '', scheduledTime: scheduledTime || '' })
     });
     return true;
-  } catch (error) {
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const deleteMatch = async (matchId: string) => {
@@ -151,15 +125,10 @@ export const deleteMatch = async (matchId: string) => {
       mode: 'no-cors',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ 
-          action: 'deleteMatch', 
-          matchId
-      })
+      body: JSON.stringify({ action: 'deleteMatch', matchId })
     });
     return true;
-  } catch (error) {
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const saveMatchToSheet = async (matchState: MatchState, summary: string) => {
@@ -172,12 +141,8 @@ export const saveMatchToSheet = async (matchState: MatchState, summary: string) 
     scoreB: matchState.scoreB,
     winner: matchState.winner === 'A' ? matchState.teamA.name : matchState.teamB.name,
     summary: summary,
-    kicks: matchState.kicks.map(k => ({
-      ...k,
-      teamId: k.teamId === 'A' ? matchState.teamA.name : matchState.teamB.name 
-    }))
+    kicks: matchState.kicks.map(k => ({ ...k, teamId: k.teamId === 'A' ? matchState.teamA.name : matchState.teamB.name }))
   };
-
   try {
     await fetch(API_URL, {
       method: 'POST',
@@ -187,10 +152,7 @@ export const saveMatchToSheet = async (matchState: MatchState, summary: string) 
       body: JSON.stringify(payload)
     });
     return true;
-  } catch (error) {
-    console.error("Failed to save match:", error);
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const registerTeam = async (data: RegistrationData): Promise<boolean> => {
@@ -217,7 +179,6 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
         photoFile: p.photoFile
     }))
   };
-
   try {
     await fetch(API_URL, {
       method: 'POST',
@@ -227,10 +188,7 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
       body: JSON.stringify(payload)
     });
     return true;
-  } catch (error) {
-    console.error("Failed to register team:", error);
-    return false;
-  }
+  } catch (error) { return false; }
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {
