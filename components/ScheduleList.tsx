@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Match, Team, Player } from '../types';
+import { Match, Team, Player, AppSettings } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle } from 'lucide-react';
 import { scheduleMatch, deleteMatch } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
@@ -14,6 +14,7 @@ interface ScheduleListProps {
   onRefresh?: () => void;
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   onStartMatch: (teamA: Team, teamB: Team, matchId: string) => void;
+  config: AppSettings;
 }
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
@@ -91,7 +92,7 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     );
 };
 
-const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch }) => {
+const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -418,39 +419,69 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         {selectedMatch && (
             <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
                 <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col max-h-[90vh]">
-                    <button onClick={() => setSelectedMatch(null)} className="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 p-2 rounded-full z-10"><X className="w-5 h-5" /></button>
-                    <div className="bg-indigo-900 p-6 text-white text-center shrink-0">
-                        <h3 className="text-lg font-bold opacity-80">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
-                        <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 mt-4">
-                            <div className="flex flex-col items-center w-full md:w-1/3">
-                                {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-16 h-16 bg-white rounded-full p-1 object-contain" /> : <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">A</div>}
-                                <span className="mt-2 font-bold text-lg leading-tight">{resolveTeam(selectedMatch.teamA).name}</span>
-                            </div>
-                            <div className="text-center my-2 md:my-0 shrink-0">
-                                {selectedMatch.winner ? (
-                                    <div className="text-4xl font-mono font-black bg-white/20 px-4 py-2 rounded-lg">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
-                                ) : (
-                                    <div className="text-2xl font-bold text-slate-300">VS</div>
-                                )}
-                                <div className="mt-2 text-xs opacity-75">{formatDate(selectedMatch.scheduledTime || selectedMatch.date)}<br/>{formatTime(selectedMatch.scheduledTime || selectedMatch.date)} น.</div>
-                            </div>
-                            <div className="flex flex-col items-center w-full md:w-1/3">
-                                {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-16 h-16 bg-white rounded-full p-1 object-contain" /> : <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">B</div>}
-                                <span className="mt-2 font-bold text-lg leading-tight">{resolveTeam(selectedMatch.teamB).name}</span>
-                            </div>
-                        </div>
+                    <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full z-20"><X className="w-5 h-5" /></button>
+                    
+                    {/* Compact Header for Mobile */}
+                    <div className="bg-indigo-900 p-4 md:p-6 text-white text-center shrink-0 relative overflow-hidden">
+                        {/* Background Decoration */}
+                        <div className="absolute top-0 left-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-x-10 -translate-y-10 blur-2xl"></div>
+                        <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 opacity-20 rounded-full translate-x-10 translate-y-10 blur-3xl"></div>
                         
+                        <div className="relative z-10">
+                             {config.competitionLogo && (
+                                <img src={config.competitionLogo} className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-2 object-contain bg-white rounded-full p-1 shadow-lg" />
+                             )}
+                             <h3 className="text-sm md:text-lg font-bold opacity-90 tracking-wide mb-4">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
+                             
+                             <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12">
+                                {/* Team A */}
+                                <div className="flex flex-col items-center w-full md:w-1/3">
+                                    {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl p-2 object-contain shadow-md" /> : <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-bold">A</div>}
+                                    <span className="mt-2 font-bold text-base md:text-xl leading-tight line-clamp-2 h-10 md:h-auto flex items-center justify-center">{resolveTeam(selectedMatch.teamA).name}</span>
+                                </div>
+
+                                {/* Score / VS */}
+                                <div className="text-center shrink-0 flex flex-col items-center">
+                                    {selectedMatch.winner ? (
+                                        <div className="text-3xl md:text-5xl font-mono font-black bg-white/10 border border-white/20 px-6 py-2 rounded-xl backdrop-blur-sm shadow-inner">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
+                                    ) : (
+                                        <div className="text-2xl font-bold text-indigo-200/50 my-2">VS</div>
+                                    )}
+                                    <div className="mt-3 flex flex-col items-center gap-1 text-indigo-200 text-xs">
+                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(selectedMatch.scheduledTime || selectedMatch.date)}</span>
+                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(selectedMatch.scheduledTime || selectedMatch.date)} น.</span>
+                                        {(selectedMatch.venue || config.locationName) && (
+                                            <span className="flex items-center gap-1 mt-1 bg-white/10 px-2 py-0.5 rounded-full"><MapPin className="w-3 h-3"/> {selectedMatch.venue || config.locationName}</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Team B */}
+                                <div className="flex flex-col items-center w-full md:w-1/3">
+                                    {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl p-2 object-contain shadow-md" /> : <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-bold">B</div>}
+                                    <span className="mt-2 font-bold text-base md:text-xl leading-tight line-clamp-2 h-10 md:h-auto flex items-center justify-center">{resolveTeam(selectedMatch.teamB).name}</span>
+                                </div>
+                             </div>
+                        </div>
+
                         {!selectedMatch.winner && (
-                            <button onClick={(e) => handleStart(e, selectedMatch)} className="mt-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-900/20 transition transform hover:scale-105">
+                            <button onClick={(e) => handleStart(e, selectedMatch)} className="mt-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 md:py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition transform hover:scale-105 active:scale-95 text-sm md:text-base">
                                 <PlayCircle className="w-5 h-5" /> เริ่มบันทึกผลการแข่งขัน
                             </button>
                         )}
                     </div>
+
                     <div className="p-4 md:p-6 bg-slate-50 overflow-y-auto flex-1">
-                        <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2"><User className="w-5 h-5" /> รายชื่อนักกีฬา</h4>
+                        <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm md:text-base"><User className="w-5 h-5 text-indigo-600" /> รายชื่อนักกีฬา</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                            <div className="bg-white p-4 rounded-xl border shadow-sm">{renderRoster(typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name)}</div>
-                            <div className="bg-white p-4 rounded-xl border shadow-sm">{renderRoster(typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name)}</div>
+                            <div className="bg-white p-3 md:p-4 rounded-xl border shadow-sm h-fit">
+                                <div className="mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Team A</div>
+                                {renderRoster(typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name)}
+                            </div>
+                            <div className="bg-white p-3 md:p-4 rounded-xl border shadow-sm h-fit">
+                                <div className="mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">Team B</div>
+                                {renderRoster(typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name)}
+                            </div>
                         </div>
                     </div>
                 </div>

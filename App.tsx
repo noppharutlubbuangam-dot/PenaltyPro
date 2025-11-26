@@ -92,32 +92,41 @@ function App() {
     }
   };
 
+  const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => {
+    setMatchState({ 
+        matchId, 
+        teamA, 
+        teamB, 
+        currentRound: 1, 
+        currentTurn: 'A', 
+        scoreA: 0, 
+        scoreB: 0, 
+        kicks: [], 
+        isFinished: false, 
+        winner: null 
+    });
+    setCurrentView('match');
+    showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success");
+  };
+
   // Triggered when user clicks "Start Match"
   const handleStartMatchRequest = (teamA: Team, teamB: Team, matchId?: string) => {
-    setPendingMatchSetup({ teamA, teamB, matchId });
-    setIsPinOpen(true); // Open PIN Dialog
+    if (isAdmin) {
+        // Skip PIN if already admin
+        startMatchSession(teamA, teamB, matchId);
+    } else {
+        setPendingMatchSetup({ teamA, teamB, matchId });
+        setIsPinOpen(true); // Open PIN Dialog
+    }
   };
 
   // Triggered when PIN is correct
   const handlePinSuccess = () => {
     if (pendingMatchSetup) {
         const { teamA, teamB, matchId } = pendingMatchSetup;
-        setMatchState({ 
-            matchId, 
-            teamA, 
-            teamB, 
-            currentRound: 1, 
-            currentTurn: 'A', 
-            scoreA: 0, 
-            scoreB: 0, 
-            kicks: [], 
-            isFinished: false, 
-            winner: null 
-        });
-        setCurrentView('match');
+        startMatchSession(teamA, teamB, matchId);
         setPendingMatchSetup(null);
         setIsPinOpen(false);
-        showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success");
     }
   };
   
@@ -238,6 +247,7 @@ function App() {
           onRefresh={loadData} 
           showNotification={showNotification}
           onStartMatch={handleStartMatchRequest}
+          config={appConfig}
         />
       )}
       {currentView === 'standings' && <StandingsView matches={matchesLog} teams={availableTeams} onBack={() => setCurrentView('home')} isLoading={isLoadingData} />}
