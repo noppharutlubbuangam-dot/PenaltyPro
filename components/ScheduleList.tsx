@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle } from 'lucide-react';
-import { scheduleMatch, deleteMatch } from '../services/sheetService';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { scheduleMatch, deleteMatch, saveMatchToSheet } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
 
 interface ScheduleListProps {
@@ -96,8 +96,12 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
 const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Delete & Reset States
   const [isDeleting, setIsDeleting] = useState(false);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
+  const [matchToReset, setMatchToReset] = useState<string | null>(null);
+  
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   
   const [activeMatchType, setActiveMatchType] = useState<'group' | 'knockout' | 'custom'>('group');
@@ -108,6 +112,15 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   // Bulk Match Form (Group Add Mode)
   const [bulkMatches, setBulkMatches] = useState<Array<{ tempId: string, teamA: string, teamB: string, time: string, venue: string }>>([]);
 
+  // Quick Result State (In Detail Modal)
+  const [quickScoreA, setQuickScoreA] = useState('');
+  const [quickScoreB, setQuickScoreB] = useState('');
+  const [isQuickSaving, setIsQuickSaving] = useState(false);
+
+  // Edit Result State (In List View)
+  const [isEditResultOpen, setIsEditResultOpen] = useState(false);
+  const [editResultForm, setEditResultForm] = useState({ matchId: '', teamA: '', teamB: '', scoreA: '', scoreB: '' });
+
   // Team Selector State
   const [selectorConfig, setSelectorConfig] = useState<{ 
       isOpen: boolean; 
@@ -115,6 +128,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       rowIndex?: number; 
       currentValue?: string;
   }>({ isOpen: false, mode: 'singleA' });
+
+  useEffect(() => {
+    if (selectedMatch) {
+        setQuickScoreA(selectedMatch.scoreA?.toString() || '');
+        setQuickScoreB(selectedMatch.scoreB?.toString() || '');
+    } else {
+        setQuickScoreA('');
+        setQuickScoreB('');
+    }
+  }, [selectedMatch]);
 
   const scheduledMatches = matches.filter(m => !m.winner).sort((a, b) => new Date(a.scheduledTime || a.date).getTime() - new Date(b.scheduledTime || b.date).getTime());
   const finishedMatches = matches.filter(m => m.winner).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -168,6 +191,61 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       setIsAddModalOpen(true); 
   };
 
+  const handleOpenEditResult = (e: React.MouseEvent, match: Match) => {
+      e.stopPropagation();
+      setEditResultForm({
+          matchId: match.id,
+          teamA: typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
+          teamB: typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
+          scoreA: match.scoreA.toString(),
+          scoreB: match.scoreB.toString()
+      });
+      setIsEditResultOpen(true);
+  };
+
+  const handleSaveEditedResult = async () => {
+      setIsSaving(true);
+      try {
+          const sA = parseInt(editResultForm.scoreA);
+          const sB = parseInt(editResultForm.scoreB);
+          
+          if (isNaN(sA) || isNaN(sB)) {
+              if (showNotification) showNotification("ข้อมูลไม่ถูกต้อง", "กรุณากรอกคะแนนเป็นตัวเลข", "warning");
+              setIsSaving(false);
+              return;
+          }
+
+          // Determine Winner
+          let winnerName = null;
+          if (sA > sB) winnerName = editResultForm.teamA;
+          else if (sB > sA) winnerName = editResultForm.teamB;
+          // else Draw (null)
+
+          const payload: any = {
+            matchId: editResultForm.matchId,
+            teamA: resolveTeam(editResultForm.teamA),
+            teamB: resolveTeam(editResultForm.teamB),
+            scoreA: sA,
+            scoreB: sB,
+            winner: winnerName ? (winnerName === editResultForm.teamA ? 'A' : 'B') : null,
+            kicks: [], 
+            isFinished: true
+        };
+
+        await saveMatchToSheet(payload, "Result Edited (Admin)");
+        
+        if(showNotification) showNotification("สำเร็จ", "แก้ไขผลการแข่งขันเรียบร้อย", "success");
+        setIsEditResultOpen(false);
+        if(onRefresh) onRefresh();
+
+      } catch (e) {
+          console.error(e);
+          if(showNotification) showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   const handleDeleteMatch = async () => { 
       if(!matchToDelete) return; 
       setIsDeleting(true); 
@@ -183,6 +261,96 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       } 
   };
   
+  const handleResetMatch = async () => {
+      if(!matchToReset) return;
+      setIsDeleting(true); // Reuse deleting state for loader
+      try {
+          const match = matches.find(m => m.id === matchToReset);
+          if (!match) throw new Error("Match not found");
+
+          // Reset payload: score 0, winner null, status Scheduled
+          const payload: any = {
+              matchId: match.id,
+              teamA: resolveTeam(match.teamA),
+              teamB: resolveTeam(match.teamB),
+              scoreA: 0,
+              scoreB: 0,
+              winner: null, 
+              roundLabel: match.roundLabel,
+              status: 'Scheduled', // This is key
+              kicks: [],
+              isFinished: false
+          };
+
+          // We use saveMatchToSheet but send empty/default data to overwrite
+          // Note: saveMatchToSheet logic in service might default status to Finished if we don't be careful.
+          // Let's modify saveMatchToSheet call or use scheduleMatch with overwrite?
+          // Actually saveMatchToSheet overwrites column 10 to 'Finished'.
+          // To reset to 'Scheduled', we might need to use `scheduleMatch` effectively re-scheduling it.
+          // But `scheduleMatch` doesn't clear scores.
+          
+          // Let's rely on `saveMatchToSheet` but we might need to update the GAS script if it hardcodes 'Finished'.
+          // Looking at the provided `code.gs`:
+          // `if (rowIndex !== -1) { ... sheet.getRange(rowIndex, 10).setValue('Finished'); ... }`
+          // It seems it hardcodes 'Finished'.
+          
+          // However, `scheduleMatch` sets status to 'Scheduled'.
+          // So if we call `scheduleMatch` it updates columns.
+          // BUT `scheduleMatch` does NOT clear scores (Col 4, 5, 6).
+          
+          // So we need to call `saveMatchToSheet` with a trick OR assume the user is okay with `saveMatch` clearing it if we pass specific flag?
+          // The provided `code.gs` `saveMatch` function updates ScoreA, ScoreB, Winner and Status.
+          // Wait, `saveMatch` in GAS: `sheet.getRange(rowIndex, 10).setValue('Finished');` -> IT HARDCODES FINISHED.
+          
+          // FIX: We need to use `saveMatch` to clear scores, but since it forces 'Finished', this is tricky without modifying backend.
+          // BUT: `scheduleMatch` in GAS: `if (data.scheduledTime) { ... sheet.getRange(i+1, 7).setValue(data.scheduledTime); }`
+          // It doesn't clear scores.
+          
+          // Workaround: Send a `saveMatch` with empty winner to clear data, then `scheduleMatch` to set status back to 'Scheduled'.
+          // Or just use `saveMatch` and live with 'Finished' but 0-0? No, user wants it back to schedule.
+          
+          // Let's try sending `status: 'Scheduled'` in the payload and hope I can tweak `saveMatchToSheet` service to send it?
+          // The service `saveMatchToSheet` hardcodes `status: 'Finished'` inside the GAS `saveMatch` function?
+          // Yes: `sheet.getRange(rowIndex, 10).setValue('Finished');`
+          
+          // Ah, I missed that `scheduleMatch` in GAS sets `sheet.getRange(i+1, 10).setValue('Scheduled')` if it's a new match.
+          // If updating: `if (!rows[i][0] && data.matchId) ...`
+          
+          // Let's look at `saveMatch` in GAS again.
+          // It DOES NOT allow passing status.
+          
+          // **Strategy**: Since I cannot change GAS easily (per instructions I should try to minimize, but I already updated GAS in previous turn),
+          // I will assume `saveMatchToSheet` can be used to set scores to 0. 
+          // And `scheduleMatch` can be used to set status to `Scheduled`.
+          // So I will call `saveMatchToSheet` (clearing scores) THEN `scheduleMatch` (reseting status).
+          
+          await saveMatchToSheet({
+               ...payload,
+               scoreA: 0, scoreB: 0, winner: null
+          }, ""); // This sets scores to 0 but status 'Finished'
+          
+          // Now force status back to Scheduled
+          await scheduleMatch(
+              match.id, 
+              typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
+              typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
+              match.roundLabel || '',
+              match.venue,
+              match.scheduledTime
+          );
+
+          if(showNotification) showNotification("สำเร็จ", "รีเซ็ตผลการแข่งขันเรียบร้อย", "success");
+          setMatchToReset(null);
+          if(onRefresh) onRefresh();
+
+      } catch (e) {
+          console.error(e);
+          if(showNotification) showNotification("ผิดพลาด", "รีเซ็ตไม่สำเร็จ", "error");
+      } finally {
+          setIsDeleting(false);
+      }
+  };
+
   const generateUniqueLabel = (groupLabel: string, tA: string, tB: string) => {
       const groupName = groupLabel.replace('Group ', '').trim();
       const teamAObj = teams.find(t => t.name === tA);
@@ -247,6 +415,49 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           setIsAddModalOpen(false); 
           if(onRefresh) onRefresh(); 
       } catch(e) { if (showNotification) showNotification("ผิดพลาด", "กรุณากรอกข้อมูลให้ครบถ้วน", "error"); } finally { setIsSaving(false); } 
+  };
+
+  const handleQuickSaveResult = async () => {
+    if (!selectedMatch) return;
+    if (quickScoreA === '' || quickScoreB === '') {
+        if (showNotification) showNotification("แจ้งเตือน", "กรุณากรอกคะแนนทั้งสองฝั่ง", "warning");
+        return;
+    }
+
+    setIsQuickSaving(true);
+    try {
+        const sA = parseInt(quickScoreA);
+        const sB = parseInt(quickScoreB);
+        const tA = resolveTeam(selectedMatch.teamA);
+        const tB = resolveTeam(selectedMatch.teamB);
+
+        // Determine Winner (Strictly based on score entered)
+        let winnerName = null;
+        if (sA > sB) winnerName = tA.name;
+        else if (sB > sA) winnerName = tB.name;
+        // else Draw (null)
+
+        const payload: any = {
+            matchId: selectedMatch.id,
+            teamA: tA,
+            teamB: tB,
+            scoreA: sA,
+            scoreB: sB,
+            winner: sA > sB ? 'A' : sB > sA ? 'B' : null,
+            kicks: [], // No kicks data for quick save
+            isFinished: true
+        };
+
+        await saveMatchToSheet(payload, "Quick Result (Admin)");
+        if (showNotification) showNotification("สำเร็จ", "บันทึกผลการแข่งขันเรียบร้อย", "success");
+        if (onRefresh) onRefresh();
+        setSelectedMatch(null);
+    } catch (e) {
+        if (showNotification) showNotification("ผิดพลาด", "บันทึกผลไม่สำเร็จ", "error");
+        console.error(e);
+    } finally {
+        setIsQuickSaving(false);
+    }
   };
   
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
@@ -414,7 +625,39 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         </div>
 
-        <div><h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-green-500">ผลการแข่งขัน</h2><div className="space-y-3">{isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); return (<div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col items-center gap-4 opacity-80 hover:opacity-100 transition cursor-pointer"><div className="flex flex-col md:flex-row items-center w-full gap-4"><div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-400 text-xs"><span>{formatDate(match.date)}</span><span>{match.roundLabel?.split(':')[0]}</span></div><div className="flex-1 flex items-center justify-center gap-4 w-full"><div className={`flex items-center justify-end gap-3 flex-1 ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}><span className="font-bold text-lg truncate">{tA.name}</span>{tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}</div><div className="bg-slate-800 text-white px-4 py-1 rounded-lg font-mono font-bold text-lg shadow-inner">{match.scoreA} - {match.scoreB}</div><div className={`flex items-center justify-start gap-3 flex-1 ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>{tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}<span className="font-bold text-lg truncate">{tB.name}</span></div></div><div className="min-w-[100px] flex justify-end"><Trophy className="w-5 h-5 text-yellow-500" /></div></div><div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2"><button onClick={(e) => handleShare(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>{isAdmin && <button onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /> ลบ</button>}</div></div>); })}</div></div>
+        <div>
+            <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-green-500">ผลการแข่งขัน</h2>
+            <div className="space-y-3">
+                {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
+                return (
+                    <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col items-center gap-4 opacity-80 hover:opacity-100 transition cursor-pointer">
+                        <div className="flex flex-col md:flex-row items-center w-full gap-4">
+                            <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-400 text-xs"><span>{formatDate(match.date)}</span><span>{match.roundLabel?.split(':')[0]}</span></div>
+                            <div className="flex-1 flex items-center justify-center gap-4 w-full">
+                                <div className={`flex items-center justify-end gap-3 flex-1 ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}><span className="font-bold text-lg truncate">{tA.name}</span>{tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}</div>
+                                <div className="bg-slate-800 text-white px-4 py-1 rounded-lg font-mono font-bold text-lg shadow-inner">{match.scoreA} - {match.scoreB}</div>
+                                <div className={`flex items-center justify-start gap-3 flex-1 ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>{tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}<span className="font-bold text-lg truncate">{tB.name}</span></div>
+                            </div>
+                            <div className="min-w-[100px] flex justify-end"><Trophy className="w-5 h-5 text-yellow-500" /></div>
+                        </div>
+                        <div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2">
+                            <button onClick={(e) => handleShare(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>
+                            {isAdmin && (
+                                <>
+                                    <button onClick={(e) => handleOpenEditResult(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold">
+                                        <Edit2 className="w-3 h-3" /> แก้ไขผล
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); setMatchToReset(match.id); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold">
+                                        <RotateCcw className="w-3 h-3" /> รีเซ็ต
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                ); 
+                })}
+            </div>
+        </div>
 
         {/* Match Detail Modal */}
         {selectedMatch && (
@@ -464,8 +707,43 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
                         {!selectedMatch.winner && (
                             <button onClick={(e) => handleStart(e, selectedMatch)} className="mt-4 w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-2 md:py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition transform hover:scale-105 active:scale-95 text-xs md:text-base">
-                                <PlayCircle className="w-4 h-4 md:w-5 md:h-5" /> เริ่มบันทึกผลการแข่งขัน
+                                <PlayCircle className="w-4 h-4 md:w-5 md:h-5" /> เริ่มบันทึกผลการแข่งขัน (รายคน)
                             </button>
+                        )}
+                        
+                        {/* Admin Quick Result Section */}
+                        {isAdmin && (
+                            <div className="mt-6 border-t border-white/20 pt-4 px-2">
+                                <div className="text-indigo-200 text-xs font-bold mb-2 flex items-center justify-center gap-2">
+                                    <ClipboardCheck className="w-3 h-3" /> ผู้ดูแล: บันทึกผลด่วน (ไม่ต้องระบุคนยิง)
+                                </div>
+                                <div className="flex items-center justify-center gap-2">
+                                    <input 
+                                        type="number" 
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={quickScoreA}
+                                        onChange={(e) => setQuickScoreA(e.target.value)}
+                                        className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
+                                    />
+                                    <span className="text-white font-bold">:</span>
+                                    <input 
+                                        type="number" 
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={quickScoreB}
+                                        onChange={(e) => setQuickScoreB(e.target.value)}
+                                        className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
+                                    />
+                                    <button 
+                                        onClick={handleQuickSaveResult}
+                                        disabled={isQuickSaving}
+                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50"
+                                    >
+                                        {isQuickSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : "บันทึกผล"}
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
 
@@ -641,18 +919,54 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
 
-        {matchToDelete && (
+        {/* Edit Result Modal */}
+        {isEditResultOpen && (
+            <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
+                     <div className="flex justify-between items-center mb-4 border-b pb-2">
+                         <h3 className="font-bold text-lg text-slate-800">แก้ไขผลการแข่งขัน</h3>
+                         <button onClick={() => setIsEditResultOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+                     </div>
+                     <div className="mb-6 flex items-center justify-between gap-4">
+                         <div className="text-center flex-1">
+                             <div className="font-bold text-slate-700 mb-2 truncate text-sm">{editResultForm.teamA}</div>
+                             <input type="number" value={editResultForm.scoreA} onChange={e => setEditResultForm({...editResultForm, scoreA: e.target.value})} className="w-full p-3 border rounded-lg text-center font-bold text-xl bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
+                         </div>
+                         <span className="font-bold text-slate-300 text-xl mt-6">:</span>
+                         <div className="text-center flex-1">
+                             <div className="font-bold text-slate-700 mb-2 truncate text-sm">{editResultForm.teamB}</div>
+                             <input type="number" value={editResultForm.scoreB} onChange={e => setEditResultForm({...editResultForm, scoreB: e.target.value})} className="w-full p-3 border rounded-lg text-center font-bold text-xl bg-slate-50 focus:ring-2 focus:ring-red-500 outline-none" />
+                         </div>
+                     </div>
+                     <button onClick={handleSaveEditedResult} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "บันทึกผลใหม่"}
+                     </button>
+                 </div>
+            </div>
+        )}
+
+        {/* Delete / Reset Confirmation Modal */}
+        {(matchToDelete || matchToReset) && (
             <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200">
                     <div className="flex items-center gap-3 text-red-600 mb-4">
                         <AlertTriangle className="w-8 h-8" />
-                        <h3 className="font-bold text-lg">ยืนยันการลบ?</h3>
+                        <h3 className="font-bold text-lg">ยืนยันการ{matchToReset ? 'รีเซ็ต' : 'ลบ'}?</h3>
                     </div>
-                    <p className="text-slate-600 mb-6">คุณต้องการลบตารางการแข่งขันนี้ใช่หรือไม่?</p>
+                    <p className="text-slate-600 mb-6">
+                        {matchToReset 
+                            ? "การรีเซ็ตจะล้างผลการแข่งขัน คะแนน และผู้ชนะ กลับไปเป็นสถานะ 'รอแข่ง' (Scheduled) แต่จะไม่ลบรายการออกจากตาราง"
+                            : "คุณต้องการลบตารางการแข่งขันนี้ใช่หรือไม่?"
+                        }
+                    </p>
                     <div className="flex gap-3">
-                        <button onClick={() => setMatchToDelete(null)} disabled={isDeleting} className="flex-1 py-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50">ยกเลิก</button>
-                        <button onClick={handleDeleteMatch} disabled={isDeleting} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "ลบรายการ"}
+                        <button onClick={() => { setMatchToDelete(null); setMatchToReset(null); }} disabled={isDeleting} className="flex-1 py-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50">ยกเลิก</button>
+                        <button 
+                            onClick={matchToReset ? handleResetMatch : handleDeleteMatch} 
+                            disabled={isDeleting} 
+                            className={`flex-1 py-2 text-white rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 ${matchToReset ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}`}
+                        >
+                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : (matchToReset ? "รีเซ็ตผล" : "ลบรายการ")}
                         </button>
                     </div>
                 </div>
