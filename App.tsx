@@ -227,7 +227,19 @@ function App() {
 
       {currentView === 'register' && <RegistrationForm onBack={() => { loadData(); setCurrentView('home'); }} schools={schools} config={appConfig} showNotification={showNotification} />}
       {currentView === 'tournament' && <TournamentView teams={availableTeams} matches={matchesLog} onSelectMatch={handleStartMatchRequest} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onRefresh={loadData} onLoginClick={() => setIsLoginOpen(true)} isLoading={isLoadingData} showNotification={showNotification} />}
-      {currentView === 'schedule' && <ScheduleList matches={matchesLog} teams={availableTeams} players={availablePlayers} onBack={() => setCurrentView('home')} isAdmin={isAdmin} isLoading={isLoadingData} onRefresh={loadData} showNotification={showNotification} />}
+      {currentView === 'schedule' && (
+        <ScheduleList 
+          matches={matchesLog} 
+          teams={availableTeams} 
+          players={availablePlayers} 
+          onBack={() => setCurrentView('home')} 
+          isAdmin={isAdmin} 
+          isLoading={isLoadingData} 
+          onRefresh={loadData} 
+          showNotification={showNotification}
+          onStartMatch={handleStartMatchRequest}
+        />
+      )}
       {currentView === 'standings' && <StandingsView matches={matchesLog} teams={availableTeams} onBack={() => setCurrentView('home')} isLoading={isLoadingData} />}
       {currentView === 'admin' && isAdmin && <AdminDashboard teams={availableTeams} players={availablePlayers} settings={appConfig} onLogout={() => { setIsAdmin(false); setCurrentView('home'); }} onRefresh={loadData} news={newsItems} showNotification={showNotification} />}
 
