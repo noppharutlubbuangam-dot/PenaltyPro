@@ -1,4 +1,3 @@
-
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem } from '../types';
 
 // HARDCODED URL AS REQUESTED
@@ -137,6 +136,24 @@ export const scheduleMatch = async (matchId: string, teamA: string, teamB: strin
           roundLabel,
           venue: venue || '',
           scheduledTime: scheduledTime || ''
+      })
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+export const deleteMatch = async (matchId: string) => {
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ 
+          action: 'deleteMatch', 
+          matchId
       })
     });
     return true;

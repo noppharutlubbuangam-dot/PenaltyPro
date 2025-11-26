@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
-import { scheduleMatch } from '../services/sheetService';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { scheduleMatch, deleteMatch } from '../services/sheetService';
+import { shareMatch } from '../services/liffService';
 
 interface ScheduleListProps {
   matches: Match[];
@@ -118,9 +118,11 @@ const SearchableSelect = ({
 const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isAdmin, isLoading, onRefresh, showNotification }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   
   // New Match Form State
-  const [newMatch, setNewMatch] = useState({
+  const [matchForm, setMatchForm] = useState({
+      id: '',
       teamA: '',
       teamB: '',
       date: '',
@@ -155,34 +157,75 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
       } catch(e) { return ''; }
   };
 
-  const handleAddMatch = async () => {
-      if (!newMatch.teamA || !newMatch.teamB || !newMatch.date || !newMatch.time) {
+  const handleOpenAdd = () => {
+      setMatchForm({ id: '', teamA: '', teamB: '', date: '', time: '', venue: '', roundLabel: 'Group Stage' });
+      setIsAddModalOpen(true);
+  };
+
+  const handleEditMatch = (match: Match) => {
+      const dateObj = new Date(match.scheduledTime || match.date);
+      const date = dateObj.toISOString().split('T')[0];
+      const time = dateObj.toTimeString().slice(0, 5);
+      
+      setMatchForm({
+          id: match.id,
+          teamA: typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
+          teamB: typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
+          date: date,
+          time: time,
+          venue: match.venue || '',
+          roundLabel: match.roundLabel || 'Group Stage'
+      });
+      setIsAddModalOpen(true);
+  };
+
+  const handleDeleteMatch = async () => {
+      if(!matchToDelete) return;
+      setIsSaving(true);
+      try {
+          await deleteMatch(matchToDelete);
+          if(showNotification) showNotification("สำเร็จ", "ลบตารางแข่งเรียบร้อย", "success");
+          setMatchToDelete(null);
+          if(onRefresh) onRefresh();
+      } catch(e) {
+          if(showNotification) showNotification("ผิดพลาด", "ลบไม่สำเร็จ", "error");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleSaveMatch = async () => {
+      if (!matchForm.teamA || !matchForm.teamB || !matchForm.date || !matchForm.time) {
           if (showNotification) showNotification("ข้อมูลไม่ครบ", "กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
-          else alert("กรุณากรอกข้อมูลให้ครบถ้วน");
           return;
       }
       
       setIsSaving(true);
-      const scheduledTime = new Date(`${newMatch.date}T${newMatch.time}`).toISOString();
+      const scheduledTime = new Date(`${matchForm.date}T${matchForm.time}`).toISOString();
       
       try {
           await scheduleMatch(
-              `M_EXT_${Date.now()}`,
-              newMatch.teamA,
-              newMatch.teamB,
-              newMatch.roundLabel,
-              newMatch.venue,
+              matchForm.id || `M_EXT_${Date.now()}`,
+              matchForm.teamA,
+              matchForm.teamB,
+              matchForm.roundLabel,
+              matchForm.venue,
               scheduledTime
           );
-          if (showNotification) showNotification("สำเร็จ", "เพิ่มตารางแข่งเรียบร้อย", "success");
+          if (showNotification) showNotification("สำเร็จ", matchForm.id ? "แก้ไขตารางเรียบร้อย" : "เพิ่มตารางแข่งเรียบร้อย", "success");
           setIsAddModalOpen(false);
-          setNewMatch({ teamA: '', teamB: '', date: '', time: '', venue: '', roundLabel: 'Group Stage' });
           if(onRefresh) onRefresh();
       } catch(e) {
           if (showNotification) showNotification("ผิดพลาด", "ไม่สามารถบันทึกข้อมูลได้", "error");
       } finally {
           setIsSaving(false);
       }
+  };
+
+  const handleShare = (match: Match) => {
+      const tA = resolveTeam(match.teamA);
+      const tB = resolveTeam(match.teamB);
+      shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl);
   };
 
   return (
@@ -199,7 +242,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
             </div>
             {isAdmin && (
                 <button 
-                    onClick={() => setIsAddModalOpen(true)}
+                    onClick={handleOpenAdd}
                     className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow hover:bg-indigo-700 transition font-bold text-sm"
                 >
                     <Plus className="w-4 h-4" /> เพิ่มคู่แข่ง
@@ -231,25 +274,38 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
                         const tA = resolveTeam(match.teamA);
                         const tB = resolveTeam(match.teamB);
                         return (
-                            <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row items-center gap-4 hover:shadow-md transition">
-                                <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-500 text-sm">
-                                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(match.scheduledTime || match.date)}</span>
-                                    {match.scheduledTime && <span className="flex items-center gap-1 text-indigo-600 font-bold"><Clock className="w-3 h-3" /> {formatTime(match.scheduledTime)}</span>}
-                                </div>
-                                <div className="flex-1 flex items-center justify-center gap-4 w-full">
-                                    <div className="flex items-center justify-end gap-3 flex-1">
-                                        <span className="font-bold text-slate-800 text-lg truncate">{tA.name}</span>
-                                        {tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}
+                            <div key={match.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative group">
+                                <div className="flex flex-col md:flex-row items-center w-full gap-4">
+                                    <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-500 text-sm">
+                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(match.scheduledTime || match.date)}</span>
+                                        {match.scheduledTime && <span className="flex items-center gap-1 text-indigo-600 font-bold"><Clock className="w-3 h-3" /> {formatTime(match.scheduledTime)}</span>}
                                     </div>
-                                    <div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap">VS</div>
-                                    <div className="flex items-center justify-start gap-3 flex-1">
-                                        {tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}
-                                        <span className="font-bold text-slate-800 text-lg truncate">{tB.name}</span>
+                                    <div className="flex-1 flex items-center justify-center gap-4 w-full">
+                                        <div className="flex items-center justify-end gap-3 flex-1">
+                                            <span className="font-bold text-slate-800 text-lg truncate">{tA.name}</span>
+                                            {tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}
+                                        </div>
+                                        <div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap">VS</div>
+                                        <div className="flex items-center justify-start gap-3 flex-1">
+                                            {tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}
+                                            <span className="font-bold text-slate-800 text-lg truncate">{tB.name}</span>
+                                        </div>
+                                    </div>
+                                    <div className="min-w-[150px] flex flex-col items-center md:items-end text-sm gap-1">
+                                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel || 'รอบทั่วไป'}</span>
+                                        {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
                                     </div>
                                 </div>
-                                <div className="min-w-[150px] flex flex-col items-center md:items-end text-sm gap-1">
-                                    <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel || 'รอบทั่วไป'}</span>
-                                    {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
+                                
+                                {/* Actions */}
+                                <div className="w-full pt-3 mt-1 border-t border-slate-100 flex justify-end gap-2">
+                                    <button onClick={() => handleShare(match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ LINE</button>
+                                    {isAdmin && (
+                                        <>
+                                            <button onClick={() => handleEditMatch(match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold"><Edit2 className="w-3 h-3" /> แก้ไข</button>
+                                            <button onClick={() => setMatchToDelete(match.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /> ลบ</button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -275,26 +331,32 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
                         const tA = resolveTeam(match.teamA);
                         const tB = resolveTeam(match.teamB);
                         return (
-                            <div key={match.id} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col md:flex-row items-center gap-4 opacity-80 hover:opacity-100 transition">
-                                <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-400 text-xs">
-                                    <span>{formatDate(match.date)}</span>
-                                    <span>{match.roundLabel}</span>
+                            <div key={match.id} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col items-center gap-4 opacity-80 hover:opacity-100 transition">
+                                <div className="flex flex-col md:flex-row items-center w-full gap-4">
+                                    <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-400 text-xs">
+                                        <span>{formatDate(match.date)}</span>
+                                        <span>{match.roundLabel}</span>
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-center gap-4 w-full">
+                                        <div className={`flex items-center justify-end gap-3 flex-1 ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className="font-bold text-lg truncate">{tA.name}</span>
+                                            {tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}
+                                        </div>
+                                        <div className="bg-slate-800 text-white px-4 py-1 rounded-lg font-mono font-bold text-lg shadow-inner">
+                                            {match.scoreA} - {match.scoreB}
+                                        </div>
+                                        <div className={`flex items-center justify-start gap-3 flex-1 ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                            {tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}
+                                            <span className="font-bold text-lg truncate">{tB.name}</span>
+                                        </div>
+                                    </div>
+                                    <div className="min-w-[100px] flex justify-end">
+                                        <Trophy className="w-5 h-5 text-yellow-500" />
+                                    </div>
                                 </div>
-                                <div className="flex-1 flex items-center justify-center gap-4 w-full">
-                                    <div className={`flex items-center justify-end gap-3 flex-1 ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}>
-                                        <span className="font-bold text-lg truncate">{tA.name}</span>
-                                        {tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}
-                                    </div>
-                                    <div className="bg-slate-800 text-white px-4 py-1 rounded-lg font-mono font-bold text-lg shadow-inner">
-                                        {match.scoreA} - {match.scoreB}
-                                    </div>
-                                    <div className={`flex items-center justify-start gap-3 flex-1 ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>
-                                        {tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}
-                                        <span className="font-bold text-lg truncate">{tB.name}</span>
-                                    </div>
-                                </div>
-                                <div className="min-w-[100px] flex justify-end">
-                                    <Trophy className="w-5 h-5 text-yellow-500" />
+                                <div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2">
+                                    <button onClick={() => handleShare(match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>
+                                    {isAdmin && <button onClick={() => setMatchToDelete(match.id)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /> ลบ</button>}
                                 </div>
                             </div>
                         );
@@ -303,12 +365,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
             </div>
         </div>
 
-        {/* Add Match Modal */}
+        {/* Add/Edit Match Modal */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in zoom-in duration-200">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h3 className="text-lg font-bold text-slate-800">เพิ่มตารางการแข่งขัน</h3>
+                        <h3 className="text-lg font-bold text-slate-800">{matchForm.id ? 'แก้ไขตาราง' : 'เพิ่มตารางการแข่งขัน'}</h3>
                         <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
                     </div>
                     <div className="space-y-4">
@@ -317,8 +379,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
                                 <label className="text-xs font-bold text-slate-500 mb-1 block">ทีมเหย้า</label>
                                 <SearchableSelect 
                                     options={teams} 
-                                    value={newMatch.teamA} 
-                                    onChange={(val) => setNewMatch({...newMatch, teamA: val})} 
+                                    value={matchForm.teamA} 
+                                    onChange={(val) => setMatchForm({...matchForm, teamA: val})} 
                                     placeholder="เลือกทีมเหย้า" 
                                 />
                             </div>
@@ -326,38 +388,55 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, onBack, isA
                                 <label className="text-xs font-bold text-slate-500 mb-1 block">ทีมเยือน</label>
                                 <SearchableSelect 
                                     options={teams} 
-                                    value={newMatch.teamB} 
-                                    onChange={(val) => setNewMatch({...newMatch, teamB: val})} 
+                                    value={matchForm.teamB} 
+                                    onChange={(val) => setMatchForm({...matchForm, teamB: val})} 
                                     placeholder="เลือกทีมเยือน" 
                                 />
                             </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-1 block">รายการ/รอบ</label>
-                            <input type="text" value={newMatch.roundLabel} onChange={e => setNewMatch({...newMatch, roundLabel: e.target.value})} className="w-full p-2 border rounded text-sm" />
+                            <input type="text" value={matchForm.roundLabel} onChange={e => setMatchForm({...matchForm, roundLabel: e.target.value})} className="w-full p-2 border rounded text-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 mb-1 block">วันที่</label>
-                                <input type="date" value={newMatch.date} onChange={e => setNewMatch({...newMatch, date: e.target.value})} className="w-full p-2 border rounded text-sm" />
+                                <input type="date" value={matchForm.date} onChange={e => setMatchForm({...matchForm, date: e.target.value})} className="w-full p-2 border rounded text-sm" />
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 mb-1 block">เวลา</label>
-                                <input type="time" value={newMatch.time} onChange={e => setNewMatch({...newMatch, time: e.target.value})} className="w-full p-2 border rounded text-sm" />
+                                <input type="time" value={matchForm.time} onChange={e => setMatchForm({...matchForm, time: e.target.value})} className="w-full p-2 border rounded text-sm" />
                             </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-1 block">สนามแข่ง</label>
-                            <input type="text" value={newMatch.venue} onChange={e => setNewMatch({...newMatch, venue: e.target.value})} className="w-full p-2 border rounded text-sm" placeholder="เช่น สนาม 1" />
+                            <input type="text" value={matchForm.venue} onChange={e => setMatchForm({...matchForm, venue: e.target.value})} className="w-full p-2 border rounded text-sm" placeholder="เช่น สนาม 1" />
                         </div>
                         
                         <button 
-                            onClick={handleAddMatch}
+                            onClick={handleSaveMatch}
                             disabled={isSaving}
                             className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
                         >
                             {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} บันทึกตารางแข่ง
                         </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Delete Confirm Modal */}
+        {matchToDelete && (
+            <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200">
+                    <div className="flex items-center gap-3 text-red-600 mb-4">
+                        <AlertTriangle className="w-8 h-8" />
+                        <h3 className="font-bold text-lg">ยืนยันการลบ?</h3>
+                    </div>
+                    <p className="text-slate-600 mb-6">คุณต้องการลบตารางการแข่งขันนี้ใช่หรือไม่?</p>
+                    <div className="flex gap-3">
+                        <button onClick={() => setMatchToDelete(null)} className="flex-1 py-2 border rounded-lg hover:bg-slate-50">ยกเลิก</button>
+                        <button onClick={handleDeleteMatch} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">ลบรายการ</button>
                     </div>
                 </div>
             </div>

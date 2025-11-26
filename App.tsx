@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -14,10 +13,11 @@ import ScheduleList from './components/ScheduleList';
 import NewsFeed from './components/NewsFeed'; 
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet } from './services/sheetService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks } from 'lucide-react';
+import { initializeLiff } from './services/liffService';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-// Default Settings Fallback
+// ... (Default Settings - Same as before) ...
 const DEFAULT_SETTINGS: AppSettings = {
   competitionName: "การแข่งขันยิงจุดโทษระดับประถมศึกษา",
   competitionLogo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_the_Ministry_of_Education_of_Thailand.svg/1200px-Emblem_of_the_Ministry_of_Education_of_Thailand.svg.png",
@@ -47,39 +47,26 @@ function App() {
   const [matchState, setMatchState] = useState<MatchState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Kick Editing State
   const [editingKick, setEditingKick] = useState<Kick | null>(null);
 
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-
-  // Toast State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; isDangerous?: boolean; } | null>(null);
 
+  useEffect(() => {
+    loadData();
+    initializeLiff(); // Init LIFF
+  }, []);
+
+  // ... (Data Loading, Match Logic, Toasts - Same as before) ...
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, title, message, type }]);
   };
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  // Confirmation Modal state
-  const [confirmModal, setConfirmModal] = useState<{
-      isOpen: boolean;
-      title: string;
-      message: string;
-      onConfirm: () => void;
-      isDangerous?: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
   const loadData = async () => {
     setIsLoadingData(true);
@@ -95,149 +82,74 @@ function App() {
         setNewsItems(data.news || []);
       }
     } catch (e: any) {
-      console.warn("Could not load database", e);
-      setConnectionError(e.message || "เชื่อมต่อฐานข้อมูลล้มเหลว");
+      console.warn("Database Error", e);
+      setConnectionError(e.message);
       showNotification("เชื่อมต่อไม่ได้", e.message, 'error');
     } finally {
       setIsLoadingData(false);
     }
   };
 
-  // Match Logic
+  // ... (Match Handling Functions - same as before) ...
   const handleStartMatch = (teamA: Team, teamB: Team, matchId?: string) => {
-    setMatchState({
-      matchId: matchId, 
-      teamA,
-      teamB,
-      currentRound: 1,
-      currentTurn: 'A',
-      scoreA: 0,
-      scoreB: 0,
-      kicks: [],
-      isFinished: false,
-      winner: null,
-    });
+    setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], isFinished: false, winner: null });
     setCurrentView('match');
   };
-
+  
   const checkWinCondition = (state: MatchState): MatchState => {
     const kicksA = state.kicks.filter(k => k.teamId === 'A');
     const kicksB = state.kicks.filter(k => k.teamId === 'B');
     const scoreA = kicksA.filter(k => k.result === KickResult.GOAL).length;
     const scoreB = kicksB.filter(k => k.result === KickResult.GOAL).length;
-    
     const roundsPlayedA = kicksA.length;
     const roundsPlayedB = kicksB.length;
-
-    let newState = { ...state, scoreA, scoreB };
-    
-    // Reset winner logic first
-    newState.winner = null;
-    newState.isFinished = false;
+    let newState = { ...state, scoreA, scoreB, winner: null, isFinished: false };
 
     if (roundsPlayedA <= 5 && roundsPlayedB <= 5) {
       const remainingKicksA = 5 - roundsPlayedA;
       const remainingKicksB = 5 - roundsPlayedB;
-
-      if (scoreA > scoreB + remainingKicksB) {
-        newState.winner = 'A';
-        newState.isFinished = true;
-      } else if (scoreB > scoreA + remainingKicksA) {
-        newState.winner = 'B';
-        newState.isFinished = true;
-      }
+      if (scoreA > scoreB + remainingKicksB) { newState.winner = 'A'; newState.isFinished = true; }
+      else if (scoreB > scoreA + remainingKicksA) { newState.winner = 'B'; newState.isFinished = true; }
     } else {
-      // Sudden Death
       if (roundsPlayedA === roundsPlayedB && roundsPlayedA >= 5) {
-          if (scoreA !== scoreB) {
-            newState.winner = scoreA > scoreB ? 'A' : 'B';
-            newState.isFinished = true;
-          }
+          if (scoreA !== scoreB) { newState.winner = scoreA > scoreB ? 'A' : 'B'; newState.isFinished = true; }
       }
     }
-
     return newState;
   };
 
   const handleRecordKick = async (player: string, result: KickResult) => {
     if (!matchState || matchState.isFinished) return;
-
     setIsProcessing(true);
-
-    const newKick: Kick = {
-      id: Date.now().toString(),
-      round: matchState.currentRound,
-      teamId: matchState.currentTurn,
-      player,
-      result,
-      timestamp: Date.now()
-    };
-
+    const newKick: Kick = { id: Date.now().toString(), round: matchState.currentRound, teamId: matchState.currentTurn, player, result, timestamp: Date.now() };
     setMatchState(prev => {
       if (!prev) return null;
-      
       const updatedKicks = [...prev.kicks, newKick];
-      let nextState: MatchState = {
-        ...prev,
-        kicks: updatedKicks,
-        currentTurn: prev.currentTurn === 'A' ? 'B' : 'A',
-        currentRound: prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound
-      };
-
+      let nextState: MatchState = { ...prev, kicks: updatedKicks, currentTurn: prev.currentTurn === 'A' ? 'B' : 'A', currentRound: prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound };
       nextState = checkWinCondition(nextState);
-
       if (nextState.isFinished) {
-         confetti({
-           particleCount: 150,
-           spread: 70,
-           origin: { y: 0.6 },
-           colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185']
-         });
-         
+         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] });
          setIsSaving(true);
-         saveMatchToSheet(nextState, "").then(() => {
-            setIsSaving(false);
-            loadData(); 
-            showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success");
-         });
+         saveMatchToSheet(nextState, "").then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); });
       }
-
       return nextState;
     });
-
     setIsProcessing(false);
   };
 
   const handleUpdateOldKick = (kickId: string, newResult: KickResult, newPlayerName: string) => {
     setMatchState(prev => {
         if (!prev) return null;
-        const updatedKicks = prev.kicks.map(k => 
-            k.id === kickId ? { ...k, result: newResult, player: newPlayerName } : k
-        );
+        const updatedKicks = prev.kicks.map(k => k.id === kickId ? { ...k, result: newResult, player: newPlayerName } : k);
         let nextState = { ...prev, kicks: updatedKicks };
         nextState = checkWinCondition(nextState);
-        if (nextState.isFinished && !prev.isFinished) {
-             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        }
         return nextState;
     });
     setEditingKick(null);
     showNotification("แก้ไขผลการยิงเรียบร้อย", "", "success");
   };
 
-  const confirmDeleteKick = (kickId: string) => {
-      setConfirmModal({
-          isOpen: true,
-          title: "ลบรายการนี้?",
-          message: "ยืนยันการลบผลการยิงนี้? (คะแนนจะถูกคำนวณใหม่ทันที)",
-          isDangerous: true,
-          onConfirm: () => {
-              handleDeleteKick(kickId);
-              setConfirmModal(null);
-          }
-      });
-  };
-
+  const confirmDeleteKick = (kickId: string) => { setConfirmModal({ isOpen: true, title: "ลบรายการนี้?", message: "ยืนยันการลบผลการยิงนี้?", isDangerous: true, onConfirm: () => { handleDeleteKick(kickId); setConfirmModal(null); } }); };
   const handleDeleteKick = (kickId: string) => {
       setMatchState(prev => {
           if (!prev) return null;
@@ -252,49 +164,11 @@ function App() {
       setEditingKick(null);
       showNotification("ลบรายการเรียบร้อย", "", "warning");
   };
+  const requestUndoLastKick = () => { if (!matchState || matchState.kicks.length === 0) return; setConfirmModal({ isOpen: true, title: "ยกเลิกการยิงล่าสุด", message: "ต้องการลบผลการยิงลูกล่าสุดใช่หรือไม่?", onConfirm: () => { handleUndoLastKick(); setConfirmModal(null); } }); };
+  const handleUndoLastKick = () => { setMatchState(prev => { if (!prev) return null; const newKicks = [...prev.kicks]; newKicks.pop(); const kicksA = newKicks.filter(k => k.teamId === 'A'); const kicksB = newKicks.filter(k => k.teamId === 'B'); const currentTurn: 'A' | 'B' = kicksA.length > kicksB.length ? 'B' : 'A'; const currentRound = Math.floor(newKicks.length / 2) + 1; const tempState = { ...prev, kicks: newKicks, currentTurn, currentRound }; return checkWinCondition(tempState); }); showNotification("ย้อนกลับรายการล่าสุดแล้ว", "", "info"); };
+  const resetMatch = () => { setConfirmModal({ isOpen: true, title: "เริ่มแมตช์ใหม่?", message: "ข้อมูลการแข่งขันปัจจุบันจะหายไป ต้องการเริ่มใหม่หรือไม่?", isDangerous: true, onConfirm: () => { setCurrentView('home'); setMatchState(null); setConfirmModal(null); } }); };
 
-  const requestUndoLastKick = () => {
-      if (!matchState || matchState.kicks.length === 0) return;
-      setConfirmModal({
-          isOpen: true,
-          title: "ยกเลิกการยิงล่าสุด",
-          message: "ต้องการลบผลการยิงลูกล่าสุดใช่หรือไม่?",
-          onConfirm: () => {
-              handleUndoLastKick();
-              setConfirmModal(null);
-          }
-      });
-  };
-
-  const handleUndoLastKick = () => {
-      setMatchState(prev => {
-          if (!prev) return null;
-          const newKicks = [...prev.kicks];
-          newKicks.pop(); 
-          const kicksA = newKicks.filter(k => k.teamId === 'A');
-          const kicksB = newKicks.filter(k => k.teamId === 'B');
-          const currentTurn: 'A' | 'B' = kicksA.length > kicksB.length ? 'B' : 'A';
-          const currentRound = Math.floor(newKicks.length / 2) + 1;
-          const tempState = { ...prev, kicks: newKicks, currentTurn, currentRound };
-          return checkWinCondition(tempState);
-      });
-      showNotification("ย้อนกลับรายการล่าสุดแล้ว", "", "info");
-  };
-
-  const resetMatch = () => {
-      setConfirmModal({
-          isOpen: true,
-          title: "เริ่มแมตช์ใหม่?",
-          message: "ข้อมูลการแข่งขันปัจจุบันจะหายไป ต้องการเริ่มใหม่หรือไม่?",
-          isDangerous: true,
-          onConfirm: () => {
-              setCurrentView('home');
-              setMatchState(null);
-              setConfirmModal(null);
-          }
-      });
-  };
-
+  // Navigation
   const BottomNav = () => (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 flex justify-around items-center z-[100] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] safe-area-bottom">
         <NavButton view="home" icon={Home} label="หน้าหลัก" />
@@ -304,189 +178,115 @@ function App() {
         <NavButton view="admin" icon={isAdmin ? Settings : Lock} label="ระบบ" onClick={isAdmin ? undefined : () => setIsLoginOpen(true)} />
     </div>
   );
-
   const NavButton = ({ view, icon: Icon, label, onClick }: { view: string, icon: any, label: string, onClick?: () => void }) => {
       const isActive = currentView === view;
       return (
-          <button 
-            onClick={onClick || (() => setCurrentView(view))}
-            className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-          >
-              <Icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-indigo-200' : ''}`} />
-              <span className="text-[10px] font-bold">{label}</span>
+          <button onClick={onClick || (() => setCurrentView(view))} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+              <Icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-indigo-200' : ''}`} /><span className="text-[10px] font-bold">{label}</span>
           </button>
       )
   };
-
   const showBottomNav = currentView !== 'match';
 
   return (
-    <div className="bg-slate-50 min-h-screen text-slate-900 font-sans" style={{ fontFamily: "'Kanit', sans-serif" }}>
-      
+    <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-24" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={loadData} currentSettings={appConfig} />
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
+      
+      {/* Modals */}
+      {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200"><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
+      {editingKick && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm"><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200"><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
 
-      {confirmModal && confirmModal.isOpen && (
-          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200">
-                  <div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}>
-                      <AlertTriangle className="w-6 h-6" />
-                      <h3 className="font-bold text-lg">{confirmModal.title}</h3>
-                  </div>
-                  <p className="text-slate-600 mb-6">{confirmModal.message}</p>
-                  <div className="flex gap-3">
-                      <button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button>
-                      <button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button>
-                  </div>
+      {/* MAIN VIEWS */}
+      {currentView === 'register' && <RegistrationForm onBack={() => { loadData(); setCurrentView('home'); }} schools={schools} config={appConfig} showNotification={showNotification} />}
+      {currentView === 'tournament' && <TournamentView teams={availableTeams} matches={matchesLog} onSelectMatch={handleStartMatch} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onRefresh={loadData} onLoginClick={() => setIsLoginOpen(true)} isLoading={isLoadingData} showNotification={showNotification} />}
+      {currentView === 'schedule' && <ScheduleList matches={matchesLog} teams={availableTeams} onBack={() => setCurrentView('home')} isAdmin={isAdmin} isLoading={isLoadingData} onRefresh={loadData} showNotification={showNotification} />}
+      {currentView === 'standings' && <StandingsView matches={matchesLog} teams={availableTeams} onBack={() => setCurrentView('home')} isLoading={isLoadingData} />}
+      {currentView === 'admin' && isAdmin && <AdminDashboard teams={availableTeams} players={availablePlayers} settings={appConfig} onLogout={() => { setIsAdmin(false); setCurrentView('home'); }} onRefresh={loadData} news={newsItems} showNotification={showNotification} />}
+
+      {/* REDESIGNED HOME VIEW */}
+      {currentView === 'home' && (
+        <div className="min-h-screen bg-slate-100">
+          {connectionError && <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-between gap-4"><div className="flex items-center gap-2 text-red-700 text-sm font-bold"><WifiOff className="w-4 h-4" /><span>{connectionError}</span></div><button onClick={loadData} className="text-xs bg-white border border-red-200 text-red-600 px-2 py-1 rounded hover:bg-red-50">ลองใหม่</button></div>}
+          
+          {/* App Bar */}
+          <div className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm px-4 py-3 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                  <img src={appConfig.competitionLogo || "https://via.placeholder.com/40"} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
+                  <h1 className="font-bold text-slate-800 truncate max-w-[200px] text-sm sm:text-base">{appConfig.competitionName}</h1>
+              </div>
+              <div className="flex items-center gap-2">
+                  <button onClick={() => setCurrentView('register')} className="bg-indigo-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-indigo-700"><UserPlus className="w-3 h-3" /> สมัครแข่ง</button>
               </div>
           </div>
-      )}
 
-      {editingKick && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
-             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
-                 <div className="flex justify-between items-start mb-4">
-                     <h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3>
-                     <button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button>
-                 </div>
-                 <div className="space-y-4">
-                     <div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div>
-                     <div>
-                         <label className="block text-sm text-slate-500 mb-1">ผลการยิง</label>
-                         <select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result">
-                             <option value={KickResult.GOAL}>เข้าประตู (GOAL)</option>
-                             <option value={KickResult.SAVED}>เซฟได้ (SAVED)</option>
-                             <option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option>
-                         </select>
-                     </div>
-                     <div className="flex gap-2 pt-4">
-                         <button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button>
-                         <button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button>
-                     </div>
-                 </div>
-             </div>
-        </div>
-      )}
-
-      <div className={`w-full mx-auto ${showBottomNav ? 'pb-24' : ''}`}>
-
-      {currentView === 'register' && (
-        <div className="min-h-screen bg-slate-50 p-4">
-          <RegistrationForm 
-            onBack={() => { loadData(); setCurrentView('home'); }} 
-            schools={schools}
-            config={appConfig}
-            showNotification={showNotification}
-          />
-        </div>
-      )}
-
-      {currentView === 'tournament' && (
-        <div className="min-h-screen bg-slate-50">
-           <TournamentView 
-              teams={availableTeams} 
-              matches={matchesLog}
-              onSelectMatch={handleStartMatch} 
-              onBack={() => setCurrentView('home')}
-              isAdmin={isAdmin}
-              onRefresh={loadData}
-              onLoginClick={() => setIsLoginOpen(true)}
-              isLoading={isLoadingData}
-              showNotification={showNotification}
-           />
-        </div>
-      )}
-
-      {currentView === 'schedule' && (
-          <ScheduleList 
-            matches={matchesLog}
-            teams={availableTeams}
-            onBack={() => setCurrentView('home')}
-            isAdmin={isAdmin}
-            isLoading={isLoadingData}
-            onRefresh={loadData}
-            showNotification={showNotification}
-          />
-      )}
-
-      {currentView === 'standings' && (
-        <StandingsView 
-            matches={matchesLog} 
-            teams={availableTeams} 
-            onBack={() => setCurrentView('home')}
-            isLoading={isLoadingData}
-        />
-      )}
-
-      {currentView === 'admin' && isAdmin && (
-        <AdminDashboard 
-            teams={availableTeams} 
-            players={availablePlayers}
-            settings={appConfig}
-            onLogout={() => { setIsAdmin(false); setCurrentView('home'); }}
-            onRefresh={loadData}
-            news={newsItems}
-            showNotification={showNotification}
-        />
-      )}
-
-      {currentView === 'home' && (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
-          {connectionError && (
-              <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-between gap-4 animate-in slide-in-from-top">
-                  <div className="flex items-center gap-2 text-red-700 text-sm font-bold"><WifiOff className="w-4 h-4" /><span>{connectionError}</span></div>
-                  <button onClick={loadData} className="text-xs bg-white border border-red-200 text-red-600 px-2 py-1 rounded hover:bg-red-50">ลองใหม่</button>
+          {/* Hero Section */}
+          <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 pb-12 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+              <div className="relative z-10 max-w-4xl mx-auto">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="bg-white/10 p-4 rounded-full mb-4 backdrop-blur-sm border border-white/20">
+                          <img src={appConfig.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/100?text=LOGO'}/>
+                      </div>
+                      <h2 className="text-2xl font-bold mb-2">{appConfig.competitionName}</h2>
+                      <p className="text-indigo-200 text-sm flex items-center gap-1"><MapPin className="w-4 h-4" /> {appConfig.locationName}</p>
+                  </div>
+                  
+                  {appConfig.announcement && (
+                      <div className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-md flex items-start gap-3 mb-6">
+                          <Bell className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5 animate-pulse" />
+                          <div>
+                              <h3 className="font-bold text-yellow-400 text-sm mb-1">ประกาศสำคัญ</h3>
+                              <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-line">{appConfig.announcement}</p>
+                          </div>
+                      </div>
+                  )}
               </div>
-          )}
+          </div>
 
-          <div className="flex-1 p-4 flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 to-slate-200 flex-col gap-6">
-            {appConfig.announcement && (
-                <div className="w-full max-w-4xl mx-auto animate-in slide-in-from-top-5 mt-4">
-                    <div className="bg-gradient-to-r from-orange-500 to-red-500 p-[2px] rounded-xl shadow-lg">
-                        <div className="bg-white rounded-[10px] p-4 flex items-start gap-3">
-                            <Bell className="w-6 h-6 text-orange-500 shrink-0 animate-bounce" />
-                            <div>
-                                <h3 className="font-bold text-slate-800 text-sm mb-1">ประกาศ / ข่าวประชาสัมพันธ์</h3>
-                                <p className="text-slate-600 text-sm whitespace-pre-line">{appConfig.announcement}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+          {/* Dashboard Content */}
+          <div className="max-w-4xl mx-auto px-4 -mt-8 relative z-20 space-y-6">
+              
+              {/* Shootout Toggle Block */}
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                  <MatchSetup 
+                      onStart={handleStartMatch} 
+                      availableTeams={availableTeams.filter(t => t.status === 'Approved')} 
+                      onOpenSettings={() => setIsSettingsOpen(true)}
+                      isLoadingData={isLoadingData}
+                  />
+              </div>
 
-            <div className="w-full max-w-4xl">
-                <div className="text-center mb-8 animate-in slide-in-from-top-10 duration-700 mt-6">
-                     <div className="inline-block p-4 bg-white rounded-full shadow-xl mb-6 relative group">
-                         <img src={appConfig.competitionLogo} alt="Logo" className="h-24 w-24 md:h-32 md:w-32 object-contain transition transform group-hover:scale-110" onError={(e) => { e.currentTarget.src = "https://via.placeholder.com/150?text=LOGO"; }} />
-                        {isLoadingData && <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-full"><Loader2 className="w-8 h-8 text-indigo-600 animate-spin" /></div>}
-                     </div>
-                     <h1 className="text-3xl md:text-4xl font-black text-slate-800 mb-4 leading-tight drop-shadow-sm px-4">{appConfig.competitionName}</h1>
-                     <div className="flex items-center justify-center gap-2 text-slate-600 font-medium mb-6">
-                        <MapPin className="w-5 h-5 text-red-500" />
-                        {appConfig.locationLink ? <a href={appConfig.locationLink} target="_blank" className="hover:underline hover:text-indigo-600">{appConfig.locationName}</a> : <span>{appConfig.locationName}</span>}
-                     </div>
-                     <div className="flex justify-center mb-8">
-                         <button onClick={() => setCurrentView('register')} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition font-bold text-lg animate-pulse"><UserPlus className="w-5 h-5" /> สมัครเข้าร่วมการแข่งขัน</button>
-                     </div>
-                </div>
+              {/* Quick Links */}
+              <div className="grid grid-cols-3 gap-3">
+                  <button onClick={() => setCurrentView('schedule')} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 transition group">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 group-hover:scale-110 transition"><CalendarDays className="w-5 h-5"/></div>
+                      <span className="text-xs font-bold text-slate-600">โปรแกรมแข่ง</span>
+                  </button>
+                  <button onClick={() => setCurrentView('standings')} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 transition group">
+                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 group-hover:scale-110 transition"><ListChecks className="w-5 h-5"/></div>
+                      <span className="text-xs font-bold text-slate-600">ตารางคะแนน</span>
+                  </button>
+                  <button onClick={() => setCurrentView('tournament')} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 transition group">
+                      <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 group-hover:scale-110 transition"><Trophy className="w-5 h-5"/></div>
+                      <span className="text-xs font-bold text-slate-600">สายการแข่ง</span>
+                  </button>
+              </div>
 
-                <NewsFeed news={newsItems} isLoading={isLoadingData} />
+              {/* News Feed */}
+              <div>
+                  <div className="flex items-center justify-between mb-3 px-1">
+                      <h3 className="font-bold text-slate-700 text-lg flex items-center gap-2"><div className="w-1 h-6 bg-indigo-600 rounded-full"></div> ข่าวสารล่าสุด</h3>
+                  </div>
+                  <NewsFeed news={newsItems} isLoading={isLoadingData} />
+              </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-white/50 mb-8">
-                     <MatchSetup 
-                        onStart={handleStartMatch} 
-                        availableTeams={availableTeams.filter(t => t.status === 'Approved')} 
-                        onOpenSettings={() => setIsSettingsOpen(true)}
-                        isLoadingData={isLoadingData}
-                    />
-                </div>
-            </div>
+          </div>
         </div>
-    </div>
-  )}
-      
+      )}
+
+      {/* MATCH VIEW (Unchanged) */}
       {currentView === 'match' && matchState && (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
@@ -538,7 +338,7 @@ function App() {
           </div>
         </div>
       )}
-      </div>
+      
       {showBottomNav && <BottomNav />}
     </div>
   );
