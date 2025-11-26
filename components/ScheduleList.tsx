@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle } from 'lucide-react';
@@ -429,44 +430,41 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                         
                         <div className="relative z-10">
                              {config.competitionLogo && (
-                                <img src={config.competitionLogo} className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-2 object-contain bg-white rounded-full p-1 shadow-lg" />
+                                <img src={config.competitionLogo} className="w-10 h-10 md:w-16 md:h-16 mx-auto mb-2 object-contain bg-white rounded-full p-1 shadow-lg" />
                              )}
-                             <h3 className="text-sm md:text-lg font-bold opacity-90 tracking-wide mb-4">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
+                             <h3 className="text-xs md:text-lg font-bold opacity-90 tracking-wide mb-3">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
                              
-                             <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12">
+                             <div className="flex flex-row items-center justify-between w-full px-2">
                                 {/* Team A */}
-                                <div className="flex flex-col items-center w-full md:w-1/3">
-                                    {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl p-2 object-contain shadow-md" /> : <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-bold">A</div>}
-                                    <span className="mt-2 font-bold text-base md:text-xl leading-tight line-clamp-2 h-10 md:h-auto flex items-center justify-center">{resolveTeam(selectedMatch.teamA).name}</span>
+                                <div className="flex flex-col items-center flex-1">
+                                    {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">A</div>}
+                                    <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamA).name}</span>
                                 </div>
 
                                 {/* Score / VS */}
-                                <div className="text-center shrink-0 flex flex-col items-center">
+                                <div className="text-center shrink-0 flex flex-col items-center px-2">
                                     {selectedMatch.winner ? (
-                                        <div className="text-3xl md:text-5xl font-mono font-black bg-white/10 border border-white/20 px-6 py-2 rounded-xl backdrop-blur-sm shadow-inner">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
+                                        <div className="text-2xl md:text-5xl font-mono font-black bg-white/10 border border-white/20 px-3 py-1 md:px-6 md:py-2 rounded-lg backdrop-blur-sm shadow-inner whitespace-nowrap">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
                                     ) : (
-                                        <div className="text-2xl font-bold text-indigo-200/50 my-2">VS</div>
+                                        <div className="text-xl md:text-2xl font-bold text-indigo-200/50 my-1">VS</div>
                                     )}
-                                    <div className="mt-3 flex flex-col items-center gap-1 text-indigo-200 text-xs">
+                                    <div className="mt-1 flex flex-col items-center gap-0.5 text-indigo-200 text-[10px] md:text-xs">
                                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(selectedMatch.scheduledTime || selectedMatch.date)}</span>
                                         <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(selectedMatch.scheduledTime || selectedMatch.date)} น.</span>
-                                        {(selectedMatch.venue || config.locationName) && (
-                                            <span className="flex items-center gap-1 mt-1 bg-white/10 px-2 py-0.5 rounded-full"><MapPin className="w-3 h-3"/> {selectedMatch.venue || config.locationName}</span>
-                                        )}
                                     </div>
                                 </div>
 
                                 {/* Team B */}
-                                <div className="flex flex-col items-center w-full md:w-1/3">
-                                    {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl p-2 object-contain shadow-md" /> : <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-bold">B</div>}
-                                    <span className="mt-2 font-bold text-base md:text-xl leading-tight line-clamp-2 h-10 md:h-auto flex items-center justify-center">{resolveTeam(selectedMatch.teamB).name}</span>
+                                <div className="flex flex-col items-center flex-1">
+                                    {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">B</div>}
+                                    <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamB).name}</span>
                                 </div>
                              </div>
                         </div>
 
                         {!selectedMatch.winner && (
-                            <button onClick={(e) => handleStart(e, selectedMatch)} className="mt-6 w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-3 md:py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition transform hover:scale-105 active:scale-95 text-sm md:text-base">
-                                <PlayCircle className="w-5 h-5" /> เริ่มบันทึกผลการแข่งขัน
+                            <button onClick={(e) => handleStart(e, selectedMatch)} className="mt-4 w-full max-w-sm mx-auto flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-2 md:py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition transform hover:scale-105 active:scale-95 text-xs md:text-base">
+                                <PlayCircle className="w-4 h-4 md:w-5 md:h-5" /> เริ่มบันทึกผลการแข่งขัน
                             </button>
                         )}
                     </div>

@@ -33,6 +33,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const [isEditingNews, setIsEditingNews] = useState(false);
   const [deleteNewsId, setDeleteNewsId] = useState<string | null>(null);
   
+  // Settings Logo Preview
+  const [settingsLogoPreview, setSettingsLogoPreview] = useState<string | null>(null);
+
   // Reject Modal State
   const [rejectModal, setRejectModal] = useState<{ isOpen: boolean, teamId: string | null }>({ isOpen: false, teamId: null });
   const [rejectReasonInput, setRejectReasonInput] = useState('');
@@ -41,6 +44,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
     setLocalTeams(initialTeams);
     setLocalPlayers(initialPlayers);
   }, [initialTeams, initialPlayers]);
+  
+  useEffect(() => {
+      setConfigForm(settings);
+      setSettingsLogoPreview(settings.competitionLogo);
+  }, [settings]);
 
   useEffect(() => {
     if (selectedTeam) {
@@ -102,6 +110,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setLocalTeams(initialTeams); 
       } finally { 
           setIsSavingTeam(false); 
+      }
+  };
+
+  const handleSettingsLogoChange = async (file: File) => {
+      if (!file) return;
+      try {
+          const preview = URL.createObjectURL(file);
+          setSettingsLogoPreview(preview);
+          const base64 = await fileToBase64(file);
+          setConfigForm(prev => ({ ...prev, competitionLogo: base64 }));
+      } catch (e) {
+          console.error("Logo Error", e);
       }
   };
 
@@ -240,10 +260,80 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
             </div>
         )}
 
-        {/* NEWS TAB & SETTINGS - Unchanged */}
+        {/* NEWS TAB */}
         {activeTab === 'news' && (<div className="animate-in fade-in duration-300 max-w-4xl mx-auto"><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="md:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit sticky top-24" id="news-form-anchor"><h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">{isEditingNews ? <Edit3 className="w-5 h-5 text-orange-500" /> : <Plus className="w-5 h-5 text-indigo-600" />} {isEditingNews ? 'แก้ไขข่าว' : 'สร้างข่าวใหม่'}</h3><div className="space-y-4"><div><label className="block text-sm font-bold text-slate-700 mb-1">หัวข้อข่าว</label><input type="text" value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="เรื่อง..." /></div><div><label className="block text-sm font-bold text-slate-700 mb-1">เนื้อหา</label><textarea value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full p-2 border rounded-lg h-32" placeholder="รายละเอียด..." /></div><div><label className="block text-sm font-bold text-slate-700 mb-1">รูปภาพ</label><div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center cursor-pointer hover:bg-slate-50 relative"><input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {const file = e.target.files?.[0]; if(file) setNewsForm({...newsForm, imageFile: file, imagePreview: URL.createObjectURL(file)});}} />{newsForm.imagePreview ? <div className="relative"><img src={newsForm.imagePreview} className="max-h-32 mx-auto object-contain" /><div className="absolute top-0 right-0 bg-white/80 p-1 rounded text-xs">เปลี่ยน</div></div> : <div className="text-slate-400 text-xs"><Image className="w-8 h-8 mx-auto mb-1" />คลิกอัปโหลด</div>}</div></div><div><label className="block text-sm font-bold text-slate-700 mb-1">เอกสาร (PDF)</label><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setNewsForm({...newsForm, docFile: e.target.files?.[0] || null})} className="text-xs" /></div><div className="flex gap-2">{isEditingNews && <button onClick={() => { setIsEditingNews(false); setNewsForm({ id: null, title: '', content: '', imageFile: null, imagePreview: null, docFile: null }); }} className="flex-1 py-2 border border-slate-300 text-slate-600 rounded-lg font-bold hover:bg-slate-50">ยกเลิก</button>}<button onClick={handleSaveNews} disabled={isSavingNews} className={`flex-1 py-2 text-white rounded-lg font-bold hover:brightness-110 disabled:opacity-50 flex justify-center items-center gap-2 ${isEditingNews ? 'bg-orange-500' : 'bg-indigo-600'}`}>{isSavingNews ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditingNews ? 'บันทึกแก้ไข' : 'ประกาศข่าว'}</button></div></div></div><div className="md:col-span-2 space-y-4">{news.slice().reverse().map(item => (<div key={item.id} className={`bg-white rounded-xl p-4 border shadow-sm flex gap-4 group ${newsForm.id === item.id ? 'border-orange-400 ring-1 ring-orange-200' : 'border-slate-200'}`}>{item.imageUrl && <img src={item.imageUrl} className="w-24 h-24 object-cover rounded-lg bg-slate-100 shrink-0" />}<div className="flex-1"><div className="flex justify-between items-start"><h4 className="font-bold text-slate-800 line-clamp-1">{item.title}</h4><div className="flex gap-1"><button onClick={() => handleEditNews(item)} className="p-1.5 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded"><Edit3 className="w-4 h-4" /></button><button onClick={() => triggerDeleteNews(item.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div></div><p className="text-xs text-slate-400 mb-2">{new Date(item.timestamp).toLocaleDateString('th-TH')}</p><p className="text-sm text-slate-600 line-clamp-2">{item.content}</p></div></div>))}</div></div></div>)}
         
-        {activeTab === 'settings' && (<div className="animate-in fade-in duration-300 max-w-2xl mx-auto"><div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6"><h2 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Settings className="w-5 h-5" /> ตั้งค่าทั่วไป</h2><input type="text" placeholder="ชื่อรายการแข่งขัน" value={configForm.competitionName} onChange={e => setConfigForm({...configForm, competitionName: e.target.value})} className="w-full p-3 border rounded-lg" /><input type="text" placeholder="URL โลโก้" value={configForm.competitionLogo} onChange={e => setConfigForm({...configForm, competitionLogo: e.target.value})} className="w-full p-3 border rounded-lg" /><div className="grid grid-cols-2 gap-4"><input type="text" placeholder="ธนาคาร" value={configForm.bankName} onChange={e => setConfigForm({...configForm, bankName: e.target.value})} className="w-full p-3 border rounded-lg" /><input type="text" placeholder="เลขบัญชี" value={configForm.bankAccount} onChange={e => setConfigForm({...configForm, bankAccount: e.target.value})} className="w-full p-3 border rounded-lg" /></div><input type="text" placeholder="ชื่อบัญชี" value={configForm.accountName} onChange={e => setConfigForm({...configForm, accountName: e.target.value})} className="w-full p-3 border rounded-lg" /><button onClick={handleSaveConfig} disabled={isSavingSettings} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">{isSavingSettings ? 'กำลังบันทึก...' : 'บันทึก'}</button></div></div>)}
+        {/* SETTINGS TAB */}
+        {activeTab === 'settings' && (
+            <div className="animate-in fade-in duration-300 max-w-2xl mx-auto">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+                    <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <Settings className="w-5 h-5" /> ตั้งค่าทั่วไป
+                    </h2>
+                    
+                    <div className="flex flex-col items-center gap-4 py-4 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                        <div className="w-24 h-24 bg-white rounded-xl shadow-sm border flex items-center justify-center overflow-hidden">
+                            {settingsLogoPreview ? (
+                                <img src={settingsLogoPreview} alt="Logo" className="w-full h-full object-contain" />
+                            ) : (
+                                <Image className="w-8 h-8 text-slate-300" />
+                            )}
+                        </div>
+                        <label className="cursor-pointer bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">
+                            อัปโหลดโลโก้การแข่งขัน
+                            <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={(e) => e.target.files?.[0] && handleSettingsLogoChange(e.target.files[0])}
+                            />
+                        </label>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อรายการแข่งขัน</label>
+                            <input type="text" placeholder="ชื่อรายการแข่งขัน" value={configForm.competitionName} onChange={e => setConfigForm({...configForm, competitionName: e.target.value})} className="w-full p-3 border rounded-lg" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">ธนาคาร</label>
+                                <input type="text" placeholder="ธนาคาร" value={configForm.bankName} onChange={e => setConfigForm({...configForm, bankName: e.target.value})} className="w-full p-3 border rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">เลขบัญชี</label>
+                                <input type="text" placeholder="เลขบัญชี" value={configForm.bankAccount} onChange={e => setConfigForm({...configForm, bankAccount: e.target.value})} className="w-full p-3 border rounded-lg" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อบัญชี</label>
+                            <input type="text" placeholder="ชื่อบัญชี" value={configForm.accountName} onChange={e => setConfigForm({...configForm, accountName: e.target.value})} className="w-full p-3 border rounded-lg" />
+                        </div>
+                        
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">สถานที่จัดการแข่งขัน</label>
+                                <input type="text" placeholder="ชื่อสนาม/โรงเรียน" value={configForm.locationName} onChange={e => setConfigForm({...configForm, locationName: e.target.value})} className="w-full p-3 border rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">ลิงก์แผนที่ (Google Maps)</label>
+                                <input type="text" placeholder="URL" value={configForm.locationLink} onChange={e => setConfigForm({...configForm, locationLink: e.target.value})} className="w-full p-3 border rounded-lg" />
+                            </div>
+                        </div>
+
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">ประกาศสำคัญ (หน้าแรก)</label>
+                            <textarea placeholder="ข้อความประกาศ..." value={configForm.announcement} onChange={e => setConfigForm({...configForm, announcement: e.target.value})} className="w-full p-3 border rounded-lg h-24" />
+                        </div>
+                    </div>
+
+                    <button onClick={handleSaveConfig} disabled={isSavingSettings} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+                        {isSavingSettings ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'บันทึกการตั้งค่า'}
+                    </button>
+                </div>
+            </div>
+        )}
 
         {/* TEAM EDIT MODAL */}
         {editForm && selectedTeam && (

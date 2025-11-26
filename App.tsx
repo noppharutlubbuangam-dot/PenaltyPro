@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -13,7 +14,7 @@ import PinDialog from './components/PinDialog';
 import ScheduleList from './components/ScheduleList'; 
 import NewsFeed from './components/NewsFeed'; 
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
-import { fetchDatabase, saveMatchToSheet } from './services/sheetService';
+import { fetchDatabase, saveMatchToSheet, saveKicksToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -163,10 +164,17 @@ function App() {
       nextState = checkWinCondition(nextState);
       if (nextState.isFinished) {
          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] });
-         // Check PIN again before Saving? Or assume session is secure. 
-         // For UX, auto-save is better if entry was secured.
+         
          setIsSaving(true);
-         saveMatchToSheet(nextState, "").then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); });
+         // Fire both save requests (Match Summary & Kicks Detail)
+         Promise.all([
+             saveMatchToSheet(nextState, ""),
+             saveKicksToSheet(nextState.kicks, nextState.matchId || `M${Date.now()}`, nextState.teamA.name, nextState.teamB.name)
+         ]).then(() => { 
+             setIsSaving(false); 
+             loadData(); 
+             showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); 
+         });
       }
       return nextState;
     });

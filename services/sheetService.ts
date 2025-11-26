@@ -1,4 +1,5 @@
-import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem } from '../types';
+
+import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
@@ -154,6 +155,34 @@ export const saveMatchToSheet = async (matchState: MatchState, summary: string) 
     return true;
   } catch (error) { return false; }
 };
+
+export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName: string, teamBName: string) => {
+    // Format Kicks for separate sheet: matchId, round, team, player, result, timestamp
+    const formattedKicks = kicks.map(k => ({
+        matchId: matchId || `M${Date.now()}`,
+        round: k.round,
+        team: k.teamId === 'A' ? teamAName : teamBName,
+        player: k.player,
+        result: k.result,
+        timestamp: k.timestamp || Date.now()
+    }));
+
+    const payload = {
+        action: 'saveKicks',
+        data: formattedKicks
+    };
+
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+        return true;
+    } catch (error) { return false; }
+}
 
 export const registerTeam = async (data: RegistrationData): Promise<boolean> => {
   const payload = {
