@@ -11,6 +11,9 @@ interface RegistrationFormProps {
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_DOC_SIZE = 3 * 1024 * 1024;   // 3MB
+
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config, showNotification }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,15 +74,43 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       else alert(`${title}: ${msg}`);
   };
 
+  const validateFile = (file: File, type: 'image' | 'doc') => {
+    const limit = type === 'image' ? MAX_IMAGE_SIZE : MAX_DOC_SIZE;
+    if (file.size > limit) {
+        notify("ไฟล์ใหญ่เกินไป", `ขนาดไฟล์ต้องไม่เกิน ${limit / 1024 / 1024}MB`, "error");
+        return false;
+    }
+    return true;
+  };
+
   const updatePlayer = (index: number, field: string, value: any) => {
     const newPlayers = [...players];
     if (field === 'photoFile' && value) {
+        if (!validateFile(value, 'image')) return;
         const url = URL.createObjectURL(value);
         newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: url };
     } else {
         newPlayers[index] = { ...newPlayers[index], [field]: value };
     }
     setPlayers(newPlayers);
+  };
+
+  const handleLogoChange = (file: File) => {
+      if (validateFile(file, 'image')) {
+          setTeamLogo(file);
+      }
+  };
+
+  const handleDocChange = (file: File) => {
+      if (validateFile(file, 'doc')) {
+          setDocumentFile(file);
+      }
+  };
+
+  const handleSlipChange = (file: File) => {
+      if (validateFile(file, 'image')) {
+          setSlipFile(file);
+      }
   };
 
   const handleSchoolSelect = (school: SchoolType) => {
@@ -100,6 +131,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     }
     if (!schoolName) {
         notify("ข้อมูลไม่ครบ", "กรุณาระบุชื่อโรงเรียน", "error");
+        return;
+    }
+
+    // Double check file sizes
+    if (documentFile.size > MAX_DOC_SIZE || slipFile.size > MAX_IMAGE_SIZE) {
+        notify("ไฟล์ใหญ่เกินไป", "กรุณาลดขนาดไฟล์ก่อนส่ง", "error");
         return;
     }
 
@@ -152,7 +189,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       setIsSuccess(true);
     } catch (error) {
       console.error(error);
-      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล", "error");
+      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล (ไฟล์อาจใหญ่เกินไป)", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -279,7 +316,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">ตราสโมสร/โรงเรียน</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ตราสโมสร/โรงเรียน <span className="text-xs text-slate-400">(Max 2MB)</span></label>
                         <div className="flex items-center gap-4">
                              {logoPreview && (
                                 <div className="w-16 h-16 rounded-lg border bg-white p-1 relative group">
@@ -295,7 +332,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                              <label className="flex-1 flex items-center gap-3 p-3 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-white transition">
                                 <Upload className="w-5 h-5 text-slate-400" />
                                 <span className="text-sm text-slate-600 truncate">{teamLogo ? teamLogo.name : 'อัปโหลดไฟล์ภาพ (PNG/JPG)'}</span>
-                                <input type="file" accept="image/*" onChange={e => setTeamLogo(e.target.files?.[0] || null)} className="hidden" />
+                                <input type="file" accept="image/*" onChange={e => e.target.files?.[0] && handleLogoChange(e.target.files[0])} className="hidden" />
                              </label>
                         </div>
                     </div>
@@ -392,7 +429,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                     </div>
                 ))}
             </div>
-          </div>
+        </div>
         )}
 
         {/* Step 4: Documents */}
@@ -416,9 +453,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
             <div className="grid grid-cols-1 gap-6">
                 <div className={`border-2 border-dashed rounded-xl p-8 text-center transition ${documentFile ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'}`}>
                     <FileText className={`w-12 h-12 mx-auto mb-3 ${documentFile ? 'text-indigo-500' : 'text-slate-400'}`} />
-                    <h4 className="font-bold text-slate-700">เอกสารใบสมัคร (PDF/Doc)</h4>
+                    <h4 className="font-bold text-slate-700">เอกสารใบสมัคร (PDF/Doc) <span className="text-xs text-red-500 block font-normal mt-1">*ขนาดไม่เกิน 3MB</span></h4>
                     <p className="text-sm text-slate-500 mb-4">อัปโหลดไฟล์ใบสมัครที่มีลายเซ็นครบถ้วน</p>
-                    <input type="file" id="doc-upload" accept=".pdf,.doc,.docx" className="hidden" onChange={e => setDocumentFile(e.target.files?.[0] || null)} />
+                    <input type="file" id="doc-upload" accept=".pdf,.doc,.docx" className="hidden" onChange={e => e.target.files?.[0] && handleDocChange(e.target.files[0])} />
                     <label htmlFor="doc-upload" className="inline-block bg-indigo-600 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-indigo-700 transition">
                         {documentFile ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์'}
                     </label>
@@ -433,9 +470,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                     ) : (
                         <ImageIcon className={`w-12 h-12 mx-auto mb-3 text-slate-400`} />
                     )}
-                    <h4 className="font-bold text-slate-700">หลักฐานการโอนเงิน (Slip)</h4>
+                    <h4 className="font-bold text-slate-700">หลักฐานการโอนเงิน (Slip) <span className="text-xs text-red-500 block font-normal mt-1">*ขนาดไม่เกิน 2MB</span></h4>
                     <p className="text-sm text-slate-500 mb-4">อัปโหลดรูปสลิปการโอนเงิน</p>
-                    <input type="file" id="slip-upload" accept="image/*" className="hidden" onChange={e => setSlipFile(e.target.files?.[0] || null)} />
+                    <input type="file" id="slip-upload" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleSlipChange(e.target.files[0])} />
                     <label htmlFor="slip-upload" className="inline-block bg-pink-600 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-pink-700 transition">
                         {slipFile ? 'เปลี่ยนรูปภาพ' : 'อัปโหลดสลิป'}
                     </label>

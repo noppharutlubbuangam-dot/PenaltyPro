@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
@@ -420,30 +421,71 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' })));
   };
 
+  // Helper for Age Calculation
+  const calculateAge = (birthDateString?: string) => { 
+      if (!birthDateString) return '-'; 
+      const parts = birthDateString.split('/'); 
+      let birthDate: Date; 
+      if (parts.length === 3) { 
+          birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); 
+      } else { 
+          birthDate = new Date(birthDateString); 
+      } 
+      if (isNaN(birthDate.getTime())) return '-'; 
+      const today = new Date(); 
+      let age = today.getFullYear() - birthDate.getFullYear(); 
+      const m = today.getMonth() - birthDate.getMonth(); 
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { 
+          age--; 
+      } 
+      return age; 
+  };
+
   const renderRoster = (teamName: string) => {
       const team = teams.find(t => t.name === teamName);
       if (!team) return <div className="text-center text-slate-400 py-4">ไม่พบข้อมูลทีม</div>;
       const roster = players.filter(p => p.teamId === team.id);
+      
       return (
-          <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg">
+          <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
                   {team.logoUrl && <img src={team.logoUrl} className="w-8 h-8 object-contain" />}
                   <div>
-                      <div className="font-bold text-slate-800">{team.name}</div>
+                      <div className="font-bold text-slate-800 text-sm">{team.name}</div>
                       <div className="text-xs text-slate-500">{team.managerName ? `ผจก: ${team.managerName}` : ''}</div>
                   </div>
               </div>
+              
               {roster.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
+                  <div className="grid grid-cols-1 gap-2">
                       {roster.map(p => (
-                          <div key={p.id} className="flex items-center gap-3 text-sm p-1.5 border-b border-slate-50 last:border-0">
-                              <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold text-xs shrink-0">{p.number}</div>
-                              <div className="flex-1">{p.name}</div>
-                              {p.photoUrl && <img src={p.photoUrl} className="w-6 h-6 rounded-full object-cover" />}
+                          <div key={p.id} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded-lg shadow-sm hover:shadow-md transition">
+                              {/* Photo - Optimized size for check */}
+                              <div className="w-16 h-20 bg-slate-200 rounded-md overflow-hidden shrink-0 border border-slate-200">
+                                   {p.photoUrl ? (
+                                      <img src={p.photoUrl} className="w-full h-full object-cover" />
+                                   ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                          <User className="w-6 h-6" />
+                                      </div>
+                                   )}
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xl font-black text-indigo-700 font-mono italic">#{p.number}</span>
+                                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.position || 'Player'}</span>
+                                  </div>
+                                  <div className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{p.name}</div>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                      <span>เกิด: {p.birthDate || '-'}</span>
+                                      <span className="bg-indigo-50 text-indigo-600 px-1 rounded font-bold">อายุ {calculateAge(p.birthDate)}</span>
+                                  </div>
+                              </div>
                           </div>
                       ))}
                   </div>
-              ) : <div className="text-center text-slate-400 text-xs">ไม่มีรายชื่อนักกีฬา</div>}
+              ) : <div className="text-center text-slate-400 text-xs py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ไม่มีรายชื่อนักกีฬา</div>}
           </div>
       );
   };
