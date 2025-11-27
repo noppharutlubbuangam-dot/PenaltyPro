@@ -490,7 +490,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                        <div>
                            <input type="number" step="any" placeholder="Longitude (ลองจิจูด)" value={configForm.locationLng || ''} onChange={e => setConfigForm({...configForm, locationLng: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg text-sm" />
                        </div>
-                       <p className="col-span-2 text-[10px] text-slate-400">หาพิกัดได้จาก Google Maps (คลิกขวาที่จุด > เลือกตัวเลขพิกัด)</p>
+                       <p className="col-span-2 text-[10px] text-slate-400">หาพิกัดได้จาก Google Maps (คลิกขวาที่จุด &gt; เลือกตัวเลขพิกัด)</p>
                    </div>
                </div>
                <div className="mt-4 border-t pt-4">
