@@ -1,8 +1,7 @@
-
-
-import React, { useState } from 'react';
-import { Team, Standing, Match, Kick, KickResult } from '../types';
-import { Trophy, ArrowLeft, Calendar, LayoutGrid, X, User, Phone, MapPin, Grid, Info, BarChart3, History } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Team, Standing, Match, KickResult, Player } from '../types'; 
+import { Trophy, ArrowLeft, Calendar, LayoutGrid, X, User, Phone, MapPin, Info, BarChart3, History, Sparkles } from 'lucide-react'; 
+import PlayerCard from './PlayerCard'; 
 
 interface StandingsViewProps {
   matches: Match[]; 
@@ -216,8 +215,20 @@ interface TeamDetailModalProps {
 }
 
 const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClose }) => {
-    const [tab, setTab] = useState<'info' | 'form' | 'stats'>('info');
+    const [tab, setTab] = useState<'info' | 'form' | 'stats' | 'cards'>('info'); 
     const [formLimit, setFormLimit] = useState(5);
+    const [players, setPlayers] = useState<Player[]>([]);
+    const [cardPlayer, setCardPlayer] = useState<Player | null>(null);
+
+    useEffect(() => {
+        import('../services/sheetService').then(service => {
+            service.fetchDatabase().then(data => {
+                if (data && data.players) {
+                    setPlayers(data.players.filter(p => p.teamId === team.id));
+                }
+            });
+        });
+    }, [team.id]);
 
     // Calculate Form (Last 5 matches)
     const teamMatches = matches
@@ -236,12 +247,10 @@ const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClos
         if (m.kicks) {
             m.kicks.forEach(k => {
                 if (k.result === KickResult.GOAL && (k.teamId === team.name || k.teamId === 'A' && (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === team.name || k.teamId === 'B' && (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) === team.name)) {
-                    // Clean player name (remove number if present like "Name #10")
                     let pName = k.player.trim();
                     if (pName.includes('(#')) {
                          pName = pName.split('(#')[0].trim();
                     } else {
-                         // Fallback heuristic if no standard format
                          pName = pName.replace(/[0-9]/g, '').replace('#','').trim();
                     }
                     if(!pName) pName = "ไม่ระบุชื่อ";
@@ -257,6 +266,10 @@ const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClos
 
     return (
         <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+            {cardPlayer && (
+                <PlayerCard player={cardPlayer} team={team} onClose={() => setCardPlayer(null)} />
+            )}
+
             <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="bg-slate-900 p-6 text-white relative shrink-0">
@@ -275,10 +288,11 @@ const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClos
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b shrink-0">
-                    <button onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'info' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><Info className="w-4 h-4"/> ข้อมูล</button>
-                    <button onClick={() => setTab('form')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'form' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><History className="w-4 h-4"/> ฟอร์ม</button>
-                    <button onClick={() => setTab('stats')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'stats' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><BarChart3 className="w-4 h-4"/> สถิติ</button>
+                <div className="flex border-b shrink-0 overflow-x-auto">
+                    <button onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition min-w-[80px] ${tab === 'info' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><Info className="w-4 h-4"/> ข้อมูล</button>
+                    <button onClick={() => setTab('form')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition min-w-[80px] ${tab === 'form' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><History className="w-4 h-4"/> ฟอร์ม</button>
+                    <button onClick={() => setTab('stats')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition min-w-[80px] ${tab === 'stats' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><BarChart3 className="w-4 h-4"/> สถิติ</button>
+                    <button onClick={() => setTab('cards')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition min-w-[80px] ${tab === 'cards' ? 'text-yellow-600 border-b-2 border-yellow-500 bg-yellow-50' : 'text-slate-500 hover:bg-slate-50'}`}><Sparkles className="w-4 h-4 text-yellow-500"/> Cards</button>
                 </div>
 
                 {/* Content */}
@@ -366,6 +380,45 @@ const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClos
                                     </div>
                                 )) : (
                                     <div className="text-center text-slate-400 py-6 text-sm">ไม่มีข้อมูลการทำประตู</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'cards' && (
+                        <div className="space-y-4">
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
+                                <Sparkles className="w-5 h-5 text-yellow-600 mt-0.5"/>
+                                <div>
+                                    <h4 className="font-bold text-yellow-800 text-sm">Player Spotlight Cards</h4>
+                                    <p className="text-xs text-yellow-700">เลือกนักเตะเพื่อสร้างการ์ดเท่ๆ แชร์ลงโซเชียล!</p>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                {players.length > 0 ? players.map(p => (
+                                    <button 
+                                        key={p.id} 
+                                        onClick={() => setCardPlayer(p)}
+                                        className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:border-yellow-400 hover:ring-2 hover:ring-yellow-100 transition flex flex-col items-center gap-2 group"
+                                    >
+                                        <div className="w-16 h-16 rounded-full bg-slate-100 overflow-hidden border-2 border-slate-200 group-hover:border-yellow-400 transition">
+                                            {p.photoUrl ? (
+                                                <img src={p.photoUrl} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User className="w-full h-full p-3 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="font-bold text-slate-800 text-sm truncate w-24">{p.name}</div>
+                                            <div className="text-xs text-slate-500">#{p.number}</div>
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <div className="col-span-2 text-center py-8 text-slate-400 flex flex-col items-center">
+                                        <User className="w-12 h-12 mb-2 text-slate-200" />
+                                        <span>กำลังโหลดข้อมูลนักเตะ...</span>
+                                    </div>
                                 )}
                             </div>
                         </div>
