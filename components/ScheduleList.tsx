@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, ArrowRight, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Share2, Edit2, Trash2, PlayCircle, Video, Image, BarChart2, ImageIcon, Camera, Filter, Users, User, PlusCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
 
@@ -19,56 +20,6 @@ interface ScheduleListProps {
 }
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
-
-// --- Helper Functions ---
-
-const formatDate = (dateStr: string) => { 
-  try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } 
-  catch(e) { return dateStr; } 
-};
-
-const formatTime = (dateStr: string) => { 
-  try { return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); } 
-  catch(e) { return ''; } 
-};
-
-const getRoundName = (label: string) => {
-  if (!label) return 'อื่นๆ';
-  const groupMatch = label.match(/Group\s+[A-Z0-9]+/i);
-  if (groupMatch) return groupMatch[0];
-  if (label.includes(':')) return label.split(':')[0].trim();
-  return label;
-};
-
-const getEmbedUrl = (url: string) => {
-  if (!url) return null;
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      let videoId = '';
-      if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
-      else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
-      if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-  }
-  if (url.includes('facebook.com')) {
-      const encodedUrl = encodeURIComponent(url);
-      return `https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=false&t=0&autoplay=1`;
-  }
-  return null;
-};
-
-const calculateAge = (birthDateString?: string) => { 
-  if (!birthDateString) return '-'; 
-  const parts = birthDateString.split('/'); 
-  let birthDate: Date; 
-  if (parts.length === 3) birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); 
-  else birthDate = new Date(birthDateString); 
-  if (isNaN(birthDate.getTime())) return '-'; 
-  const today = new Date(); 
-  let age = today.getFullYear() - birthDate.getFullYear(); 
-  if (today.getMonth() < birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--; 
-  return age; 
-};
-
-// --- Sub Components ---
 
 interface TeamSelectorProps {
     isOpen: boolean;
@@ -142,9 +93,7 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     );
 };
 
-// --- Main Component ---
-
-export default function ScheduleList({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }: ScheduleListProps) {
+const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -219,6 +168,18 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
     } as Team;
   };
 
+  const formatDate = (dateStr: string) => { try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(e) { return dateStr; } };
+  const formatTime = (dateStr: string) => { try { return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); } catch(e) { return ''; } };
+
+  // Filter Logic
+  const getRoundName = (label: string) => {
+    if (!label) return 'อื่นๆ';
+    const groupMatch = label.match(/Group\s+[A-Z0-9]+/i);
+    if (groupMatch) return groupMatch[0];
+    if (label.includes(':')) return label.split(':')[0].trim();
+    return label;
+  };
+
   const uniqueRounds = Array.from(new Set(scheduledMatches.map(m => getRoundName(m.roundLabel || '')))).sort();
 
   const filteredScheduled = scheduledMatches.filter(m => {
@@ -245,6 +206,7 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
 
   const sortedDates = Object.keys(groupedScheduled).sort();
 
+  // ... (Add/Edit Match Handlers remain same) ...
   const handleOpenAdd = () => { 
       const today = new Date().toISOString().split('T')[0];
       setMatchForm({ id: '', teamA: '', teamB: '', date: today, time: '09:00', venue: '', roundLabel: 'Group A', livestreamUrl: '' });
@@ -436,6 +398,64 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
+  
+  const calculateAge = (birthDateString?: string) => { 
+      if (!birthDateString) return '-'; 
+      const parts = birthDateString.split('/'); 
+      let birthDate: Date; 
+      if (parts.length === 3) birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); 
+      else birthDate = new Date(birthDateString); 
+      if (isNaN(birthDate.getTime())) return '-'; 
+      const today = new Date(); 
+      let age = today.getFullYear() - birthDate.getFullYear(); 
+      if (today.getMonth() < birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--; 
+      return age; 
+  };
+
+  const getEmbedUrl = (url: string) => {
+      if (!url) return null;
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          let videoId = '';
+          if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
+          else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
+          if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      }
+      if (url.includes('facebook.com')) {
+          const encodedUrl = encodeURIComponent(url);
+          return `https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=false&t=0&autoplay=1`;
+      }
+      return null;
+  };
+
+  const renderRoster = (teamName: string) => {
+      const team = teams.find(t => t.name === teamName);
+      if (!team) return <div className="text-center text-slate-400 py-4">ไม่พบข้อมูลทีม</div>;
+      const roster = players.filter(p => p.teamId === team.id);
+      return (
+          <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                  {team.logoUrl && <img src={team.logoUrl} className="w-8 h-8 object-contain" />}
+                  <div><div className="font-bold text-slate-800 text-sm">{team.name}</div><div className="text-xs text-slate-500">{team.managerName ? `ผจก: ${team.managerName}` : ''}</div></div>
+              </div>
+              {roster.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2">
+                      {roster.map(p => (
+                          <div key={p.id} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded-lg shadow-sm hover:shadow-md transition">
+                              <div className="w-16 h-20 bg-slate-200 rounded-md overflow-hidden shrink-0 border border-slate-200">
+                                   {p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><User className="w-6 h-6" /></div>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1"><span className="text-xl font-black text-indigo-700 font-mono italic">#{p.number}</span><span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.position || 'Player'}</span></div>
+                                  <div className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{p.name}</div>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500"><span>เกิด: {p.birthDate || '-'}</span><span className="bg-indigo-50 text-indigo-600 px-1 rounded font-bold">อายุ {calculateAge(p.birthDate)}</span></div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              ) : <div className="text-center text-slate-400 text-xs py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ไม่มีรายชื่อนักกีฬา</div>}
+          </div>
+      );
+  };
 
   const getFilteredTeams = (excludeName?: string) => {
     const currentGroup = activeMatchType === 'group' && matchForm.roundLabel.startsWith('Group ') ? matchForm.roundLabel.replace('Group ', '').trim() : null;
@@ -458,6 +478,15 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
   const addBulkRow = () => { const last = bulkMatches[bulkMatches.length - 1]; setBulkMatches([...bulkMatches, { tempId: Date.now().toString(), teamA: '', teamB: '', time: last ? last.time : '09:00', venue: last ? last.venue : '' }]); };
   const removeBulkRow = (idx: number) => { if (bulkMatches.length > 1) setBulkMatches(bulkMatches.filter((_, i) => i !== idx)); };
   const updateBulkRow = (idx: number, field: keyof typeof bulkMatches[0], value: string) => { const newRows = [...bulkMatches]; newRows[idx] = { ...newRows[idx], [field]: value }; setBulkMatches(newRows); };
+
+  const TeamSelectionButton = ({ value, placeholder, onClick, disabled }: { value: string, placeholder: string, onClick: () => void, disabled?: boolean }) => {
+      const team = teams.find(t => t.name === value);
+      return (
+        <button type="button" onClick={onClick} disabled={disabled} className={`w-full p-2.5 border rounded-lg flex items-center justify-between text-left transition ${disabled ? 'bg-slate-50 opacity-50 cursor-not-allowed' : 'bg-white hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100'}`}>
+            <div className="flex items-center gap-2 overflow-hidden">{team ? (<>{team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded-md object-contain border border-slate-100 p-0.5" /> : <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-500">{team.name.substring(0,1)}</div>}<span className="font-bold text-slate-700 truncate text-sm">{team.name}</span></>) : (<span className="text-slate-400 text-sm flex items-center gap-1"><Users className="w-4 h-4"/> {placeholder}</span>)}</div><ChevronDown className="w-4 h-4 text-slate-300" />
+        </button>
+      );
+  };
 
   const renderScorers = (match: Match, teamName: string, side: 'A' | 'B') => {
       const scorers = (match.kicks || []).filter(k => (k.teamId === teamName || k.teamId === 'A' || k.teamId === 'B') && k.result === KickResult.GOAL).filter(k => { if (k.teamId === 'A' && side === 'A') return true; if (k.teamId === 'B' && side === 'B') return true; if (k.teamId === teamName) return true; return false; });
@@ -542,45 +571,6 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
                   <StatBar label="Win Rate" valA={statsA.winRate} valB={statsB.winRate} suffix="%" />
                   <StatBar label="Total Goals" valA={statsA.goals} valB={statsB.goals} />
               </div>
-          </div>
-      );
-  };
-
-  const TeamSelectionButton = ({ value, placeholder, onClick, disabled }: { value: string, placeholder: string, onClick: () => void, disabled?: boolean }) => {
-      const team = teams.find(t => t.name === value);
-      return (
-        <button type="button" onClick={onClick} disabled={disabled} className={`w-full p-2.5 border rounded-lg flex items-center justify-between text-left transition ${disabled ? 'bg-slate-50 opacity-50 cursor-not-allowed' : 'bg-white hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100'}`}>
-            <div className="flex items-center gap-2 overflow-hidden">{team ? (<>{team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded-md object-contain border border-slate-100 p-0.5" /> : <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-500">{team.name.substring(0,1)}</div>}<span className="font-bold text-slate-700 truncate text-sm">{team.name}</span></>) : (<span className="text-slate-400 text-sm flex items-center gap-1"><Users className="w-4 h-4"/> {placeholder}</span>)}</div><ChevronDown className="w-4 h-4 text-slate-300" />
-        </button>
-      );
-  };
-
-  const renderRoster = (teamName: string) => {
-      const team = teams.find(t => t.name === teamName);
-      if (!team) return <div className="text-center text-slate-400 py-4">ไม่พบข้อมูลทีม</div>;
-      const roster = players.filter(p => p.teamId === team.id);
-      return (
-          <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  {team.logoUrl && <img src={team.logoUrl} className="w-8 h-8 object-contain" />}
-                  <div><div className="font-bold text-slate-800 text-sm">{team.name}</div><div className="text-xs text-slate-500">{team.managerName ? `ผจก: ${team.managerName}` : ''}</div></div>
-              </div>
-              {roster.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2">
-                      {roster.map(p => (
-                          <div key={p.id} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded-lg shadow-sm hover:shadow-md transition">
-                              <div className="w-16 h-20 bg-slate-200 rounded-md overflow-hidden shrink-0 border border-slate-200">
-                                   {p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><User className="w-6 h-6" /></div>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1"><span className="text-xl font-black text-indigo-700 font-mono italic">#{p.number}</span><span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.position || 'Player'}</span></div>
-                                  <div className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{p.name}</div>
-                                  <div className="flex items-center gap-2 text-[10px] text-slate-500"><span>เกิด: {p.birthDate || '-'}</span><span className="bg-indigo-50 text-indigo-600 px-1 rounded font-bold">อายุ {calculateAge(p.birthDate)}</span></div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              ) : <div className="text-center text-slate-400 text-xs py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ไม่มีรายชื่อนักกีฬา</div>}
           </div>
       );
   };
@@ -780,7 +770,7 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
                         <div className="sticky top-0 z-50 bg-indigo-900/95 backdrop-blur-sm border-t border-white/10 shadow-lg">
                              <div className="flex w-full">
                                  <button onClick={() => setDetailTab('overview')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition ${detailTab === 'overview' ? 'text-white border-b-4 border-white bg-white/10' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>
-                                     <ClipboardCheck className="w-4 h-4" /> ภาพรวม
+                                     <ListPlus className="w-4 h-4" /> ภาพรวม
                                  </button>
                                  <button onClick={() => setDetailTab('stats')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition ${detailTab === 'stats' ? 'text-white border-b-4 border-white bg-white/10' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>
                                      <BarChart2 className="w-4 h-4" /> วิเคราะห์
@@ -915,7 +905,7 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
             </div>
         )}
 
-        {/* Add/Edit Match Modal */}
+        {/* Add/Edit Match Modal ... (Rest of modal code remains same) ... */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setIsAddModalOpen(false)}>
                 <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`} onClick={e => e.stopPropagation()}>
@@ -923,7 +913,7 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
                         <h3 className="text-lg font-bold text-slate-800">{matchForm.id ? 'แก้ไขตาราง' : 'เพิ่มตารางการแข่งขัน'}</h3>
                         <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
                     </div>
-                    
+                    {/* ... (Existing Form Logic) ... */}
                     <div className="space-y-4">
                         {!matchForm.id && (
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2">
@@ -931,153 +921,95 @@ export default function ScheduleList({ matches, teams, players = [], onBack, isA
                             <div className="flex bg-white rounded-lg p-1 border border-slate-200 mb-3 shadow-sm">
                                 <button onClick={() => setActiveMatchType('group')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${activeMatchType === 'group' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>รอบแบ่งกลุ่ม</button>
                                 <button onClick={() => setActiveMatchType('knockout')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${activeMatchType === 'knockout' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>น็อคเอาท์</button>
-                                <button onClick={() => setActiveMatchType('custom')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${activeMatchType === 'custom' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>กำหนดเอง</button>
+                                <button onClick={() => setActiveMatchType('custom')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${activeMatchType === 'custom' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>ทั่วไป</button>
                             </div>
+                            {activeMatchType === 'group' && (
+                                <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                                    <label className="text-xs font-bold text-slate-500 mb-2 block flex items-center justify-between"><span>เลือกกลุ่ม</span><span className="text-[10px] font-normal text-slate-400">ระบุกลุ่ม A-H</span></label>
+                                    <div className="flex flex-wrap gap-2">{['A','B','C','D','E','F','G','H'].map(g => (<button key={g} onClick={() => setGroupRound(g)} className={`w-9 h-9 rounded-lg border text-sm font-bold transition hover:scale-105 active:scale-95 ${matchForm.roundLabel === `Group ${g}` ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-200' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>{g}</button>))}</div>
+                                    <p className="text-[10px] text-indigo-600 mt-2 flex items-center gap-1 bg-indigo-50 p-1 rounded"><ListPlus className="w-3 h-3"/> แสดงเฉพาะทีมในกลุ่ม {matchForm.roundLabel.replace('Group ', '')}</p>
+                                </div>
+                            )}
+                            {activeMatchType === 'knockout' && (
+                                <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                                    <label className="text-xs font-bold text-slate-500 mb-1 block">เลือกรอบการแข่งขัน</label>
+                                    <div className="relative"><select value={matchForm.roundLabel} onChange={e => setMatchForm({...matchForm, roundLabel: e.target.value})} className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-indigo-500 outline-none"><option value="Round of 32">Round of 32 (32 ทีม)</option><option value="Round of 16">Round of 16 (16 ทีม)</option><option value="Quarter Final">Quarter Final (8 ทีม)</option><option value="Semi Final">Semi Final (รองชนะเลิศ)</option><option value="Final">Final (ชิงชนะเลิศ)</option><option value="3rd Place">3rd Place (ชิงที่ 3)</option></select><ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" /></div>
+                                </div>
+                            )}
+                            {activeMatchType === 'custom' && (
+                                <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                                    <label className="text-xs font-bold text-slate-500 mb-1 block">ชื่อรายการ / รอบ</label>
+                                    <input type="text" value={matchForm.roundLabel} onChange={e => setMatchForm({...matchForm, roundLabel: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="เช่น กระชับมิตร, รอบพิเศษ..." />
+                                </div>
+                            )}
                         </div>
                         )}
+                        <div><label className="text-xs font-bold text-slate-500 mb-1 block">{activeMatchType === 'group' && !matchForm.id ? 'วันที่แข่ง (ใช้ร่วมกัน)' : 'วันที่'}</label><input type="date" value={matchForm.date} onChange={e => setMatchForm({...matchForm, date: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" /></div>
 
-                        {/* Round / Group Name */}
-                         <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">{activeMatchType === 'group' ? 'ชื่อกลุ่ม (เช่น A, B)' : 'รอบการแข่งขัน (เช่น Final, R16)'}</label>
-                            <div className="relative">
-                                {activeMatchType === 'group' ? (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-bold text-slate-500">Group</span>
-                                        <input 
-                                            type="text" 
-                                            value={matchForm.roundLabel.replace('Group ', '')} 
-                                            onChange={(e) => setGroupRound(e.target.value.toUpperCase())} 
-                                            className="w-full p-2 border rounded-lg uppercase" 
-                                            placeholder="A"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="relative">
-                                        <input type="text" value={matchForm.roundLabel} onChange={(e) => setMatchForm({...matchForm, roundLabel: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="ระบุรอบ..." />
-                                        {activeMatchType === 'knockout' && (
-                                            <div className="absolute right-2 top-2 flex gap-1">
-                                                <button onClick={() => setMatchForm({...matchForm, roundLabel: 'Final'})} className="text-[10px] bg-slate-100 px-1.5 rounded hover:bg-slate-200">Final</button>
-                                                <button onClick={() => setMatchForm({...matchForm, roundLabel: 'SF'})} className="text-[10px] bg-slate-100 px-1.5 rounded hover:bg-slate-200">SF</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Common Date */}
-                        <div className="grid grid-cols-2 gap-4">
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">วันที่แข่ง</label>
-                                <input type="date" value={matchForm.date} onChange={(e) => setMatchForm({...matchForm, date: e.target.value})} className="w-full p-2 border rounded-lg" />
-                             </div>
-                             {(!activeMatchType || activeMatchType !== 'group' || matchForm.id) && (
-                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">เวลา</label>
-                                    <input type="time" value={matchForm.time} onChange={(e) => setMatchForm({...matchForm, time: e.target.value})} className="w-full p-2 border rounded-lg" />
-                                 </div>
-                             )}
-                        </div>
-
-                        {/* BULK MODE (Only for Group Create) */}
                         {activeMatchType === 'group' && !matchForm.id ? (
-                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="text-xs font-bold text-slate-500">ตารางคู่แข่งขัน</label>
-                                    <button onClick={addBulkRow} className="text-indigo-600 text-xs font-bold flex items-center gap-1 hover:underline"><PlusCircle className="w-3 h-3"/> เพิ่มคู่</button>
-                                </div>
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                    {bulkMatches.map((row, idx) => (
-                                        <div key={row.tempId} className="flex gap-2 items-center">
-                                            <div className="w-6 text-center text-xs font-bold text-slate-400">{idx+1}</div>
-                                            <div className="flex-1"><TeamSelectionButton value={row.teamA} placeholder="ทีมเหย้า" onClick={() => openTeamSelector('bulkA', idx, row.teamA)} /></div>
-                                            <div className="text-xs font-bold text-slate-300">VS</div>
-                                            <div className="flex-1"><TeamSelectionButton value={row.teamB} placeholder="ทีมเยือน" onClick={() => openTeamSelector('bulkB', idx, row.teamB)} /></div>
-                                            <input type="time" value={row.time} onChange={(e) => updateBulkRow(idx, 'time', e.target.value)} className="w-20 p-2 border rounded-lg text-xs" />
-                                            {bulkMatches.length > 1 && <button onClick={() => removeBulkRow(idx)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div className="bg-slate-100 p-2 grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 text-center"><div className="col-span-2">เวลา</div><div className="col-span-3">ทีมเหย้า</div><div className="col-span-3">ทีมเยือน</div><div className="col-span-3">สนาม</div><div className="col-span-1">ลบ</div></div>
+                                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white"><datalist id="venue-list">{VENUE_OPTIONS.map(v => <option key={v} value={v} />)}</datalist>{bulkMatches.map((row, idx) => (<div key={row.tempId} className="grid grid-cols-12 gap-2 p-2 items-center text-sm"><div className="col-span-2"><input type="time" value={row.time} onChange={(e) => updateBulkRow(idx, 'time', e.target.value)} className="w-full p-1 border rounded text-center text-xs" /></div><div className="col-span-3"><TeamSelectionButton value={row.teamA} placeholder="เหย้า" onClick={() => openTeamSelector('bulkA', idx, row.teamA)} /></div><div className="col-span-3"><TeamSelectionButton value={row.teamB} placeholder="เยือน" onClick={() => openTeamSelector('bulkB', idx, row.teamB)} /></div><div className="col-span-3"><input type="text" list="venue-list" value={row.venue} onChange={(e) => updateBulkRow(idx, 'venue', e.target.value)} className="w-full p-1.5 border rounded text-xs" placeholder="สนาม..." /></div><div className="col-span-1 flex justify-center"><button onClick={() => removeBulkRow(idx)} className="text-slate-300 hover:text-red-500 disabled:opacity-30" disabled={bulkMatches.length <= 1}><X className="w-4 h-4" /></button></div></div>))}</div>
+                                <div className="bg-slate-50 p-2 text-center"><button onClick={addBulkRow} className="text-indigo-600 text-xs font-bold hover:underline flex items-center justify-center gap-1 w-full"><PlusCircle className="w-4 h-4"/> เพิ่มคู่แข่งขันอีก</button></div>
                             </div>
                         ) : (
-                            /* SINGLE MODE */
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                                    <TeamSelectionButton value={matchForm.teamA} placeholder="ทีม A" onClick={() => openTeamSelector('singleA', 0, matchForm.teamA)} />
-                                    <span className="font-bold text-slate-300">VS</span>
-                                    <TeamSelectionButton value={matchForm.teamB} placeholder="ทีม B" onClick={() => openTeamSelector('singleB', 0, matchForm.teamB)} />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">สนามแข่งขัน</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                        <input type="text" list="venues" value={matchForm.venue} onChange={(e) => setMatchForm({...matchForm, venue: e.target.value})} className="w-full pl-9 p-2 border rounded-lg" placeholder="เลือกหรือพิมพ์ชื่อสนาม..." />
-                                        <datalist id="venues">{VENUE_OPTIONS.map(v => <option key={v} value={v} />)}</datalist>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                    <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1"><Video className="w-3 h-3"/> ลิงก์ถ่ายทอดสด (Optional)</label>
-                                    <input type="text" value={matchForm.livestreamUrl} onChange={(e) => setMatchForm({...matchForm, livestreamUrl: e.target.value})} className="w-full p-2 border rounded-lg mb-3 text-sm" placeholder="https://youtube.com/..." />
-                                    
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-20 h-12 bg-slate-200 rounded overflow-hidden flex items-center justify-center border">
-                                            {matchCover.preview ? <img src={matchCover.preview} className="w-full h-full object-cover" /> : <Image className="w-5 h-5 text-slate-400" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-xs text-slate-500 mb-1">รูปปกวิดีโอ (Cover)</p>
-                                            <label className="cursor-pointer inline-block bg-white border border-slate-300 px-3 py-1 rounded text-xs hover:bg-slate-50">
-                                                เลือกรูปภาพ
-                                                <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleCoverChange(e.target.files[0])} />
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500 mb-1 block">ทีมเหย้า (Home)</label><TeamSelectionButton value={matchForm.teamA} placeholder="เลือกทีม..." onClick={() => openTeamSelector('singleA')} /></div><div><label className="text-xs font-bold text-slate-500 mb-1 block">ทีมเยือน (Away)</label><TeamSelectionButton value={matchForm.teamB} placeholder="เลือกทีม..." onClick={() => openTeamSelector('singleB')} /></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500 mb-1 block">เวลา</label><input type="time" value={matchForm.time} onChange={e => setMatchForm({...matchForm, time: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" /></div><div><label className="text-xs font-bold text-slate-500 mb-1 block">สนามแข่ง</label><div className="relative"><input type="text" list="single-venue-list" value={matchForm.venue} onChange={e => setMatchForm({...matchForm, venue: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="สนาม..." /><datalist id="single-venue-list">{VENUE_OPTIONS.map(v => <option key={v} value={v} />)}</datalist></div></div></div>
+                            <div className="border-t border-slate-100 pt-3 mt-2"><label className="text-xs font-bold text-slate-500 mb-2 block flex items-center gap-2"><Video className="w-4 h-4" /> Live Stream (Youtube/Facebook)</label><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><input type="text" value={matchForm.livestreamUrl} onChange={e => setMatchForm({...matchForm, livestreamUrl: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="https://www.youtube.com/watch?v=..." /><p className="text-[10px] text-slate-400 mt-1 flex gap-2"><span className="flex items-center gap-1"><Youtube className="w-3 h-3"/> Support Youtube</span><span className="flex items-center gap-1"><Facebook className="w-3 h-3"/> Support FB Watch</span></p></div><div><label className="flex items-center gap-2 p-2 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition"><div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center shrink-0">{matchCover.preview ? <img src={matchCover.preview} className="w-full h-full object-cover rounded" /> : <Image className="w-4 h-4 text-slate-400" />}</div><span className="text-xs text-slate-500 truncate">{matchCover.file ? matchCover.file.name : 'อัปโหลดรูปปก Live (ถ้ามี)'}</span><input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleCoverChange(e.target.files[0])} /></label></div></div></div>
+                        </>
                         )}
-
-                        <button onClick={handleSaveMatch} disabled={isSaving} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 mt-4">
-                            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} บันทึกข้อมูล
-                        </button>
+                        <button onClick={handleSaveMatch} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 mt-2">{isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} บันทึกตารางแข่ง</button>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* Edit Result Modal */}
+        {/* Edit Result Modal ... (Rest remains same) */}
         {isEditResultOpen && (
-             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsEditResultOpen(false)}>
-                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                    <h3 className="font-bold text-lg mb-4 text-slate-800">แก้ไขผลการแข่งขัน</h3>
-                    <div className="flex items-center justify-between gap-4 mb-6">
-                         <div className="text-center w-1/3">
-                             <div className="font-bold text-sm mb-2">{editResultForm.teamA}</div>
-                             <input type="number" value={editResultForm.scoreA} onChange={e => setEditResultForm({...editResultForm, scoreA: e.target.value})} className="w-full p-3 text-center text-2xl font-bold border rounded-xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" />
+            <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsEditResultOpen(false)}>
+                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                     <div className="flex justify-between items-center mb-4 border-b pb-2">
+                         <h3 className="font-bold text-lg text-slate-800">แก้ไขผลการแข่งขัน</h3>
+                         <button onClick={() => setIsEditResultOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+                     </div>
+                     <div className="mb-6 flex items-center justify-between gap-4">
+                         <div className="text-center flex-1">
+                             <div className="font-bold text-slate-700 mb-2 truncate text-sm">{editResultForm.teamA}</div>
+                             <input type="number" value={editResultForm.scoreA} onChange={e => setEditResultForm({...editResultForm, scoreA: e.target.value})} className="w-full p-3 border rounded-lg text-center font-bold text-xl bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
                          </div>
-                         <div className="text-2xl font-black text-slate-300">-</div>
-                         <div className="text-center w-1/3">
-                             <div className="font-bold text-sm mb-2">{editResultForm.teamB}</div>
-                             <input type="number" value={editResultForm.scoreB} onChange={e => setEditResultForm({...editResultForm, scoreB: e.target.value})} className="w-full p-3 text-center text-2xl font-bold border rounded-xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                         <span className="font-bold text-slate-300 text-xl mt-6">:</span>
+                         <div className="text-center flex-1">
+                             <div className="font-bold text-slate-700 mb-2 truncate text-sm">{editResultForm.teamB}</div>
+                             <input type="number" value={editResultForm.scoreB} onChange={e => setEditResultForm({...editResultForm, scoreB: e.target.value})} className="w-full p-3 border rounded-lg text-center font-bold text-xl bg-slate-50 focus:ring-2 focus:ring-red-500 outline-none" />
                          </div>
-                    </div>
-                    <button onClick={handleSaveEditedResult} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2">
-                        {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'บันทึกผล'}
-                    </button>
-                </div>
-             </div>
-        )}
-
-        {/* Delete Confirmation Overlay (Optional if using standard confirm) */}
-        {isDeleting && (
-            <div className="fixed inset-0 z-[1200] bg-black/20 flex items-center justify-center backdrop-blur-sm">
-                 <div className="bg-white p-4 rounded-xl shadow-lg flex items-center gap-3">
-                     <Loader2 className="w-6 h-6 animate-spin text-red-500" />
-                     <span className="font-bold text-slate-700">กำลังดำเนินการ...</span>
+                     </div>
+                     <button onClick={handleSaveEditedResult} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : "บันทึกผลใหม่"}
+                     </button>
                  </div>
             </div>
         )}
 
+        {/* Delete / Reset Confirmation Modal ... (Rest remains same) */}
+        {(matchToDelete || matchToReset) && (
+            <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => { setMatchToDelete(null); setMatchToReset(null); }}>
+                <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-3 text-red-600 mb-4">
+                        <AlertTriangle className="w-8 h-8" />
+                        <h3 className="font-bold text-lg">ยืนยันการ{matchToReset ? 'รีเซ็ต' : 'ลบ'}?</h3>
+                    </div>
+                    <p className="text-slate-600 mb-6">{matchToReset ? "การรีเซ็ตจะล้างผลการแข่งขัน คะแนน และผู้ชนะ กลับไปเป็นสถานะ 'รอแข่ง' (Scheduled) และล้างข้อมูลการยิงประตูทั้งหมด" : "คุณต้องการลบตารางการแข่งขันนี้ใช่หรือไม่?"}</p>
+                    <div className="flex gap-3">
+                        <button onClick={() => { setMatchToDelete(null); setMatchToReset(null); }} disabled={isDeleting} className="flex-1 py-2 border rounded-lg hover:bg-slate-50 disabled:opacity-50">ยกเลิก</button>
+                        <button onClick={matchToReset ? handleResetMatch : handleDeleteMatch} disabled={isDeleting} className={`flex-1 py-2 text-white rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50 ${matchToReset ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}`}>{isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : (matchToReset ? "รีเซ็ตผล" : "ลบรายการ")}</button>
+                    </div>
+                </div>
+            </div>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default ScheduleList;
