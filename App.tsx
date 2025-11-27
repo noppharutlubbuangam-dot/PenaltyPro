@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match } from './types';
+import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile } from './types';
 import MatchSetup from './components/MatchSetup';
 import ScoreVisualizer from './components/ScoreVisualizer';
 import PenaltyInterface from './components/PenaltyInterface';
@@ -10,13 +10,15 @@ import TournamentView from './components/TournamentView';
 import StandingsView from './components/StandingsView';
 import AdminDashboard from './components/AdminDashboard';
 import LoginDialog from './components/LoginDialog';
+import UserLoginDialog from './components/UserLoginDialog';
 import PinDialog from './components/PinDialog'; 
 import ScheduleList from './components/ScheduleList'; 
 import NewsFeed from './components/NewsFeed'; 
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, saveKicksToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play } from 'lucide-react';
+import { checkSession, logout } from './services/authService';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -35,6 +37,10 @@ function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [viewKey, setViewKey] = useState<number>(0); // Used to force reset components
   
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isUserLoginOpen, setIsUserLoginOpen] = useState(false);
+
   // Deep Linking State
   const [initialMatchId, setInitialMatchId] = useState<string | null>(null);
   const [initialNewsId, setInitialNewsId] = useState<string | null>(null);
@@ -71,8 +77,13 @@ function App() {
   const announcements = appConfig.announcement ? appConfig.announcement.split('|').filter(s => s.trim() !== '') : [];
 
   useEffect(() => {
+    const init = async () => {
+        await initializeLiff();
+        const user = await checkSession();
+        setCurrentUser(user);
+    };
     loadData();
-    initializeLiff(); 
+    init();
   }, []);
 
   useEffect(() => {
@@ -143,6 +154,21 @@ function App() {
     } finally {
       setIsLoadingData(false);
     }
+  };
+
+  const handleRegisterClick = () => {
+      if (currentUser) {
+          setCurrentView('register');
+      } else {
+          setIsUserLoginOpen(true);
+      }
+  };
+
+  const handleUserLoginSuccess = (user: UserProfile) => {
+      setCurrentUser(user);
+      showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success");
+      // Optional: Auto redirect to register if they clicked it before
+      // setCurrentView('register');
   };
 
   const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => {
@@ -349,12 +375,13 @@ function App() {
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={loadData} currentSettings={appConfig} />
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
       <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={appConfig.adminPin || "1234"} title="กรุณากรอกรหัสเริ่มแข่ง" />
+      <UserLoginDialog isOpen={isUserLoginOpen} onClose={() => setIsUserLoginOpen(false)} onLoginSuccess={handleUserLoginSuccess} />
 
       {/* Modals */}
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
       {editingKick && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1100] p-4 backdrop-blur-sm" onClick={() => setEditingKick(null)}><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
 
-      {currentView === 'register' && <RegistrationForm key={viewKey} onBack={() => { loadData(); setCurrentView('home'); }} schools={schools} config={appConfig} showNotification={showNotification} />}
+      {currentView === 'register' && <RegistrationForm key={viewKey} onBack={() => { loadData(); setCurrentView('home'); }} schools={schools} config={appConfig} showNotification={showNotification} user={currentUser} />}
       {currentView === 'tournament' && <TournamentView key={viewKey} teams={availableTeams} matches={matchesLog} onSelectMatch={handleStartMatchRequest} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onRefresh={loadData} onLoginClick={() => setIsLoginOpen(true)} isLoading={isLoadingData} showNotification={showNotification} />}
       {currentView === 'schedule' && (
         <ScheduleList 
@@ -394,10 +421,26 @@ function App() {
           <div className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm px-4 py-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
                   <img src={appConfig.competitionLogo || "https://via.placeholder.com/40"} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
-                  <h1 className="font-bold text-slate-800 truncate max-w-[200px] text-sm sm:text-base">{appConfig.competitionName}</h1>
+                  <h1 className="font-bold text-slate-800 truncate max-w-[150px] sm:max-w-[200px] text-sm sm:text-base">{appConfig.competitionName}</h1>
               </div>
               <div className="flex items-center gap-2">
-                  <button onClick={() => setCurrentView('register')} className="bg-indigo-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-indigo-700"><UserPlus className="w-3 h-3" /> สมัครแข่ง</button>
+                  {currentUser ? (
+                      <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                          {currentUser.pictureUrl ? (
+                              <img src={currentUser.pictureUrl} className="w-8 h-8 rounded-full border border-slate-200" />
+                          ) : (
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                                  {currentUser.displayName.charAt(0)}
+                              </div>
+                          )}
+                          <div className="hidden sm:block text-xs text-slate-600">
+                              <div className="font-bold max-w-[80px] truncate">{currentUser.displayName}</div>
+                          </div>
+                          <button onClick={logout} className="ml-1 text-slate-400 hover:text-red-500"><LogOut className="w-4 h-4" /></button>
+                      </div>
+                  ) : (
+                      <button onClick={handleRegisterClick} className="bg-indigo-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-indigo-700"><UserPlus className="w-3 h-3" /> สมัครแข่ง</button>
+                  )}
               </div>
           </div>
 

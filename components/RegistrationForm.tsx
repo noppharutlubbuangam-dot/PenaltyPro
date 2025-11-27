@@ -1,16 +1,16 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera } from 'lucide-react';
 import { registerTeam, fileToBase64 } from '../services/sheetService';
 import { shareRegistration } from '../services/liffService';
-import { RegistrationData, AppSettings, School as SchoolType } from '../types';
+import { RegistrationData, AppSettings, School as SchoolType, UserProfile } from '../types';
 
 interface RegistrationFormProps {
   onBack: () => void;
   schools: SchoolType[];
   config: AppSettings;
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
+  user?: UserProfile | null;
 }
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
@@ -54,7 +54,7 @@ const compressImage = async (file: File): Promise<File> => {
     });
 };
 
-const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config, showNotification }) => {
+const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config, showNotification, user }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -99,6 +99,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  
+  // Auto-fill manager info from user profile
+  useEffect(() => {
+    if (user) {
+        if (!managerName) setManagerName(user.displayName);
+        if (!managerPhone && user.phoneNumber) setManagerPhone(user.phoneNumber);
+    }
+  }, [user]);
 
   // PDF Generation Logic (Print Window)
   const handleDownloadPDF = () => {
@@ -262,18 +270,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         
         // Then try to compress and update state again if successful
         compressImage(value).then(compressed => {
-             // We can keep the immediate URL or revoke it and create new one
-             // For simplicity, we just update the file object to be the compressed one.
-             // The preview can stay as is, or be updated.
              const compressedUrl = URL.createObjectURL(compressed);
-             const currentPlayers = [...players];
-             // Need to re-fetch state in a functional update to be safe, but for now:
-             // We just update the array in place if the user hasn't changed it? 
-             // To avoid complexity, we just update the photoFile property silently 
-             // in a way that doesn't disrupt UI if user is typing.
-             // Actually, react state update is enough.
-             
-             // Let's just update the file.
              setPlayers(prev => {
                  const updated = [...prev];
                  updated[index] = { ...updated[index], photoFile: compressed };

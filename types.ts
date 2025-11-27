@@ -146,3 +146,12 @@ export interface Standing {
   goalsAgainst: number; 
   points: number; 
 }
+
+export interface UserProfile {
+  userId: string;
+  displayName: string;
+  pictureUrl?: string;
+  statusMessage?: string;
+  type: 'line' | 'guest';
+  phoneNumber?: string; // Optional for Guest login
+}
