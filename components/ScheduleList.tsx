@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
 
@@ -124,6 +124,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       currentValue?: string;
   }>({ isOpen: false, mode: 'singleA' });
 
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [filterGroup, setFilterGroup] = useState('All');
+
   useEffect(() => {
     if (initialMatchId) {
         const found = matches.find(m => m.id === initialMatchId);
@@ -165,6 +170,41 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
   const formatDate = (dateStr: string) => { try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(e) { return dateStr; } };
   const formatTime = (dateStr: string) => { try { return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); } catch(e) { return ''; } };
+
+  // Filter Logic
+  const getRoundName = (label: string) => {
+    if (!label) return 'อื่นๆ';
+    const groupMatch = label.match(/Group\s+[A-Z0-9]+/i);
+    if (groupMatch) return groupMatch[0];
+    if (label.includes(':')) return label.split(':')[0].trim();
+    return label;
+  };
+
+  const uniqueRounds = Array.from(new Set(scheduledMatches.map(m => getRoundName(m.roundLabel || '')))).sort();
+
+  const filteredScheduled = scheduledMatches.filter(m => {
+    const tA = resolveTeam(m.teamA).name.toLowerCase();
+    const tB = resolveTeam(m.teamB).name.toLowerCase();
+    const search = searchTerm.toLowerCase();
+    const matchesSearch = !search || tA.includes(search) || tB.includes(search) || (m.venue || '').toLowerCase().includes(search);
+    
+    const mDate = new Date(m.scheduledTime || m.date).toISOString().split('T')[0];
+    const matchesDate = !filterDate || mDate === filterDate;
+
+    const mRound = getRoundName(m.roundLabel || '');
+    const matchesRound = filterGroup === 'All' || mRound === filterGroup;
+
+    return matchesSearch && matchesDate && matchesRound;
+  });
+
+  const groupedScheduled = filteredScheduled.reduce((acc, m) => {
+    const d = new Date(m.scheduledTime || m.date).toISOString().split('T')[0];
+    if (!acc[d]) acc[d] = [];
+    acc[d].push(m);
+    return acc;
+  }, {} as Record<string, Match[]>);
+
+  const sortedDates = Object.keys(groupedScheduled).sort();
 
   // ... (Add/Edit Match Handlers remain same) ...
   const handleOpenAdd = () => { 
@@ -454,7 +494,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       return (<div className={`flex flex-wrap gap-2 ${side === 'A' ? 'justify-end' : 'justify-start'}`}>{scorers.map((k, i) => (<div key={i} className="text-xs font-bold text-indigo-900 bg-white/90 shadow-sm border border-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap"><span>⚽ {String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span><span className="text-indigo-400 font-mono text-[10px] border-l border-indigo-100 pl-1.5 ml-1">({k.round}')</span></div>))}</div>);
   };
 
-  // ANALYSIS HELPERS
   const calculateTeamStats = (teamName: string) => {
       const teamFinishedMatches = matches.filter(m => m.winner && (
           (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === teamName ||
@@ -547,39 +586,113 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             {isAdmin && <button onClick={handleOpenAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow hover:bg-indigo-700 transition font-bold text-sm"><Plus className="w-4 h-4" /> เพิ่มคู่แข่ง</button>}
         </div>
 
-        {/* Schedule List */}
+        {/* Schedule List with Filters */}
         <div className="mb-8">
             <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-blue-500">โปรแกรมการแข่งขัน</h2>
-            <div className="space-y-3">
-                {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-white rounded-xl shadow-sm p-4 h-24 animate-pulse"></div>) : scheduledMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ไม่มีโปรแกรมการแข่งขันที่กำลังจะมาถึง</div> : scheduledMatches.map(match => {
-                        const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB);
-                        return (
-                            <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative cursor-pointer">
-                                <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
-                                    <div className="flex md:flex-col items-center md:items-start justify-center min-w-[120px] text-slate-500 text-sm gap-2 md:gap-0 w-full md:w-auto bg-slate-50 md:bg-transparent p-2 md:p-0 rounded-lg">
-                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(match.scheduledTime || match.date)}</span>
-                                        {match.scheduledTime && <span className="flex items-center gap-1 text-indigo-600 font-bold"><Clock className="w-3 h-3" /> {formatTime(match.scheduledTime)}</span>}
-                                    </div>
-                                    <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 w-full py-2 md:py-0">
-                                        <div className="flex items-center justify-center md:justify-end gap-3 flex-1 w-full"><span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-right w-full">{tA.name}</span>{tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}</div>
-                                        <div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap shrink-0">VS</div>
-                                        <div className="flex items-center justify-center md:justify-start gap-3 flex-1 w-full">{tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}<span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-left w-full">{tB.name}</span></div>
-                                    </div>
-                                    <div className="w-full md:w-auto min-w-[150px] flex flex-row md:flex-col items-center justify-between md:justify-end md:items-end text-sm gap-1 border-t md:border-t-0 pt-2 md:pt-0 mt-1 md:mt-0">
-                                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel?.split(':')[0] || 'รอบทั่วไป'}</span>
-                                        {match.livestreamUrl && <span className="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold flex items-center gap-1 animate-pulse"><Video className="w-3 h-3" /> LIVE</span>}
-                                        {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
-                                    </div>
-                                </div>
-                                <div className="w-full pt-3 mt-1 border-t border-slate-100 flex justify-end gap-2 flex-wrap">
-                                    <button onClick={(e) => handleStart(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100"><PlayCircle className="w-3 h-3" /> บันทึกผล</button>
-                                    <button onClick={(e) => handleShare(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ LINE</button>
-                                    {isAdmin && <><button onClick={(e) => handleEditMatch(e, match)} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold"><Edit2 className="w-3 h-3" /></button><button onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /></button></>}
-                                </div>
-                            </div>
-                        );
-                    })}
+            
+            {/* Filter Toolbar */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 sticky top-0 z-20">
+                <div className="flex flex-col md:flex-row gap-4">
+                    {/* Search */}
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="text" 
+                            placeholder="ค้นหาทีม / สนามแข่ง..." 
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm"
+                        />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                         {/* Date Filter */}
+                        <div className="relative">
+                           <input 
+                              type="date" 
+                              value={filterDate}
+                              onChange={e => setFilterDate(e.target.value)}
+                              className="w-full md:w-auto p-2 border rounded-lg bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                           />
+                        </div>
+                        {/* Round Filter */}
+                        <div className="relative flex-1 md:flex-none md:min-w-[140px]">
+                           <select 
+                              value={filterGroup}
+                              onChange={e => setFilterGroup(e.target.value)}
+                              className="w-full p-2 pr-8 border rounded-lg bg-slate-50 text-sm appearance-none focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                           >
+                              <option value="All">ทุกรอบ</option>
+                              {uniqueRounds.map(r => <option key={r} value={r}>{r}</option>)}
+                           </select>
+                           <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* Loading / Empty / List */}
+            {isLoading ? (
+                <div className="space-y-3">
+                   {Array(3).fill(0).map((_, i) => <div key={i} className="bg-white rounded-xl shadow-sm p-4 h-24 animate-pulse"></div>)}
+                </div>
+            ) : sortedDates.length === 0 ? (
+                <div className="bg-white p-10 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200 border-dashed">
+                    <Filter className="w-12 h-12 mx-auto mb-3 text-slate-300"/>
+                    <p>ไม่พบรายการแข่งขันตามเงื่อนไข</p>
+                    <button onClick={() => {setSearchTerm(''); setFilterDate(''); setFilterGroup('All');}} className="mt-3 text-indigo-600 text-sm font-bold hover:underline">
+                        ล้างตัวกรองทั้งหมด
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-8">
+                    {sortedDates.map(dateKey => (
+                        <div key={dateKey}>
+                             <div className="flex items-center gap-2 mb-3 bg-indigo-50 px-3 py-1.5 rounded-lg w-fit border border-indigo-100 shadow-sm sticky top-20 z-10 backdrop-blur-sm">
+                                <Calendar className="w-4 h-4 text-indigo-600" />
+                                <span className="font-bold text-indigo-900 text-sm">
+                                    {new Date(dateKey).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                </span>
+                                <span className="text-xs text-indigo-400 bg-white px-1.5 rounded-full ml-1 font-bold">{groupedScheduled[dateKey].length} คู่</span>
+                            </div>
+                            <div className="space-y-3">
+                                {groupedScheduled[dateKey].map(match => {
+                                    const tA = resolveTeam(match.teamA); 
+                                    const tB = resolveTeam(match.teamB);
+                                    return (
+                                        <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative cursor-pointer">
+                                            <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
+                                                <div className="flex md:flex-col items-center md:items-start justify-center min-w-[100px] text-slate-500 text-sm gap-2 md:gap-0 w-full md:w-auto bg-slate-50 md:bg-transparent p-2 md:p-0 rounded-lg shrink-0">
+                                                    {match.scheduledTime ? (
+                                                        <span className="flex items-center gap-1 text-indigo-600 font-bold text-lg md:text-xl font-mono"><Clock className="w-4 h-4 md:w-5 md:h-5" /> {formatTime(match.scheduledTime)}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">ไม่ระบุเวลา</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 w-full py-2 md:py-0">
+                                                    <div className="flex items-center justify-center md:justify-end gap-3 flex-1 w-full"><span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-right w-full">{tA.name}</span>{tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}</div>
+                                                    <div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap shrink-0">VS</div>
+                                                    <div className="flex items-center justify-center md:justify-start gap-3 flex-1 w-full">{tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}<span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-left w-full">{tB.name}</span></div>
+                                                </div>
+                                                <div className="w-full md:w-auto min-w-[140px] flex flex-row md:flex-col items-center justify-between md:justify-end md:items-end text-sm gap-1 border-t md:border-t-0 pt-2 md:pt-0 mt-1 md:mt-0">
+                                                    <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel?.split(':')[0] || 'รอบทั่วไป'}</span>
+                                                    {match.livestreamUrl && <span className="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold flex items-center gap-1 animate-pulse"><Video className="w-3 h-3" /> LIVE</span>}
+                                                    {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="w-full pt-3 mt-1 border-t border-slate-100 flex justify-end gap-2 flex-wrap">
+                                                <button onClick={(e) => handleStart(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100"><PlayCircle className="w-3 h-3" /> บันทึกผล</button>
+                                                <button onClick={(e) => handleShare(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ LINE</button>
+                                                {isAdmin && <><button onClick={(e) => handleEditMatch(e, match)} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold"><Edit2 className="w-3 h-3" /></button><button onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /></button></>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
 
         {/* Finished Matches List */}
