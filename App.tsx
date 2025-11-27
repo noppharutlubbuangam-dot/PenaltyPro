@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -17,7 +16,7 @@ import NewsFeed from './components/NewsFeed';
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, saveKicksToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -223,7 +222,17 @@ function App() {
     setMatchState(prev => {
       if (!prev) return null;
       const updatedKicks = [...prev.kicks, newKick];
-      let nextState: MatchState = { ...prev, kicks: updatedKicks, currentTurn: prev.currentTurn === 'A' ? 'B' : 'A', currentRound: prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound };
+      
+      const nextTurn = prev.currentTurn === 'A' ? 'B' : 'A';
+      const nextRound = prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound;
+
+      let nextState: MatchState = { 
+          ...prev, 
+          kicks: updatedKicks, 
+          currentTurn: nextTurn,
+          currentRound: nextRound
+      };
+      
       nextState = checkWinCondition(nextState);
       if (nextState.isFinished) {
          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] });
@@ -276,12 +285,13 @@ function App() {
   const resetMatch = () => { setConfirmModal({ isOpen: true, title: "เริ่มแมตช์ใหม่?", message: "ข้อมูลการแข่งขันปัจจุบันจะหายไป ต้องการเริ่มใหม่หรือไม่?", isDangerous: true, onConfirm: () => { setCurrentView('home'); setMatchState(null); setConfirmModal(null); } }); };
 
   const handleNavClick = (view: string) => {
+      if (view === 'schedule') {
+           setInitialMatchId(null); // Clear any pre-selected match to prevent modal opening
+      }
+
       if (currentView === view) {
           // If clicking the same tab, increment key to force reset/remount
           setViewKey(prev => prev + 1);
-          if (view === 'schedule') {
-               setInitialMatchId(null); // Clear deep link if resetting
-          }
       } else {
           setCurrentView(view);
       }
@@ -327,7 +337,7 @@ function App() {
     } as Team;
   };
 
-  // Helper for Home Page Recent Results
+  const liveMatches = matchesLog.filter(m => m.livestreamUrl && !m.winner);
   const recentFinishedMatches = matchesLog
       .filter(m => m.winner)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -444,6 +454,51 @@ function App() {
           </div>
 
           <div className="max-w-4xl mx-auto px-4 -mt-8 relative z-20 space-y-6">
+              {/* LIVE SECTION */}
+              {liveMatches.length > 0 && (
+                <div className="space-y-3">
+                   <div className="flex items-center gap-2 text-white font-bold bg-red-600 px-3 py-1 rounded w-fit shadow-md">
+                       <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                       LIVE NOW ถ่ายทอดสด
+                   </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       {liveMatches.map(m => {
+                          const tA = resolveTeam(m.teamA);
+                          const tB = resolveTeam(m.teamB);
+                          return (
+                            <div key={m.id} onClick={() => { setInitialMatchId(m.id); setCurrentView('schedule'); }} className="bg-white rounded-xl shadow-lg border border-red-100 overflow-hidden cursor-pointer group hover:ring-2 hover:ring-red-400 transition">
+                                <div className="aspect-video bg-black relative flex items-center justify-center">
+                                    {m.livestreamCover ? (
+                                        <img src={m.livestreamCover} className="w-full h-full object-cover opacity-80" />
+                                    ) : (
+                                        <div className="text-white/20"><Video className="w-12 h-12" /></div>
+                                    )}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition">
+                                            <Play className="w-6 h-6 fill-white" />
+                                        </div>
+                                    </div>
+                                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+                                    </div>
+                                </div>
+                                <div className="p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                                            <span className="font-bold text-slate-800 text-sm truncate text-right flex-1">{tA.name}</span>
+                                            <div className="text-xs font-bold text-slate-400">VS</div>
+                                            <span className="font-bold text-slate-800 text-sm truncate flex-1">{tB.name}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-slate-400 mt-1 text-center">{m.roundLabel}</div>
+                                </div>
+                            </div>
+                          )
+                       })}
+                   </div>
+                </div>
+              )}
+
               {/* Match Setup / Skeleton */}
               <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                   {isLoadingData ? (
@@ -475,7 +530,7 @@ function App() {
                              <div className="h-3 w-16 bg-slate-200 rounded"></div>
                           </div>
                       ) : (
-                          <button key={idx} onClick={() => setCurrentView(item.view)} className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 transition group`}>
+                          <button key={idx} onClick={() => handleNavClick(item.view)} className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 transition group`}>
                               <div className={`w-10 h-10 bg-${item.color}-100 rounded-full flex items-center justify-center text-${item.color}-600 group-hover:scale-110 transition`}>
                                   <item.icon className="w-5 h-5"/>
                               </div>

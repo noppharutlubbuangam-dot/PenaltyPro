@@ -1,9 +1,8 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag } from 'lucide-react';
-import { scheduleMatch, deleteMatch, saveMatchToSheet } from '../services/sheetService';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook } from 'lucide-react';
+import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
 
 interface ScheduleListProps {
@@ -106,7 +105,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   
   const [activeMatchType, setActiveMatchType] = useState<'group' | 'knockout' | 'custom'>('group');
   
-  const [matchForm, setMatchForm] = useState({ id: '', teamA: '', teamB: '', date: '', time: '', venue: '', roundLabel: 'Group A' });
+  const [matchForm, setMatchForm] = useState({ id: '', teamA: '', teamB: '', date: '', time: '', venue: '', roundLabel: 'Group A', livestreamUrl: '' });
+  const [matchCover, setMatchCover] = useState<{file: File | null, preview: string | null}>({file: null, preview: null});
   const [bulkMatches, setBulkMatches] = useState<Array<{ tempId: string, teamA: string, teamB: string, time: string, venue: string }>>([]);
 
   const [quickScoreA, setQuickScoreA] = useState('');
@@ -124,9 +124,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   }>({ isOpen: false, mode: 'singleA' });
 
   useEffect(() => {
-    if (initialMatchId && matches.length > 0) {
+    // Only set selected match if explicitly provided initially, OR if we are not "resetting"
+    // However, App.tsx handles clearing initialMatchId, so we respect it here.
+    if (initialMatchId) {
         const found = matches.find(m => m.id === initialMatchId);
         if (found) setSelectedMatch(found);
+    } else {
+        // Ensure no modal is open if no ID provided (e.g. Nav clicked)
+        setSelectedMatch(null);
     }
   }, [initialMatchId, matches]);
 
@@ -167,7 +172,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
   const handleOpenAdd = () => { 
       const today = new Date().toISOString().split('T')[0];
-      setMatchForm({ id: '', teamA: '', teamB: '', date: today, time: '09:00', venue: '', roundLabel: 'Group A' });
+      setMatchForm({ id: '', teamA: '', teamB: '', date: today, time: '09:00', venue: '', roundLabel: 'Group A', livestreamUrl: '' });
+      setMatchCover({file: null, preview: null});
       setBulkMatches([{ tempId: Date.now().toString(), teamA: '', teamB: '', time: '09:00', venue: '' }]);
       setActiveMatchType('group');
       setIsAddModalOpen(true); 
@@ -196,9 +202,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           date: dateObj.toISOString().split('T')[0], 
           time: dateObj.toTimeString().slice(0, 5), 
           venue: match.venue || '', 
-          roundLabel: uiLabel 
+          roundLabel: uiLabel,
+          livestreamUrl: match.livestreamUrl || ''
       }); 
       
+      setMatchCover({ file: null, preview: match.livestreamCover || null });
       setActiveMatchType(type);
       setIsAddModalOpen(true); 
   };
@@ -294,7 +302,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
               match.roundLabel || '',
               match.venue,
-              match.scheduledTime
+              match.scheduledTime,
+              match.livestreamUrl,
+              match.livestreamCover
           );
 
           if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' (ล้างผลยิงประตู) เรียบร้อย", "success");
@@ -324,6 +334,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   const handleSaveMatch = async () => { 
       setIsSaving(true); 
       try { 
+          let coverBase64 = matchCover.preview;
+          if (matchCover.file) {
+              coverBase64 = await fileToBase64(matchCover.file);
+          }
+
           if (matchForm.id) {
               if (!matchForm.teamA || !matchForm.teamB || !matchForm.date || !matchForm.time) throw new Error("Missing Fields");
                
@@ -338,7 +353,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                   matchForm.teamB, 
                   finalLabel, 
                   matchForm.venue, 
-                  new Date(`${matchForm.date}T${matchForm.time}`).toISOString()
+                  new Date(`${matchForm.date}T${matchForm.time}`).toISOString(),
+                  matchForm.livestreamUrl,
+                  coverBase64 || undefined
               );
           } else {
               if (activeMatchType === 'group') {
@@ -366,7 +383,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                       matchForm.teamB, 
                       matchForm.roundLabel, 
                       matchForm.venue, 
-                      new Date(`${matchForm.date}T${matchForm.time}`).toISOString()
+                      new Date(`${matchForm.date}T${matchForm.time}`).toISOString(),
+                      matchForm.livestreamUrl,
+                      coverBase64 || undefined
                   );
               }
           }
@@ -375,6 +394,15 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           setIsAddModalOpen(false); 
           if(onRefresh) onRefresh(); 
       } catch(e) { if (showNotification) showNotification("ผิดพลาด", "กรุณากรอกข้อมูลให้ครบถ้วน", "error"); } finally { setIsSaving(false); } 
+  };
+
+  const handleCoverChange = (file: File) => {
+      if (file.size > 2 * 1024 * 1024) {
+          if(showNotification) showNotification("ไฟล์ใหญ่เกินไป", "ขนาดรูปปกต้องไม่เกิน 2MB", "warning");
+          return;
+      }
+      const preview = URL.createObjectURL(file);
+      setMatchCover({ file, preview });
   };
 
   const handleQuickSaveResult = async () => {
@@ -403,7 +431,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             scoreB: sB,
             winner: sA > sB ? 'A' : sB > sA ? 'B' : null,
             kicks: [], 
-            isFinished: true
+            isFinished: true,
+            // Preserve live info
+            livestreamUrl: selectedMatch.livestreamUrl,
+            livestreamCover: selectedMatch.livestreamCover
         };
 
         await saveMatchToSheet(payload, "Quick Result (Admin)");
@@ -434,7 +465,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               winner: winnerSide,
               kicks: [],
               isFinished: true,
-              status: 'Walkover'
+              status: 'Walkover',
+              // Preserve live info
+              livestreamUrl: selectedMatch.livestreamUrl,
+              livestreamCover: selectedMatch.livestreamCover
           };
           
           await saveMatchToSheet(payload, "Walkover (Forfeit)");
@@ -481,6 +515,26 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           age--; 
       } 
       return age; 
+  };
+
+  const getEmbedUrl = (url: string) => {
+      if (!url) return null;
+      // Youtube
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          let videoId = '';
+          if (url.includes('v=')) {
+              videoId = url.split('v=')[1].split('&')[0];
+          } else if (url.includes('youtu.be/')) {
+              videoId = url.split('youtu.be/')[1].split('?')[0];
+          }
+          if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      }
+      // Facebook
+      if (url.includes('facebook.com')) {
+          const encodedUrl = encodeURIComponent(url);
+          return `https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=false&t=0&autoplay=1`;
+      }
+      return null;
   };
 
   const renderRoster = (teamName: string) => {
@@ -704,6 +758,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     {/* Info Group */}
                                     <div className="w-full md:w-auto min-w-[150px] flex flex-row md:flex-col items-center justify-between md:justify-end md:items-end text-sm gap-1 border-t md:border-t-0 pt-2 md:pt-0 mt-1 md:mt-0">
                                         <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel?.split(':')[0] || 'รอบทั่วไป'}</span>
+                                        {match.livestreamUrl && (
+                                            <span className="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold flex items-center gap-1 animate-pulse">
+                                                <Video className="w-3 h-3" /> LIVE
+                                            </span>
+                                        )}
                                         {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
                                     </div>
                                 </div>
@@ -779,12 +838,31 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                 <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full z-20"><X className="w-5 h-5" /></button>
                     
+                    {/* Live Stream Player (If available) */}
+                    {selectedMatch.livestreamUrl && (
+                        <div className="w-full aspect-video bg-black relative">
+                             {getEmbedUrl(selectedMatch.livestreamUrl) ? (
+                                <iframe 
+                                    src={getEmbedUrl(selectedMatch.livestreamUrl)!} 
+                                    className="w-full h-full" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowFullScreen
+                                ></iframe>
+                             ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-white">
+                                    <p>ไม่สามารถโหลดวิดีโอได้</p>
+                                    <a href={selectedMatch.livestreamUrl} target="_blank" className="text-blue-400 underline mt-2 text-sm">เปิดในแอปภายนอก</a>
+                                </div>
+                             )}
+                        </div>
+                    )}
+
                     <div className="bg-indigo-900 p-4 md:p-6 text-white text-center shrink-0 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-x-10 -translate-y-10 blur-2xl"></div>
                         <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 opacity-20 rounded-full translate-x-10 translate-y-10 blur-3xl"></div>
                         
                         <div className="relative z-10">
-                             {config.competitionLogo && (
+                             {!selectedMatch.livestreamUrl && config.competitionLogo && (
                                 <img src={config.competitionLogo} className="w-10 h-10 md:w-16 md:h-16 mx-auto mb-2 object-contain bg-white rounded-full p-1 shadow-lg" />
                              )}
                              <h3 className="text-xs md:text-lg font-bold opacity-90 tracking-wide mb-3">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
@@ -1058,6 +1136,35 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                         <datalist id="single-venue-list">
                                             {VENUE_OPTIONS.map(v => <option key={v} value={v} />)}
                                         </datalist>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Live Stream Section */}
+                            <div className="border-t border-slate-100 pt-3 mt-2">
+                                <label className="text-xs font-bold text-slate-500 mb-2 block flex items-center gap-2"><Video className="w-4 h-4" /> Live Stream (Youtube/Facebook)</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <input 
+                                            type="text" 
+                                            value={matchForm.livestreamUrl} 
+                                            onChange={e => setMatchForm({...matchForm, livestreamUrl: e.target.value})} 
+                                            className="w-full p-2.5 border border-slate-300 rounded-lg text-sm" 
+                                            placeholder="https://www.youtube.com/watch?v=..." 
+                                        />
+                                        <p className="text-[10px] text-slate-400 mt-1 flex gap-2">
+                                            <span className="flex items-center gap-1"><Youtube className="w-3 h-3"/> Support Youtube</span>
+                                            <span className="flex items-center gap-1"><Facebook className="w-3 h-3"/> Support FB Watch</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="flex items-center gap-2 p-2 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition">
+                                            <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center shrink-0">
+                                                {matchCover.preview ? <img src={matchCover.preview} className="w-full h-full object-cover rounded" /> : <Image className="w-4 h-4 text-slate-400" />}
+                                            </div>
+                                            <span className="text-xs text-slate-500 truncate">{matchCover.file ? matchCover.file.name : 'อัปโหลดรูปปก Live (ถ้ามี)'}</span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleCoverChange(e.target.files[0])} />
+                                        </label>
                                     </div>
                                 </div>
                             </div>

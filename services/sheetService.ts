@@ -1,5 +1,4 @@
 
-
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
@@ -111,14 +110,27 @@ export const saveSettings = async (settings: AppSettings) => {
   } catch (error) { return false; }
 };
 
-export const scheduleMatch = async (matchId: string, teamA: string, teamB: string, roundLabel: string, venue?: string, scheduledTime?: string) => {
+export const scheduleMatch = async (matchId: string, teamA: string, teamB: string, roundLabel: string, venue?: string, scheduledTime?: string, livestreamUrl?: string, livestreamCover?: string) => {
   try {
     await fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'scheduleMatch', matchId, teamA, teamB, roundLabel, venue: venue || '', scheduledTime: scheduledTime || '' })
+      body: JSON.stringify({ 
+          action: 'scheduleMatch', 
+          matchId, 
+          teamA, 
+          teamB, 
+          roundLabel, 
+          venue: venue || '', 
+          scheduledTime: scheduledTime || '',
+          // Assuming backend supports these or ignores them if not. 
+          // If backend Code.gs needs update, the user will need to update it.
+          // For now we send them in case the backend saves extra props dynamically.
+          livestreamUrl,
+          livestreamCover
+      })
     });
     return true;
   } catch (error) { return false; }
@@ -137,17 +149,24 @@ export const deleteMatch = async (matchId: string) => {
   } catch (error) { return false; }
 };
 
-export const saveMatchToSheet = async (matchState: MatchState, summary: string) => {
+export const saveMatchToSheet = async (matchState: MatchState | any, summary: string) => {
+  // Support both MatchState and generic object for Admin Edits
+  const teamAName = matchState.teamA.name || matchState.teamA;
+  const teamBName = matchState.teamB.name || matchState.teamB;
+  
   const payload = {
     action: 'saveMatch',
     matchId: matchState.matchId || `M${Date.now()}`,
-    teamA: matchState.teamA.name,
-    teamB: matchState.teamB.name,
+    teamA: teamAName,
+    teamB: teamBName,
     scoreA: matchState.scoreA,
     scoreB: matchState.scoreB,
-    winner: matchState.winner === 'A' ? matchState.teamA.name : matchState.teamB.name,
+    winner: matchState.winner === 'A' ? teamAName : matchState.teamB.name || matchState.teamB, // Ensure winner is string name
     summary: summary,
-    kicks: matchState.kicks.map(k => ({ ...k, teamId: k.teamId === 'A' ? matchState.teamA.name : matchState.teamB.name }))
+    kicks: matchState.kicks ? matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : teamBName })) : [],
+    // Add Live Fields if they exist in the state (passed from Admin)
+    livestreamUrl: matchState.livestreamUrl,
+    livestreamCover: matchState.livestreamCover
   };
   try {
     await fetch(API_URL, {

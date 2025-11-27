@@ -1,3 +1,4 @@
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -91,6 +92,8 @@ export interface Match {
   status?: 'Scheduled' | 'Finished' | 'Walkover';
   venue?: string; 
   scheduledTime?: string; 
+  livestreamUrl?: string; // New: YouTube/FB Link
+  livestreamCover?: string; // New: Cover Image for Live
 }
 
 export interface MatchState {
