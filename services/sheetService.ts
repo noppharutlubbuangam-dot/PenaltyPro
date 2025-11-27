@@ -1,4 +1,5 @@
 
+
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
@@ -14,7 +15,8 @@ export const setStoredScriptUrl = (url: string) => {
 export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[], matches: any[], config: AppSettings, schools: School[], news: NewsItem[] } | null> => {
   
   try {
-    const response = await fetch(`${API_URL}?action=getData`, {
+    // Added cache busting timestamp to prevent browser caching
+    const response = await fetch(`${API_URL}?action=getData&t=${Date.now()}`, {
         method: 'GET',
         redirect: 'follow'
     });
@@ -187,7 +189,7 @@ export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName
 export const registerTeam = async (data: RegistrationData): Promise<boolean> => {
   const payload = {
     action: 'register',
-    teamName: data.schoolName, 
+    schoolName: data.schoolName, // Ensure parameter name matches backend expectations (Code.gs expects schoolName)
     color: data.color,
     logoFile: data.logoFile,
     documentFile: data.documentFile,

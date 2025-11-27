@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData } from '../services/sheetService';
 
 interface AdminDashboardProps {
@@ -62,6 +62,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   useEffect(() => {
     if (selectedTeam) {
         const teamPlayers = localPlayers.filter(p => p.teamId === selectedTeam.id);
+        // Deep copy to prevent mutating local state directly during edit
         setEditForm({
             team: { ...selectedTeam },
             players: JSON.parse(JSON.stringify(teamPlayers)),
@@ -73,7 +74,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
     }
   }, [selectedTeam]);
 
-  const calculateAge = (birthDateString?: string) => { if (!birthDateString) return '-'; const parts = birthDateString.split('/'); let birthDate: Date; if (parts.length === 3) { birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); } else { birthDate = new Date(birthDateString); } if (isNaN(birthDate.getTime())) return '-'; const today = new Date(); let age = today.getFullYear() - birthDate.getFullYear(); const m = today.getMonth() - birthDate.getMonth(); if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; } return age; };
+  // Improved Age Calculation (Supports BE)
+  const calculateAge = (birthDateString?: string) => { 
+      if (!birthDateString) return '-'; 
+      const parts = birthDateString.split('/'); 
+      if (parts.length !== 3) return '-';
+
+      let day = parseInt(parts[0]);
+      let month = parseInt(parts[1]);
+      let year = parseInt(parts[2]);
+
+      // Detect Buddhist Era (BE) > 2400 and convert to AD
+      if (year > 2400) year -= 543;
+
+      const birthDate = new Date(year, month - 1, day);
+      if (isNaN(birthDate.getTime())) return '-';
+
+      const today = new Date(); 
+      let age = today.getFullYear() - birthDate.getFullYear(); 
+      const m = today.getMonth() - birthDate.getMonth(); 
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { 
+          age--; 
+      } 
+      return age >= 0 ? age : '-'; 
+  };
+
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => { if (showNotification) showNotification(title, msg, type); else alert(`${title}: ${msg}`); };
   
   const validateFile = (file: File, type: 'image' | 'doc') => {
@@ -153,6 +178,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setEditForm({ ...editForm, players: updatedPlayers });
       }
   };
+  
+  // Format Date Input (DD/MM/YYYY)
+  const handleDateInput = (index: number, value: string) => {
+      let cleaned = value.replace(/[^0-9]/g, '');
+      if (cleaned.length > 8) cleaned = cleaned.substring(0, 8);
+      
+      let formatted = cleaned;
+      if (cleaned.length > 2) {
+          formatted = cleaned.substring(0, 2) + '/' + cleaned.substring(2);
+      }
+      if (cleaned.length > 4) {
+          formatted = formatted.substring(0, 5) + '/' + cleaned.substring(4);
+      }
+      
+      handlePlayerChange(index, 'birthDate', formatted);
+  };
 
   const handlePlayerPhotoChange = async (index: number, file: File) => {
       if (editForm && file) {
@@ -184,7 +225,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const handleAddPlayer = () => {
       if (!editForm) return;
       const newPlayer: Player = {
-          id: `TEMP_${Date.now()}`,
+          id: `TEMP_${Date.now()}_${Math.floor(Math.random()*1000)}`, // Ensure unique ID
           teamId: editForm.team.id,
           name: '',
           number: '',
@@ -214,15 +255,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           if (editForm.newDoc) docBase64 = await fileToBase64(editForm.newDoc);
 
           const teamToSave = { ...editForm.team, logoUrl: logoBase64, slipUrl: slipBase64, docUrl: docBase64 };
+          
           await updateTeamData(teamToSave, editForm.players);
           
           setLocalTeams(prev => prev.map(t => t.id === teamToSave.id ? teamToSave : t));
+          // Update local players state
           setLocalPlayers(prev => {
-              const otherPlayers = prev.filter(p => p.teamId !== teamToSave.id);
-              return [...otherPlayers, ...editForm.players];
+              // Remove old players of this team and add the new/edited ones
+              const others = prev.filter(p => p.teamId !== teamToSave.id);
+              return [...others, ...editForm.players];
           });
-          setSelectedTeam(teamToSave); setIsEditingTeam(false); notify("สำเร็จ", "บันทึกผลการแก้ไขแล้ว", "success"); onRefresh();
-      } catch (error) { console.error(error); notify("ผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก", "error"); } finally { setIsSavingTeam(false); }
+          
+          setSelectedTeam(teamToSave); 
+          setIsEditingTeam(false); 
+          notify("สำเร็จ", "บันทึกผลการแก้ไขแล้ว", "success"); 
+          onRefresh();
+      } catch (error) { 
+          console.error(error); 
+          notify("ผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก", "error"); 
+      } finally { 
+          setIsSavingTeam(false); 
+      }
   };
 
   const handleEditNews = (item: NewsItem) => { setNewsForm({ id: item.id, title: item.title, content: item.content, imageFile: null, imagePreview: item.imageUrl || null, docFile: null }); setIsEditingNews(true); const formElement = document.getElementById('news-form-anchor'); if (formElement) formElement.scrollIntoView({ behavior: 'smooth' }); };
@@ -286,19 +339,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
             </div>
         )}
 
-        {activeTab === 'news' && (<div className="animate-in fade-in duration-300 max-w-4xl mx-auto"><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="md:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit sticky top-24" id="news-form-anchor"><h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">{isEditingNews ? <Edit3 className="w-5 h-5 text-orange-500" /> : <Plus className="w-5 h-5 text-indigo-600" />} {isEditingNews ? 'แก้ไขข่าว' : 'สร้างข่าวใหม่'}</h3><div className="space-y-4"><div><label className="block text-sm font-bold text-slate-700 mb-1">หัวข้อข่าว</label><input type="text" value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="เรื่อง..." /></div><div><label className="block text-sm font-bold text-slate-700 mb-1">เนื้อหา</label><textarea value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full p-2 border rounded-lg h-32" placeholder="รายละเอียด..." /></div><div><label className="block text-sm font-bold text-slate-700 mb-1">รูปภาพ</label><div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center cursor-pointer hover:bg-slate-50 relative"><input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {const file = e.target.files?.[0]; if(file) { if(validateFile(file, 'image')) setNewsForm({...newsForm, imageFile: file, imagePreview: URL.createObjectURL(file)}); }}} />{newsForm.imagePreview ? <div className="relative"><img src={newsForm.imagePreview} className="max-h-32 mx-auto object-contain" /><div className="absolute top-0 right-0 bg-white/80 p-1 rounded text-xs">เปลี่ยน</div></div> : <div className="text-slate-400 text-xs"><Image className="w-8 h-8 mx-auto mb-1" />คลิกอัปโหลด</div>}</div></div><div><label className="block text-sm font-bold text-slate-700 mb-1">เอกสาร (PDF)</label><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => {const file = e.target.files?.[0]; if(file && validateFile(file, 'doc')) setNewsForm({...newsForm, docFile: file})}} className="text-xs" /></div><div className="flex gap-2">{isEditingNews && <button onClick={() => { setIsEditingNews(false); setNewsForm({ id: null, title: '', content: '', imageFile: null, imagePreview: null, docFile: null }); }} className="flex-1 py-2 border border-slate-300 text-slate-600 rounded-lg font-bold hover:bg-slate-50">ยกเลิก</button>}<button onClick={handleSaveNews} disabled={isSavingNews} className={`flex-1 py-2 text-white rounded-lg font-bold hover:brightness-110 disabled:opacity-50 flex justify-center items-center gap-2 ${isEditingNews ? 'bg-orange-500' : 'bg-indigo-600'}`}>{isSavingNews ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditingNews ? 'บันทึกแก้ไข' : 'ประกาศข่าว'}</button></div></div></div><div className="md:col-span-2 space-y-4">{news.slice().reverse().map(item => (<div key={item.id} className={`bg-white rounded-xl p-4 border shadow-sm flex gap-4 group ${newsForm.id === item.id ? 'border-orange-400 ring-1 ring-orange-200' : 'border-slate-200'}`}>{item.imageUrl && <img src={item.imageUrl} className="w-24 h-24 object-cover rounded-lg bg-slate-100 shrink-0" />}<div className="flex-1"><div className="flex justify-between items-start"><h4 className="font-bold text-slate-800 line-clamp-1">{item.title}</h4><div className="flex gap-1"><button onClick={() => handleEditNews(item)} className="p-1.5 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded"><Edit3 className="w-4 h-4" /></button><button onClick={() => triggerDeleteNews(item.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div></div><p className="text-xs text-slate-400 mb-2">{new Date(item.timestamp).toLocaleDateString('th-TH')}</p><p className="text-sm text-slate-600 line-clamp-2">{item.content}</p></div></div>))}</div></div></div>)}
-        
-        {activeTab === 'settings' && (
-            <div className="animate-in fade-in duration-300 max-w-2xl mx-auto">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                    <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Settings className="w-5 h-5" /> ตั้งค่าทั่วไป</h2>
-                    <div className="flex flex-col items-center gap-4 py-4 bg-slate-50 rounded-xl border border-dashed border-slate-300"><div className="w-24 h-24 bg-white rounded-xl shadow-sm border flex items-center justify-center overflow-hidden">{settingsLogoPreview ? (<img src={settingsLogoPreview} alt="Logo" className="w-full h-full object-contain" />) : (<Image className="w-8 h-8 text-slate-300" />)}</div><label className="cursor-pointer bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">อัปโหลดโลโก้การแข่งขัน<input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleSettingsLogoChange(e.target.files[0])} /></label></div>
-                    <div className="space-y-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ชื่อรายการแข่งขัน</label><input type="text" placeholder="ชื่อรายการแข่งขัน" value={configForm.competitionName} onChange={e => setConfigForm({...configForm, competitionName: e.target.value})} className="w-full p-3 border rounded-lg" /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ธนาคาร</label><input type="text" placeholder="ธนาคาร" value={configForm.bankName} onChange={e => setConfigForm({...configForm, bankName: e.target.value})} className="w-full p-3 border rounded-lg" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">เลขบัญชี</label><input type="text" placeholder="เลขบัญชี" value={configForm.bankAccount} onChange={e => setConfigForm({...configForm, bankAccount: e.target.value})} className="w-full p-3 border rounded-lg" /></div></div><div><label className="block text-sm font-medium text-slate-700 mb-1">ชื่อบัญชี</label><input type="text" placeholder="ชื่อบัญชี" value={configForm.accountName} onChange={e => setConfigForm({...configForm, accountName: e.target.value})} className="w-full p-3 border rounded-lg" /></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">สถานที่จัดการแข่งขัน</label><input type="text" placeholder="ชื่อสนาม/โรงเรียน" value={configForm.locationName} onChange={e => setConfigForm({...configForm, locationName: e.target.value})} className="w-full p-3 border rounded-lg" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">ลิงก์แผนที่ (Google Maps)</label><input type="text" placeholder="URL" value={configForm.locationLink} onChange={e => setConfigForm({...configForm, locationLink: e.target.value})} className="w-full p-3 border rounded-lg" /></div></div><div><label className="block text-sm font-medium text-slate-700 mb-1">ประกาศสำคัญ (หน้าแรก)</label><textarea placeholder="ข้อความประกาศ..." value={configForm.announcement} onChange={e => setConfigForm({...configForm, announcement: e.target.value})} className="w-full p-3 border rounded-lg h-24" /></div></div>
-                    <button onClick={handleSaveConfig} disabled={isSavingSettings} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">{isSavingSettings ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'บันทึกการตั้งค่า'}</button>
-                </div>
-            </div>
-        )}
-
+        {/* Edit Form Modal */}
         {editForm && selectedTeam && (
             <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => { setSelectedTeam(null); setEditForm(null); }}>
                 <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden my-8 animate-in zoom-in duration-200 relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -309,7 +350,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                     </div>
                     
                     <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                        
                         {/* 1. Identity & Location Section */}
                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
                             <h4 className="font-bold text-slate-700 border-b pb-2 flex items-center gap-2"><MapPin className="w-4 h-4" /> ข้อมูลทั่วไปและอัตลักษณ์</h4>
@@ -352,11 +392,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                             <label className="block text-xs font-bold text-slate-500 mb-1">จังหวัด</label>
                                             <input type="text" value={editForm.team.province} onChange={(e) => handleEditFieldChange('province', e.target.value)} className="w-full p-2 border rounded text-sm" />
                                         </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">System ID <span className="font-normal text-slate-400">(แก้ไขไม่ได้)</span></label>
-                                        <div className="p-2 bg-slate-100 rounded text-xs font-mono text-slate-500 flex items-center gap-2"><Hash className="w-3 h-3"/> {editForm.team.id}</div>
                                     </div>
                                 </div>
                             ) : (
@@ -427,7 +462,100 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                              )}
                         </div>
 
-                        {/* 3. Reason & Files */}
+                        {/* 4. Players (Mobile Optimized) */}
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h4 className="font-bold text-slate-700 flex items-center gap-2"><Users className="w-4 h-4"/> รายชื่อนักกีฬา ({editForm.players.length})</h4>
+                                {isEditingTeam && (
+                                    <button onClick={handleAddPlayer} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 shadow-sm font-bold transition">
+                                        <UserPlus className="w-4 h-4" /> เพิ่มนักกีฬา
+                                    </button>
+                                )}
+                            </div>
+
+                            {isEditingTeam && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-700 flex items-start gap-2">
+                                    <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="font-bold">คำแนะนำ:</p>
+                                        <p>1. สามารถพิมพ์วันเกิดเป็น พ.ศ. ได้ (เช่น 15/04/2555)</p>
+                                        <p>2. ระบบจะใส่เครื่องหมาย / ให้เองอัตโนมัติ</p>
+                                        <p>3. กดปุ่ม "ลบคนนี้" เพื่อลบนักกีฬาออกจากทีม</p>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {editForm.players.map((p, idx) => (
+                                    <div key={p.id || idx} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition relative group">
+                                        {/* Player Photo (Large for Check) */}
+                                        <div className="w-20 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative">
+                                             {p.photoUrl ? (
+                                                <img src={p.photoUrl} className="w-full h-full object-cover" />
+                                             ) : (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                                                    <User className="w-8 h-8 mb-1" />
+                                                    <span className="text-[10px] font-bold">No Photo</span>
+                                                </div>
+                                             )}
+                                             {isEditingTeam && (
+                                                <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                                                    <Camera className="w-6 h-6 text-white" />
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handlePlayerPhotoChange(idx, e.target.files[0])} />
+                                                </label>
+                                             )}
+                                        </div>
+
+                                        {/* Player Info */}
+                                        <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1">
+                                            {isEditingTeam ? (
+                                                <div className="space-y-2">
+                                                    <div className="flex gap-2">
+                                                        <div className="w-16">
+                                                            <input type="text" value={p.number} onChange={(e) => handlePlayerChange(idx, 'number', e.target.value)} className="w-full p-1.5 text-xs border border-slate-300 rounded text-center font-bold bg-slate-50" placeholder="เบอร์" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <input type="text" value={p.name} onChange={(e) => handlePlayerChange(idx, 'name', e.target.value)} className="w-full p-1.5 text-xs border border-slate-300 rounded" placeholder="ชื่อ-นามสกุล" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="text" 
+                                                            value={p.birthDate || ''} 
+                                                            onChange={(e) => handleDateInput(idx, e.target.value)} 
+                                                            className="w-full p-1.5 pl-7 text-xs border border-slate-300 rounded" 
+                                                            placeholder="วว/ดด/ปปปป" 
+                                                            maxLength={10}
+                                                        />
+                                                        <Calendar className="w-3 h-3 text-slate-400 absolute left-2 top-2" />
+                                                    </div>
+                                                    <button onClick={() => handleRemovePlayer(idx)} className="text-red-500 text-xs flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition w-fit"><Trash2 className="w-3 h-3" /> ลบคนนี้</button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-2xl font-black text-indigo-800 font-mono italic">#{p.number || '-'}</span>
+                                                    </div>
+                                                    <div className="font-bold text-slate-800 leading-tight mb-1 truncate">{p.name || 'ไม่ระบุชื่อ'}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{p.birthDate || '-'}</span>
+                                                        <span className="text-[10px] text-white font-bold bg-indigo-500 px-1.5 py-0.5 rounded-full">อายุ {calculateAge(p.birthDate)}</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {isEditingTeam && (
+                                    <button onClick={handleAddPlayer} className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition h-28">
+                                        <Plus className="w-8 h-8" />
+                                        <span className="text-xs font-bold">เพิ่มนักกีฬา</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Files and Reason (Bottom) */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              {/* Reject Reason */}
                              {(editForm.team.status === 'Rejected' || isEditingTeam) && (
@@ -480,66 +608,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                              </div>
                         </div>
 
-                        {/* 4. Players (Mobile Optimized) */}
-                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                <h4 className="font-bold text-slate-700 flex items-center gap-2"><Users className="w-4 h-4"/> รายชื่อนักกีฬา ({editForm.players.length})</h4>
-                                {isEditingTeam && (
-                                    <button onClick={handleAddPlayer} className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 shadow-sm font-bold">
-                                        <UserPlus className="w-3 h-3" /> เพิ่มนักกีฬา
-                                    </button>
-                                )}
-                            </div>
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {editForm.players.map((p, idx) => (
-                                    <div key={p.id || idx} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition relative group">
-                                        {/* Player Photo (Large for Check) */}
-                                        <div className="w-20 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative">
-                                             {p.photoUrl ? (
-                                                <img src={p.photoUrl} className="w-full h-full object-cover" />
-                                             ) : (
-                                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
-                                                    <User className="w-8 h-8 mb-1" />
-                                                    <span className="text-[10px] font-bold">No Photo</span>
-                                                </div>
-                                             )}
-                                             {isEditingTeam && (
-                                                <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
-                                                    <Camera className="w-6 h-6 text-white" />
-                                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handlePlayerPhotoChange(idx, e.target.files[0])} />
-                                                </label>
-                                             )}
-                                        </div>
-
-                                        {/* Player Info */}
-                                        <div className="flex-1 min-w-0 flex flex-col justify-center h-24">
-                                            {isEditingTeam ? (
-                                                <div className="space-y-1">
-                                                    <div className="flex gap-1">
-                                                        <input type="text" value={p.number} onChange={(e) => handlePlayerChange(idx, 'number', e.target.value)} className="w-12 p-1 text-xs border rounded text-center font-bold" placeholder="เบอร์" />
-                                                        <input type="text" value={p.name} onChange={(e) => handlePlayerChange(idx, 'name', e.target.value)} className="flex-1 p-1 text-xs border rounded" placeholder="ชื่อ-สกุล" />
-                                                    </div>
-                                                    <input type="date" value={p.birthDate ? p.birthDate.split('/').reverse().join('-') : ''} onChange={(e) => {const d = e.target.value.split('-'); handlePlayerChange(idx, 'birthDate', `${d[2]}/${d[1]}/${d[0]}`)}} className="w-full p-1 text-xs border rounded" />
-                                                    <button onClick={() => handleRemovePlayer(idx)} className="text-red-500 text-xs flex items-center gap-1 hover:underline"><Trash2 className="w-3 h-3" /> ลบคนนี้</button>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-2xl font-black text-indigo-800 font-mono italic">#{p.number || '-'}</span>
-                                                    </div>
-                                                    <div className="font-bold text-slate-800 leading-tight mb-1 truncate">{p.name || 'ไม่ระบุชื่อ'}</div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{p.birthDate || '-'}</span>
-                                                        <span className="text-[10px] text-white font-bold bg-indigo-500 px-1.5 py-0.5 rounded-full">อายุ {calculateAge(p.birthDate)}</span>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
                     </div>
 
                     {/* Footer Actions */}
