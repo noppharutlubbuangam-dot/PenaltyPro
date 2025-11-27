@@ -41,7 +41,7 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     const filtered = teams.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <div className="fixed inset-0 z-[1100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-[1300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
             <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-slate-800">{title || "เลือกทีม"}</h3>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Upload, ArrowLeft, Save, CheckCircle, Loader2, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X } from 'lucide-react';
+import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2 } from 'lucide-react';
 import { registerTeam, fileToBase64 } from '../services/sheetService';
 import { RegistrationData, AppSettings, School as SchoolType } from '../types';
 
@@ -13,6 +13,44 @@ interface RegistrationFormProps {
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_DOC_SIZE = 3 * 1024 * 1024;   // 3MB
+
+// Utility to compress image
+const compressImage = async (file: File): Promise<File> => {
+    if (file.type === 'application/pdf') return file; // Skip PDF
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1024;
+                const scaleSize = MAX_WIDTH / img.width;
+                const width = (scaleSize < 1) ? MAX_WIDTH : img.width;
+                const height = (scaleSize < 1) ? img.height * scaleSize : img.height;
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const newFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now(),
+                        });
+                        resolve(newFile);
+                    } else {
+                        reject(new Error('Canvas is empty'));
+                    }
+                }, 'image/jpeg', 0.7); // 70% Quality
+            };
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, config, showNotification }) => {
   const [step, setStep] = useState(1);
@@ -28,7 +66,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [district, setDistrict] = useState('');
   const [province, setProvince] = useState('กาญจนบุรี');
   const [phone, setPhone] = useState('');
-  const [teamColor, setTeamColor] = useState('#2563EB');
+  
+  // Dual Colors
+  const [primaryColor, setPrimaryColor] = useState('#2563EB');
+  const [secondaryColor, setSecondaryColor] = useState('#FFFFFF');
+
   const [teamLogo, setTeamLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
@@ -52,6 +94,105 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+
+  // PDF Generation Logic (Print Window)
+  const handleDownloadPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("Pop-up blocked. Please allow pop-ups to print.");
+        return;
+    }
+
+    const playersHtml = players.map(p => `
+        <tr style="border-bottom: 1px solid #ddd;">
+            <td style="padding: 8px; text-align: center;">${p.sequence}</td>
+            <td style="padding: 8px;">${p.name || '-'}</td>
+            <td style="padding: 8px; text-align: center;">${p.birthDate || '-'}</td>
+            <td style="padding: 8px; text-align: center;">${p.photoPreview ? '<span style="color:green;">✔ แนบรูปแล้ว</span>' : '<span style="color:red;">✘ ไม่มีรูป</span>'}</td>
+        </tr>
+    `).join('');
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>ใบสมัคร - ${schoolName}</title>
+          <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;700&display=swap" rel="stylesheet">
+          <style>
+            body { font-family: 'Kanit', sans-serif; padding: 40px; color: #333; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .section { margin-bottom: 20px; }
+            .section-title { font-size: 18px; font-weight: bold; background: #f0f0f0; padding: 5px 10px; margin-bottom: 10px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+            .label { font-weight: bold; font-size: 14px; color: #666; }
+            .value { font-size: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #eee; padding: 8px; text-align: left; font-size: 14px; }
+            td { padding: 8px; font-size: 14px; }
+            .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 20px; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>ใบสมัครเข้าร่วมการแข่งขัน</h1>
+            <h2>${config.competitionName}</h2>
+          </div>
+
+          <div class="section">
+            <div class="section-title">1. ข้อมูลทีม / โรงเรียน</div>
+            <div class="grid">
+               <div><span class="label">ชื่อทีม/โรงเรียน:</span> <span class="value">${schoolName}</span></div>
+               <div><span class="label">สังกัด:</span> <span class="value">${district}, ${province}</span></div>
+               <div><span class="label">เบอร์โทรศัพท์:</span> <span class="value">${phone}</span></div>
+               <div><span class="label">สีประจำทีม:</span> <div style="display:inline-block; width:20px; height:20px; background:${primaryColor}; border:1px solid #ccc; vertical-align:middle;"></div> <div style="display:inline-block; width:20px; height:20px; background:${secondaryColor}; border:1px solid #ccc; vertical-align:middle;"></div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">2. คณะผู้ควบคุมทีม</div>
+             <div class="grid">
+               <div><span class="label">ผู้อำนวยการ:</span> <span class="value">${directorName}</span></div>
+               <div></div>
+               <div><span class="label">ผู้จัดการทีม:</span> <span class="value">${managerName}</span></div>
+               <div><span class="label">เบอร์โทร:</span> <span class="value">${managerPhone}</span></div>
+               <div><span class="label">ผู้ฝึกสอน:</span> <span class="value">${coachName}</span></div>
+               <div><span class="label">เบอร์โทร:</span> <span class="value">${coachPhone}</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">3. รายชื่อนักกีฬา</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">ลำดับ</th>
+                        <th>ชื่อ - นามสกุล</th>
+                        <th style="width: 120px; text-align: center;">วัน/เดือน/ปีเกิด</th>
+                        <th style="width: 100px; text-align: center;">รูปถ่าย</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${playersHtml}
+                </tbody>
+            </table>
+          </div>
+          
+          <div class="footer">
+             เอกสารนี้ถูกสร้างจากระบบ Penalty Pro Recorder | ลงทะเบียนเมื่อ: ${new Date().toLocaleDateString('th-TH')}
+             <br/><br/>
+             ลงชื่อ ....................................................... ผู้รับรองข้อมูล
+          </div>
+
+          <script>
+             window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
 
   useEffect(() => {
     if (teamLogo) {
@@ -77,8 +218,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const validateFile = (file: File, type: 'image' | 'doc') => {
     const limit = type === 'image' ? MAX_IMAGE_SIZE : MAX_DOC_SIZE;
     if (file.size > limit) {
-        notify("ไฟล์ใหญ่เกินไป", `ขนาดไฟล์ต้องไม่เกิน ${limit / 1024 / 1024}MB`, "error");
-        return false;
+        notify("ไฟล์ใหญ่เกินไป", `ขนาดไฟล์ต้องไม่เกิน ${limit / 1024 / 1024}MB (ระบบจะพยายามบีบอัด)`, "info");
+        // We will try to compress, so don't return false immediately for images
+        if(type === 'doc') return false; 
     }
     return true;
   };
@@ -86,19 +228,45 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const updatePlayer = (index: number, field: string, value: any) => {
     const newPlayers = [...players];
     if (field === 'photoFile' && value) {
-        if (!validateFile(value, 'image')) return;
-        const url = URL.createObjectURL(value);
-        newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: url };
+        // Compress Image immediately upon selection
+        compressImage(value).then(compressed => {
+             const url = URL.createObjectURL(compressed);
+             newPlayers[index] = { ...newPlayers[index], photoFile: compressed, photoPreview: url };
+             setPlayers(newPlayers);
+        }).catch(err => {
+             console.error("Compression failed", err);
+             // Fallback to original
+             const url = URL.createObjectURL(value);
+             newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: url };
+             setPlayers(newPlayers);
+        });
     } else {
         newPlayers[index] = { ...newPlayers[index], [field]: value };
     }
     setPlayers(newPlayers);
   };
-
-  const handleLogoChange = (file: File) => {
-      if (validateFile(file, 'image')) {
-          setTeamLogo(file);
+  
+  const updatePlayerDate = (index: number, value: string) => {
+      // Auto-format DD/MM/YYYY
+      let cleaned = value.replace(/[^0-9]/g, '');
+      if (cleaned.length > 8) cleaned = cleaned.substring(0, 8);
+      
+      let formatted = cleaned;
+      if (cleaned.length > 2) {
+          formatted = cleaned.substring(0, 2) + '/' + cleaned.substring(2);
       }
+      if (cleaned.length > 4) {
+          formatted = formatted.substring(0, 5) + '/' + cleaned.substring(4);
+      }
+      
+      updatePlayer(index, 'birthDate', formatted);
+  };
+
+  const handleLogoChange = async (file: File) => {
+      try {
+        const compressed = await compressImage(file);
+        setTeamLogo(compressed);
+      } catch (e) { setTeamLogo(file); }
   };
 
   const handleDocChange = (file: File) => {
@@ -107,10 +275,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       }
   };
 
-  const handleSlipChange = (file: File) => {
-      if (validateFile(file, 'image')) {
-          setSlipFile(file);
-      }
+  const handleSlipChange = async (file: File) => {
+      try {
+        const compressed = await compressImage(file);
+        setSlipFile(compressed);
+      } catch (e) { setSlipFile(file); }
   };
 
   const handleSchoolSelect = (school: SchoolType) => {
@@ -131,12 +300,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     }
     if (!schoolName) {
         notify("ข้อมูลไม่ครบ", "กรุณาระบุชื่อโรงเรียน", "error");
-        return;
-    }
-
-    // Double check file sizes
-    if (documentFile.size > MAX_DOC_SIZE || slipFile.size > MAX_IMAGE_SIZE) {
-        notify("ไฟล์ใหญ่เกินไป", "กรุณาลดขนาดไฟล์ก่อนส่ง", "error");
         return;
     }
 
@@ -164,6 +327,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       setUploadProgress(75);
 
       const validPlayers = processedPlayers.filter(p => p.name.trim() !== '');
+      
+      // Combine Colors
+      const combinedColors = JSON.stringify([primaryColor, secondaryColor]);
 
       const payload: RegistrationData = {
         schoolName,
@@ -175,7 +341,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         managerPhone,
         coachName,
         coachPhone,
-        color: teamColor,
+        color: combinedColors,
         logoFile: logoBase64,
         documentFile: docBase64,
         slipFile: slipBase64,
@@ -189,7 +355,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       setIsSuccess(true);
     } catch (error) {
       console.error(error);
-      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล (ไฟล์อาจใหญ่เกินไป)", "error");
+      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล (โปรดลองใหม่)", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -203,9 +369,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         </div>
         <h2 className="text-3xl font-bold text-slate-800 mb-2">ลงทะเบียนเรียบร้อย</h2>
         <p className="text-slate-500 mb-8 text-lg">ข้อมูลใบสมัครและเอกสารของคุณถูกส่งเข้าสู่ระบบแล้ว<br/>สถานะปัจจุบัน: <span className="text-yellow-600 font-bold">รอตรวจสอบ (Pending)</span></p>
-        <button onClick={onBack} className="px-8 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-bold text-lg transition transform hover:scale-105">
-            กลับสู่หน้าหลัก
-        </button>
+        
+        <div className="flex flex-col md:flex-row gap-4 w-full max-w-md">
+            <button onClick={handleDownloadPDF} className="flex-1 px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
+                <Printer className="w-5 h-5" /> พิมพ์ / ดาวน์โหลด PDF
+            </button>
+            <button onClick={onBack} className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition">
+                กลับสู่หน้าหลัก
+            </button>
+        </div>
       </div>
     );
   }
@@ -223,7 +395,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                   <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
                       <div className="h-full bg-indigo-600 transition-all duration-500 ease-out" style={{ width: `${uploadProgress}%` }}></div>
                   </div>
-                  <p className="text-center text-sm text-slate-400">กรุณาอย่าปิดหน้าต่างนี้ จนกว่าการบันทึกจะเสร็จสิ้น</p>
+                  <p className="text-center text-sm text-slate-400">ระบบกำลังบีบอัดรูปภาพและอัปโหลด กรุณารอสักครู่...</p>
               </div>
           </div>
       )}
@@ -306,17 +478,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
             </div>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
-                <h4 className="font-bold text-slate-700 mb-4">อัตลักษณ์ทีม</h4>
+                <h4 className="font-bold text-slate-700 mb-4">อัตลักษณ์ทีม (เลือก 2 สี)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">สีประจำทีม</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">สีหลัก (Primary)</label>
                         <div className="flex items-center gap-3">
-                            <input type="color" value={teamColor} onChange={e => setTeamColor(e.target.value)} className="w-12 h-12 rounded-lg cursor-pointer border-0 p-0" />
-                            <span className="text-sm text-slate-500">คลิกเพื่อเลือกสีเสื้อ</span>
+                            <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="w-12 h-12 rounded-lg cursor-pointer border-0 p-0" />
+                            <span className="text-sm text-slate-500 font-mono">{primaryColor}</span>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">ตราสโมสร/โรงเรียน <span className="text-xs text-slate-400">(Max 2MB)</span></label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">สีรอง (Secondary)</label>
+                        <div className="flex items-center gap-3">
+                            <input type="color" value={secondaryColor} onChange={e => setSecondaryColor(e.target.value)} className="w-12 h-12 rounded-lg cursor-pointer border-0 p-0" />
+                            <span className="text-sm text-slate-500 font-mono">{secondaryColor}</span>
+                        </div>
+                    </div>
+                    
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ตราสโมสร/โรงเรียน <span className="text-xs text-slate-400">(ระบบจะย่อขนาดให้อัตโนมัติ)</span></label>
                         <div className="flex items-center gap-4">
                              {logoPreview && (
                                 <div className="w-16 h-16 rounded-lg border bg-white p-1 relative group">
@@ -390,7 +570,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                 </div>
             </div>
             <p className="text-sm text-slate-500 bg-blue-50 p-3 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-blue-600" /> กรุณาตรวจสอบ วัน/เดือน/ปีเกิด ให้ถูกต้องเพื่อสิทธิ์ในการแข่งขัน
+                <AlertCircle className="w-4 h-4 text-blue-600" /> สามารถกรอกวันเกิดเป็น พ.ศ. หรือ ค.ศ. ก็ได้ (เช่น 15/04/2555) ระบบจะแปลงให้อัตโนมัติ
             </p>
             
             <div className="space-y-4">
@@ -408,14 +588,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                                 className="w-full p-2 border border-slate-300 rounded"
                             />
                         </div>
-                        <div className="w-full md:w-40">
+                        <div className="w-full md:w-40 relative">
                             <input 
                                 type="text" 
                                 placeholder="วว/ดด/ปปปป" 
                                 value={player.birthDate}
-                                onChange={(e) => updatePlayer(index, 'birthDate', e.target.value)}
+                                onChange={(e) => updatePlayerDate(index, e.target.value)}
                                 className="w-full p-2 border border-slate-300 rounded text-center"
+                                maxLength={10}
                             />
+                            <div className="text-[10px] text-slate-400 text-center mt-1">เช่น 12/08/2555</div>
                         </div>
                          <div className="w-full md:w-auto">
                             <label className={`cursor-pointer border px-3 py-2 rounded flex items-center gap-2 text-sm whitespace-nowrap transition ${player.photoFile ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-600'}`}>
@@ -470,7 +652,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                     ) : (
                         <ImageIcon className={`w-12 h-12 mx-auto mb-3 text-slate-400`} />
                     )}
-                    <h4 className="font-bold text-slate-700">หลักฐานการโอนเงิน (Slip) <span className="text-xs text-red-500 block font-normal mt-1">*ขนาดไม่เกิน 2MB</span></h4>
+                    <h4 className="font-bold text-slate-700">หลักฐานการโอนเงิน (Slip) <span className="text-xs text-red-500 block font-normal mt-1">*ระบบจะย่อขนาดอัตโนมัติ</span></h4>
                     <p className="text-sm text-slate-500 mb-4">อัปโหลดรูปสลิปการโอนเงิน</p>
                     <input type="file" id="slip-upload" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleSlipChange(e.target.files[0])} />
                     <label htmlFor="slip-upload" className="inline-block bg-pink-600 text-white px-6 py-2 rounded-lg cursor-pointer hover:bg-pink-700 transition">

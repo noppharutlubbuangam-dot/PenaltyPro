@@ -34,6 +34,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       logoPreview?: string | null, 
       slipPreview?: string | null 
   } | null>(null);
+  
+  // Dual Color State for Editing
+  const [editPrimaryColor, setEditPrimaryColor] = useState('#2563EB');
+  const [editSecondaryColor, setEditSecondaryColor] = useState('#FFFFFF');
+
   const [isSavingTeam, setIsSavingTeam] = useState(false);
   const [configForm, setConfigForm] = useState<AppSettings>(settings);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -62,6 +67,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   useEffect(() => {
     if (selectedTeam) {
         const teamPlayers = localPlayers.filter(p => p.teamId === selectedTeam.id);
+        
+        // Parse Colors
+        let pColor = '#2563EB';
+        let sColor = '#FFFFFF';
+        try {
+            const parsed = JSON.parse(selectedTeam.color);
+            if (Array.isArray(parsed)) {
+                pColor = parsed[0] || '#2563EB';
+                sColor = parsed[1] || '#FFFFFF';
+            } else {
+                pColor = selectedTeam.color; // Fallback for old format
+            }
+        } catch (e) {
+            pColor = selectedTeam.color || '#2563EB';
+        }
+        setEditPrimaryColor(pColor);
+        setEditSecondaryColor(sColor);
+
         // Deep copy to prevent mutating local state directly during edit
         setEditForm({
             team: { ...selectedTeam },
@@ -171,6 +194,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
   const handleEditFieldChange = (field: keyof Team, value: string) => { if (editForm) setEditForm({ ...editForm, team: { ...editForm.team, [field]: value } }); };
   
+  const handleColorChange = (type: 'primary' | 'secondary', color: string) => {
+      if (!editForm) return;
+      
+      const p = type === 'primary' ? color : editPrimaryColor;
+      const s = type === 'secondary' ? color : editSecondaryColor;
+      
+      if (type === 'primary') setEditPrimaryColor(color);
+      else setEditSecondaryColor(color);
+
+      // Pack into JSON string
+      handleEditFieldChange('color', JSON.stringify([p, s]));
+  };
+
   const handlePlayerChange = (index: number, field: keyof Player, value: string) => {
       if (editForm) {
           const updatedPlayers = [...editForm.players];
@@ -361,17 +397,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                             <input type="text" value={editForm.team.name} onChange={(e) => handleEditFieldChange('name', e.target.value)} className="w-full p-2 border rounded text-sm" />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อย่อ (3 ตัวอักษร)</label>
-                                            <input type="text" value={editForm.team.shortName} onChange={(e) => handleEditFieldChange('shortName', e.target.value.toUpperCase())} className="w-full p-2 border rounded text-sm uppercase" maxLength={5} placeholder="ABC"/>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อย่อ (ENG 3 ตัว)</label>
+                                            <input 
+                                                type="text" 
+                                                value={editForm.team.shortName} 
+                                                onChange={(e) => handleEditFieldChange('shortName', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} 
+                                                className="w-full p-2 border rounded text-sm uppercase font-mono" 
+                                                maxLength={3} 
+                                                placeholder="ABC"
+                                            />
                                         </div>
                                     </div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                          <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">สีประจำทีม</label>
-                                            <div className="flex items-center gap-3">
-                                                <input type="color" value={editForm.team.color || '#2563EB'} onChange={(e) => handleEditFieldChange('color', e.target.value)} className="h-9 w-16 p-0 border rounded cursor-pointer" />
-                                                <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded">{editForm.team.color}</span>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">สีประจำทีม (หลัก / รอง)</label>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1">
+                                                    <input type="color" value={editPrimaryColor} onChange={(e) => handleColorChange('primary', e.target.value)} className="h-8 w-12 p-0 border rounded cursor-pointer" />
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <input type="color" value={editSecondaryColor} onChange={(e) => handleColorChange('secondary', e.target.value)} className="h-8 w-12 p-0 border rounded cursor-pointer" />
+                                                </div>
+                                                <span className="text-[10px] text-slate-400 ml-1">(เลือก 2 สี)</span>
                                             </div>
                                         </div>
                                         <div>
@@ -405,7 +453,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                         <p className="text-xs text-slate-400 mb-1">อัตลักษณ์</p>
                                         <div className="flex items-center gap-3">
                                             <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold text-slate-600">{editForm.team.shortName || '-'}</span>
-                                            <div className="flex items-center gap-1 text-xs"><div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{backgroundColor: editForm.team.color}}></div> <span className="text-slate-500">{editForm.team.color}</span></div>
+                                            <div className="flex items-center gap-1 text-xs">
+                                                <div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{backgroundColor: editPrimaryColor}}></div> 
+                                                <div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{backgroundColor: editSecondaryColor}}></div>
+                                            </div>
                                         </div>
                                         <div className="mt-2 flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-fit"><Grid className="w-3 h-3"/> Group {editForm.team.group || '-'}</div>
                                     </div>
