@@ -459,14 +459,16 @@ function App() {
                 <div className="space-y-3">
                    <div className="flex items-center gap-2 text-white font-bold bg-red-600 px-3 py-1 rounded w-fit shadow-md">
                        <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                       LIVE NOW ถ่ายทอดสด
+                       LIVE NOW ถ่ายทอดสด ({liveMatches.length})
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   
+                   {/* Horizontal Scrolling for Multiple Live Matches */}
+                   <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 scrollbar-hide snap-x">
                        {liveMatches.map(m => {
                           const tA = resolveTeam(m.teamA);
                           const tB = resolveTeam(m.teamB);
                           return (
-                            <div key={m.id} onClick={() => { setInitialMatchId(m.id); setCurrentView('schedule'); }} className="bg-white rounded-xl shadow-lg border border-red-100 overflow-hidden cursor-pointer group hover:ring-2 hover:ring-red-400 transition">
+                            <div key={m.id} onClick={() => { setInitialMatchId(m.id); setCurrentView('schedule'); }} className={`bg-white rounded-xl shadow-lg border border-red-100 overflow-hidden cursor-pointer group hover:ring-2 hover:ring-red-400 transition snap-center ${liveMatches.length > 1 ? 'min-w-[85vw] md:min-w-[400px]' : 'w-full'}`}>
                                 <div className="aspect-video bg-black relative flex items-center justify-center">
                                     {m.livestreamCover ? (
                                         <img src={m.livestreamCover} className="w-full h-full object-cover opacity-80" />
