@@ -92,7 +92,6 @@ export const authenticateUser = async (data: any): Promise<UserProfile | null> =
     }
 };
 
-// ... (Rest of the functions remain unchanged) ...
 export const manageNews = async (actionType: 'add' | 'delete' | 'edit', newsItem: Partial<NewsItem>) => {
     try {
       await fetch(API_URL, {
@@ -188,7 +187,8 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
   
   const payload = {
     action: 'saveMatch',
-    matchId: matchState.matchId || `M${Date.now()}`,
+    // Check matchState.id (from Schedule List) OR matchState.matchId (from Game) to prevent duplicates
+    matchId: matchState.matchId || matchState.id || `M${Date.now()}`,
     teamA: teamAName,
     teamB: teamBName,
     scoreA: matchState.scoreA,

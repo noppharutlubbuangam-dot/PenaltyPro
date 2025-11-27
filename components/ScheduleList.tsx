@@ -803,7 +803,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 opacity-10 rounded-bl-full"></div>
                                             <div className="flex justify-between items-center mb-3">
                                                 <h4 className="font-bold text-indigo-800 text-sm flex items-center gap-2">
-                                                    <Sparkles className="w-4 h-4 text-purple-500" /> AI Match Summary (นักข่าวกีฬา AI)
+                                                    <Sparkles className="w-4 h-4 text-purple-500" /> AI Match Reporter (นักข่าวกีฬา AI)
                                                 </h4>
                                                 {aiSummary && (
                                                     <button 
