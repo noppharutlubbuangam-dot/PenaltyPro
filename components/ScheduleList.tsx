@@ -1,9 +1,9 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
-import { shareMatch } from '../services/liffService';
+import { generateMatchSummary } from '../services/geminiService';
+import { shareMatch, shareMatchSummary } from '../services/liffService';
 
 interface ScheduleListProps {
   matches: Match[];
@@ -94,6 +94,7 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
 };
 
 const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }) => {
+  // ... (existing state) ...
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -129,6 +130,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   const [filterDate, setFilterDate] = useState('');
   const [filterGroup, setFilterGroup] = useState('All');
 
+  // AI Summary State
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  // ... (useEffect and resolveTeam hooks remain same) ...
+
   useEffect(() => {
     if (initialMatchId) {
         const found = matches.find(m => m.id === initialMatchId);
@@ -145,9 +152,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
     if (selectedMatch) {
         setQuickScoreA(selectedMatch.scoreA?.toString() || '');
         setQuickScoreB(selectedMatch.scoreB?.toString() || '');
+        // Load summary if exists
+        setAiSummary(selectedMatch.summary || null);
     } else {
         setQuickScoreA('');
         setQuickScoreB('');
+        setAiSummary(null);
         setDetailTab('overview');
     }
   }, [selectedMatch]);
@@ -167,11 +177,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         shortName: teamName.substring(0, 3).toUpperCase()
     } as Team;
   };
+  
+  // ... (Existing helper functions: formatDate, formatTime, getRoundName, filteredScheduled, groupedScheduled, sortedDates) ...
 
   const formatDate = (dateStr: string) => { try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(e) { return dateStr; } };
   const formatTime = (dateStr: string) => { try { return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); } catch(e) { return ''; } };
 
-  // Filter Logic
   const getRoundName = (label: string) => {
     if (!label) return 'อื่นๆ';
     const groupMatch = label.match(/Group\s+[A-Z0-9]+/i);
@@ -187,13 +198,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
     const tB = resolveTeam(m.teamB).name.toLowerCase();
     const search = searchTerm.toLowerCase();
     const matchesSearch = !search || tA.includes(search) || tB.includes(search) || (m.venue || '').toLowerCase().includes(search);
-    
     const mDate = new Date(m.scheduledTime || m.date).toISOString().split('T')[0];
     const matchesDate = !filterDate || mDate === filterDate;
-
     const mRound = getRoundName(m.roundLabel || '');
     const matchesRound = filterGroup === 'All' || mRound === filterGroup;
-
     return matchesSearch && matchesDate && matchesRound;
   });
 
@@ -206,7 +214,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
   const sortedDates = Object.keys(groupedScheduled).sort();
 
-  // ... (Add/Edit Match Handlers remain same) ...
+  // ... (Existing handlers: handleOpenAdd, handleEditMatch, handleOpenEditResult, handleSaveEditedResult, handleDeleteMatch, handleResetMatch, handleSaveMatch, handleCoverChange, handleQuickSaveResult, handleWalkover) ...
+
   const handleOpenAdd = () => { 
       const today = new Date().toISOString().split('T')[0];
       setMatchForm({ id: '', teamA: '', teamB: '', date: today, time: '09:00', venue: '', roundLabel: 'Group A', livestreamUrl: '' });
@@ -261,11 +270,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           const sA = parseInt(editResultForm.scoreA);
           const sB = parseInt(editResultForm.scoreB);
           if (isNaN(sA) || isNaN(sB)) throw new Error("Invalid score");
-
           let winnerName = null;
           if (sA > sB) winnerName = editResultForm.teamA;
           else if (sB > sA) winnerName = editResultForm.teamB;
-
           const payload: any = {
             matchId: editResultForm.matchId,
             teamA: resolveTeam(editResultForm.teamA),
@@ -394,9 +401,44 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           setSelectedMatch(null);
       } catch (e) { if (showNotification) showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error"); } finally { setIsQuickSaving(false); }
   };
+
+  // AI Summary Logic
+  const handleGenerateSummary = async () => {
+      if (!selectedMatch) return;
+      setIsGeneratingSummary(true);
+      try {
+          const tA = typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name;
+          const tB = typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name;
+          
+          const summary = await generateMatchSummary(
+              tA, tB, selectedMatch.scoreA, selectedMatch.scoreB, 
+              selectedMatch.winner || '', selectedMatch.kicks || []
+          );
+          setAiSummary(summary);
+          
+          // Save the summary to the match record immediately
+          const matchPayload = { ...selectedMatch, summary: summary };
+          await saveMatchToSheet(matchPayload, "AI Summary Added");
+
+      } catch (error) {
+          console.error("AI Gen Error", error);
+      } finally {
+          setIsGeneratingSummary(false);
+      }
+  };
+  
+  const handleShareSummary = () => {
+     if(!selectedMatch || !aiSummary) return;
+     const tA = typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name;
+     const tB = typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name;
+     shareMatchSummary(selectedMatch, aiSummary, tA, tB);
+  };
   
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
+  
+  // ... (Other helpers: setGroupRound, calculateAge, getEmbedUrl, renderRoster, getFilteredTeams, openTeamSelector, handleTeamSelect, addBulkRow, removeBulkRow, updateBulkRow, TeamSelectionButton, renderScorers, calculateTeamStats, renderStatsComparison) ...
+  
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
   
   const calculateAge = (birthDateString?: string) => { 
@@ -577,7 +619,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 pb-24">
-      
+      {/* ... (TeamSelectorModal, Header, etc. - No changes needed until Detail View) ... */}
       <TeamSelectorModal isOpen={selectorConfig.isOpen} onClose={() => setSelectorConfig(prev => ({ ...prev, isOpen: false }))} onSelect={handleTeamSelect} teams={getFilteredTeams(selectorConfig.mode === 'singleA' ? matchForm.teamB : selectorConfig.mode === 'singleB' ? matchForm.teamA : selectorConfig.mode === 'bulkA' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamB : selectorConfig.mode === 'bulkB' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamA : undefined)} title={selectorConfig.mode.includes('A') ? "เลือกทีมเหย้า" : "เลือกทีมเยือน"} />
 
       <div className="max-w-4xl mx-auto">
@@ -589,50 +631,22 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         {/* Schedule List with Filters */}
         <div className="mb-8">
             <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-blue-500">โปรแกรมการแข่งขัน</h2>
-            
-            {/* Filter Toolbar */}
+            {/* ... (Filters and List - No changes) ... */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 sticky top-0 z-20">
                 <div className="flex flex-col md:flex-row gap-4">
-                    {/* Search */}
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="ค้นหาทีม / สนามแข่ง..." 
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm"
-                        />
+                        <input type="text" placeholder="ค้นหาทีม / สนามแข่ง..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm" />
                     </div>
-                    
                     <div className="flex gap-2">
-                         {/* Date Filter */}
-                        <div className="relative">
-                           <input 
-                              type="date" 
-                              value={filterDate}
-                              onChange={e => setFilterDate(e.target.value)}
-                              className="w-full md:w-auto p-2 border rounded-lg bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                           />
-                        </div>
-                        {/* Round Filter */}
-                        <div className="relative flex-1 md:flex-none md:min-w-[140px]">
-                           <select 
-                              value={filterGroup}
-                              onChange={e => setFilterGroup(e.target.value)}
-                              className="w-full p-2 pr-8 border rounded-lg bg-slate-50 text-sm appearance-none focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                           >
-                              <option value="All">ทุกรอบ</option>
-                              {uniqueRounds.map(r => <option key={r} value={r}>{r}</option>)}
-                           </select>
-                           <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                        </div>
+                        <div className="relative"><input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-full md:w-auto p-2 border rounded-lg bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+                        <div className="relative flex-1 md:flex-none md:min-w-[140px]"><select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} className="w-full p-2 pr-8 border rounded-lg bg-slate-50 text-sm appearance-none focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"><option value="All">ทุกรอบ</option>{uniqueRounds.map(r => <option key={r} value={r}>{r}</option>)}</select><ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" /></div>
                     </div>
                 </div>
             </div>
-
-            {/* Loading / Empty / List */}
-            {isLoading ? (
+            {/* ... (Match List - No Changes) ... */}
+            {/* (Omitted for brevity, logic remains identical to original file) */}
+             {isLoading ? (
                 <div className="space-y-3">
                    {Array(3).fill(0).map((_, i) => <div key={i} className="bg-white rounded-xl shadow-sm p-4 h-24 animate-pulse"></div>)}
                 </div>
@@ -661,7 +675,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     const tB = resolveTeam(match.teamB);
                                     return (
                                         <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative cursor-pointer">
-                                            <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
+                                            {/* ... (Match Content) ... */}
+                                             <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
                                                 <div className="flex md:flex-col items-center md:items-start justify-center min-w-[100px] text-slate-500 text-sm gap-2 md:gap-0 w-full md:w-auto bg-slate-50 md:bg-transparent p-2 md:p-0 rounded-lg shrink-0">
                                                     {match.scheduledTime ? (
                                                         <span className="flex items-center gap-1 text-indigo-600 font-bold text-lg md:text-xl font-mono"><Clock className="w-4 h-4 md:w-5 md:h-5" /> {formatTime(match.scheduledTime)}</span>
@@ -695,13 +710,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             )}
         </div>
 
-        {/* Finished Matches List */}
+        {/* Finished Matches List (No changes here) */}
         <div>
             <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-green-500">ผลการแข่งขัน</h2>
             <div className="space-y-3">
-                {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
+                 {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
                 return (
                     <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-3 md:p-4 flex flex-col items-center gap-3 opacity-80 hover:opacity-100 transition cursor-pointer">
+                        {/* ... Match Content ... */}
                         <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
                             <div className="flex justify-between w-full md:w-auto md:flex-col md:items-start min-w-[120px] text-slate-400 text-[10px] md:text-xs border-b md:border-b-0 pb-2 md:pb-0 mb-1 md:mb-0"><span>{formatDate(match.date)}</span><span>{match.roundLabel?.split(':')[0]}</span></div>
                             <div className="flex-1 w-full grid grid-cols-[1fr_auto_1fr] md:flex md:items-center md:justify-center gap-2 md:gap-4 items-center">
@@ -721,25 +737,21 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         </div>
 
-        {/* Match Detail Modal with Tabs - FULLY SCROLLABLE */}
+        {/* Match Detail Modal - UPDATED AI SUMMARY SECTION */}
         {selectedMatch && (
             <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedMatch(null)}>
                 <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col h-[90vh] md:h-auto md:max-h-[90vh]" onClick={e => e.stopPropagation()}>
                     
-                    {/* Floating Close Button */}
                     <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full z-[60] transition"><X className="w-5 h-5" /></button>
 
                     <div className="overflow-y-auto flex-1 custom-scrollbar">
-                        {/* 1. VIDEO OR COVER */}
+                         {/* ... (Video and Header sections remain same) ... */}
                         {selectedMatch.livestreamUrl && (
                             <div className="w-full aspect-video bg-black relative">
                                 {getEmbedUrl(selectedMatch.livestreamUrl) ? <iframe src={getEmbedUrl(selectedMatch.livestreamUrl)!} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe> : <div className="flex flex-col items-center justify-center h-full text-white"><p>ไม่สามารถโหลดวิดีโอได้</p><a href={selectedMatch.livestreamUrl} target="_blank" className="text-blue-400 underline mt-2 text-sm">เปิดในแอปภายนอก</a></div>}
                             </div>
                         )}
-
-                        {/* 2. HEADER INFO */}
                         <div className="bg-indigo-900 p-0 text-white text-center relative overflow-hidden">
-                             {/* Decorative Background */}
                              <div className="absolute top-0 left-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-x-10 -translate-y-10 blur-2xl pointer-events-none"></div>
                              <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 opacity-20 rounded-full translate-x-10 translate-y-10 blur-3xl pointer-events-none"></div>
                              
@@ -766,7 +778,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                              </div>
                         </div>
 
-                        {/* 3. STICKY TABS BAR */}
                         <div className="sticky top-0 z-50 bg-indigo-900/95 backdrop-blur-sm border-t border-white/10 shadow-lg">
                              <div className="flex w-full">
                                  <button onClick={() => setDetailTab('overview')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition ${detailTab === 'overview' ? 'text-white border-b-4 border-white bg-white/10' : 'text-indigo-300 hover:text-white hover:bg-white/5'}`}>
@@ -781,11 +792,50 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                              </div>
                         </div>
 
-                        {/* 4. CONTENT */}
                         <div className="bg-slate-50 min-h-[400px]">
                             {/* TAB: OVERVIEW */}
                             {detailTab === 'overview' && (
                                 <div className="p-4 md:p-6 space-y-6 animate-in fade-in duration-300">
+                                    
+                                    {/* AI Summary Section with Share Button */}
+                                    {selectedMatch.winner && (
+                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 opacity-10 rounded-bl-full"></div>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h4 className="font-bold text-indigo-800 text-sm flex items-center gap-2">
+                                                    <Sparkles className="w-4 h-4 text-purple-500" /> AI Match Summary (นักข่าวกีฬา AI)
+                                                </h4>
+                                                {aiSummary && (
+                                                    <button 
+                                                        onClick={handleShareSummary} 
+                                                        className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
+                                                    >
+                                                        <Share2 className="w-3 h-3" /> แชร์ข่าว
+                                                    </button>
+                                                )}
+                                            </div>
+                                            
+                                            {aiSummary ? (
+                                                <div className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line">
+                                                    {aiSummary}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                                                    <p className="text-xs text-slate-400 mb-3">ยังไม่มีสรุปผลการแข่งขัน</p>
+                                                    <button 
+                                                        onClick={handleGenerateSummary}
+                                                        disabled={isGeneratingSummary}
+                                                        className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold shadow-md transition flex items-center justify-center gap-2 mx-auto"
+                                                    >
+                                                        {isGeneratingSummary ? <Loader2 className="w-4 h-4 animate-spin"/> : <MessageSquare className="w-4 h-4" />}
+                                                        {isGeneratingSummary ? 'กำลังเขียนข่าว...' : 'ให้ AI เขียนข่าวสรุปผล'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ... (Penalty scores, Roster, etc. remains same) ... */}
                                     {selectedMatch.winner && selectedMatch.kicks && selectedMatch.kicks.length > 0 && (
                                          <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                                              <div className="text-right border-r border-slate-100 pr-4">
@@ -838,7 +888,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                 </div>
                             )}
 
-                            {/* TAB: STATS */}
+                            {/* ... (Other Tabs Remain Identical) ... */}
                             {detailTab === 'stats' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="bg-white p-4 border-b border-slate-100">
@@ -848,7 +898,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                 </div>
                             )}
 
-                            {/* TAB: SHARE CARD */}
                             {detailTab === 'share' && (
                                  <div className="p-8 flex flex-col items-center justify-center animate-in fade-in slide-in-from-right-4 duration-300 h-full min-h-[400px]">
                                      <div className="relative bg-gradient-to-br from-indigo-900 to-slate-900 w-full max-w-sm aspect-[4/5] rounded-2xl shadow-2xl overflow-hidden flex flex-col items-center justify-between p-8 text-white select-none ring-4 ring-white border border-slate-200">
@@ -905,17 +954,20 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
 
-        {/* Add/Edit Match Modal ... (Rest of modal code remains same) ... */}
+        {/* ... (Modal Components) ... */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setIsAddModalOpen(false)}>
+                {/* ... existing modal logic ... */}
                 <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`} onClick={e => e.stopPropagation()}>
+                    {/* ... content same as original ... */}
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 className="text-lg font-bold text-slate-800">{matchForm.id ? 'แก้ไขตาราง' : 'เพิ่มตารางการแข่งขัน'}</h3>
                         <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
                     </div>
-                    {/* ... (Existing Form Logic) ... */}
+                    {/* ... (Existing Form Logic Omitted for brevity, assumed identical) ... */}
                     <div className="space-y-4">
-                        {!matchForm.id && (
+                        {/* ... form content ... */}
+                         {!matchForm.id && (
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2">
                             <label className="text-xs font-bold text-slate-500 mb-2 block">ประเภทการแข่งขัน</label>
                             <div className="flex bg-white rounded-lg p-1 border border-slate-200 mb-3 shadow-sm">
@@ -964,9 +1016,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                 </div>
             </div>
         )}
-
-        {/* Edit Result Modal ... (Rest remains same) */}
-        {isEditResultOpen && (
+        
+        {/* ... (Other Modals: EditResult, Delete, etc. - No changes needed) ... */}
+         {isEditResultOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsEditResultOpen(false)}>
                  <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                      <div className="flex justify-between items-center mb-4 border-b pb-2">
@@ -991,7 +1043,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
 
-        {/* Delete / Reset Confirmation Modal ... (Rest remains same) */}
         {(matchToDelete || matchToReset) && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => { setMatchToDelete(null); setMatchToReset(null); }}>
                 <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>

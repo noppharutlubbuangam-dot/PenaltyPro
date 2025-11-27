@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Player, Team } from '../types';
-import { X, Download, RefreshCw, Share2, Shield } from 'lucide-react';
+import { X, Download, RefreshCw, Share2, Shield, Loader2, MessageCircle } from 'lucide-react';
+import { sharePlayerCardFlex } from '../services/liffService';
 
 interface PlayerCardProps {
   player: Player;
@@ -42,10 +43,10 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
     setStats({ pac, sho, pas, dri, def, phy, ovr });
   };
 
-  const drawCard = async () => {
-    if (!canvasRef.current) return;
+  const drawCard = async (): Promise<boolean> => {
+    if (!canvasRef.current) return false;
     const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return false;
 
     const width = 600;
     const height = 900;
@@ -91,23 +92,31 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
             
             // Draw image centered and cropped slightly
             const imgRatio = img.width / img.height;
+            // Target drawing area
             const drawWidth = 400;
-            const drawHeight = 400 / imgRatio;
+            // const drawHeight = 400 / imgRatio;
             
             ctx.save();
             ctx.beginPath();
-            ctx.rect(100, 180, 400, 400);
+            ctx.rect(100, 180, 400, 400); // Clip area
             ctx.clip();
-            ctx.drawImage(img, 100, 180, 400, drawHeight);
+            // Simple center crop logic
+            ctx.drawImage(img, 100, 180, 400, 400 / imgRatio);
             ctx.restore();
         } catch (e) {
             console.error("Failed to load player image for canvas", e);
             // Fallback placeholder
-            ctx.fillStyle = '#ccc';
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
             ctx.beginPath();
             ctx.arc(300, 350, 120, 0, Math.PI*2);
             ctx.fill();
         }
+    } else {
+        // Fallback Icon
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(300, 350, 120, 0, Math.PI*2);
+        ctx.fill();
     }
 
     // 5. Text Content
@@ -155,7 +164,6 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
 
     // Stats Grid
     ctx.font = 'bold 36px Kanit, sans-serif';
-    ctx.fillStyle = '#fbbf24'; // Stats Value Color
     const labels = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
     const values = [stats.pac, stats.sho, stats.pas, stats.dri, stats.def, stats.phy];
     
@@ -182,6 +190,8 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'center';
     ctx.fillText('Penalty Pro Recorder Official Card', width/2, 860);
+
+    return true;
   };
 
   const handleDownload = async () => {
@@ -195,6 +205,42 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
         link.click();
     }
     setIsGenerating(false);
+  };
+
+  const handleShare = async () => {
+    setIsGenerating(true);
+    await drawCard();
+
+    if (canvasRef.current) {
+        canvasRef.current.toBlob(async (blob) => {
+            if (!blob) {
+                setIsGenerating(false);
+                return;
+            }
+            const file = new File([blob], `card_${player.id}.jpg`, { type: 'image/jpeg' });
+            
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: `${player.name} - Player Card`,
+                        text: `Check out ${player.name} from ${team.name}!`,
+                        files: [file]
+                    });
+                } catch (err) {
+                    console.log('Share cancelled or failed', err);
+                }
+            } else {
+                alert("อุปกรณ์นี้ไม่รองรับการแชร์โดยตรง กรุณาใช้ปุ่มบันทึกรูปภาพแทน");
+            }
+            setIsGenerating(false);
+        }, 'image/jpeg', 0.9);
+    } else {
+        setIsGenerating(false);
+    }
+  };
+
+  const handleShareLineFlex = () => {
+      sharePlayerCardFlex(player, team, stats);
   };
 
   return (
@@ -247,10 +293,13 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, team, onClose }) => {
             </div>
 
             {/* Actions */}
-            <div className="mt-6 flex gap-3">
-                <button onClick={generateRandomStats} className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur transition"><RefreshCw className="w-6 h-6"/></button>
-                <button onClick={handleDownload} disabled={isGenerating} className="flex-1 py-3 bg-yellow-500 hover:bg-yellow-400 text-yellow-900 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95">
-                    {isGenerating ? 'กำลังสร้าง...' : <><Download className="w-5 h-5"/> บันทึกรูปภาพ</>}
+            <div className="mt-6 grid grid-cols-5 gap-3">
+                <button onClick={generateRandomStats} className="col-span-1 p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur transition flex items-center justify-center"><RefreshCw className="w-6 h-6"/></button>
+                <button onClick={handleDownload} disabled={isGenerating} className="col-span-2 py-3 bg-white hover:bg-slate-200 text-slate-900 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95">
+                     <Download className="w-5 h-5"/> บันทึกรูป
+                </button>
+                <button onClick={handleShareLineFlex} disabled={isGenerating} className="col-span-2 py-3 bg-[#00B900] hover:bg-[#009900] text-white rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95">
+                    <MessageCircle className="w-5 h-5"/> แชร์ LINE
                 </button>
             </div>
             

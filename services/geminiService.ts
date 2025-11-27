@@ -21,11 +21,14 @@ export const generateCommentary = async (
 
   try {
     const prompt = `
-      Write a very short, energetic, 1-sentence commentary for a penalty kick in a soccer shootout.
-      Player: ${player}
-      Team: ${team}
-      Result: ${result} (Goal, Saved by keeper, or Missed off target)
-      Tone: Exciting, like a TV sports commentator.
+      คุณคือนักพากย์ฟุตบอลชาวไทยที่ตื่นเต้นและเร้าใจ
+      ช่วยบรรยายจังหวะการยิงจุดโทษนี้สั้นๆ ประโยคเดียว เป็นภาษาไทย:
+      
+      นักเตะ: ${player}
+      ทีม: ${team}
+      ผลลัพธ์: ${result === 'GOAL' ? 'ยิงเข้าประตูอย่างสวยงาม' : result === 'SAVED' ? 'ผู้รักษาประตูเซฟไว้ได้' : 'ยิงพลาดออกไปเอง'}
+      
+      น้ำเสียง: ตื่นเต้น เร้าใจ เหมือนกำลังถ่ายทอดสด
     `;
 
     const response = await ai.models.generateContent({
@@ -54,17 +57,22 @@ export const generateMatchSummary = async (
   try {
     // Simplify kick data for token efficiency
     const kickLog = kicks.map(k => 
-      `R${k.round}-${k.teamId}: ${k.result}`
+      `คนที่ ${k.round} ทีม ${k.teamId}: ${k.result}`
     ).join(', ');
 
     const prompt = `
-      Analyze this penalty shootout match.
-      Match: ${teamA} vs ${teamB}
-      Final Score: ${scoreA} - ${scoreB}
-      Winner: ${winner === 'A' ? teamA : winner === 'B' ? teamB : 'Draw'}
-      Kick Sequence: ${kickLog}
+      คุณคือนักข่าวกีฬาฟุตบอลอาชีพ ช่วยเขียนสรุปผลการแข่งขันดวลจุดโทษนี้เป็นภาษาไทย ความยาว 1 ย่อหน้าสั้นๆ:
+      
+      คู่แข่งขัน: ${teamA} vs ${teamB}
+      สกอร์รวม: ${scoreA} - ${scoreB}
+      ผู้ชนะ: ${winner === 'A' ? teamA : winner === 'B' ? teamB : 'เสมอ'}
+      ลำดับการยิง: ${kickLog}
 
-      Provide a concise paragraph summarizing the match flow, the turning point, and the emotional intensity.
+      สิ่งที่ต้องการ:
+      - บรรยายรูปเกมความสูสี
+      - จุดเปลี่ยนสำคัญของเกม (ใครพลาด ใครเซฟ)
+      - จบด้วยการแสดงความยินดีกับผู้ชนะ
+      - ใช้ภาษาข่าวกีฬาที่น่าอ่าน สนุก ตื่นเต้น
     `;
 
     const response = await ai.models.generateContent({
@@ -72,9 +80,9 @@ export const generateMatchSummary = async (
       contents: prompt,
     });
 
-    return response.text || "No summary generated.";
+    return response.text || "ไม่สามารถสร้างบทสรุปได้";
   } catch (error) {
     console.error("Error generating summary:", error);
-    return "Failed to generate summary.";
+    return "เกิดข้อผิดพลาดในการสร้างบทสรุป";
   }
 };
