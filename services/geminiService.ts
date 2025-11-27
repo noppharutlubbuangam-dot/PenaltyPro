@@ -5,7 +5,7 @@ import { KickResult, Kick } from '../types';
 const getAiClient = () => {
   // หากต้องการ Hardcode API Key เพื่อทดสอบ สามารถใส่ตรงนี้ได้ (ไม่แนะนำสำหรับ Production)
   const apiKey = "AIzaSyDYRYxiK7_a0EDBZljx_rvDQh8kw0eBtVg"; 
-  const apiKey = process.env.API_KEY;
+  //const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
     console.warn("API_KEY is missing. Please check your .env file.");
