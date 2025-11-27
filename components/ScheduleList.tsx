@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
 
@@ -291,10 +291,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               isFinished: false
           };
 
+          // Explicitly clear winner and scores
           await saveMatchToSheet({
                ...payload,
-               scoreA: 0, scoreB: 0, winner: null
-          }, ""); 
+               scoreA: 0, scoreB: 0, winner: "" // Send empty string or null to clear
+          }, "Reset by Admin"); 
           
           await scheduleMatch(
               match.id, 
@@ -419,6 +420,36 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
     } finally {
         setIsQuickSaving(false);
     }
+  };
+
+  const handleWalkover = async (winnerSide: 'A' | 'B') => {
+      if (!selectedMatch) return;
+      setIsQuickSaving(true);
+      try {
+          const tA = resolveTeam(selectedMatch.teamA);
+          const tB = resolveTeam(selectedMatch.teamB);
+
+          const payload: any = {
+              matchId: selectedMatch.id,
+              teamA: tA,
+              teamB: tB,
+              scoreA: winnerSide === 'A' ? 3 : 0,
+              scoreB: winnerSide === 'B' ? 3 : 0,
+              winner: winnerSide,
+              kicks: [],
+              isFinished: true,
+              status: 'Walkover'
+          };
+          
+          await saveMatchToSheet(payload, "Walkover (Forfeit)");
+          if (showNotification) showNotification("สำเร็จ", "บันทึกชนะบายเรียบร้อย", "success");
+          if (onRefresh) onRefresh();
+          setSelectedMatch(null);
+      } catch (e) {
+           if (showNotification) showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error");
+      } finally {
+          setIsQuickSaving(false);
+      }
   };
   
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
@@ -602,13 +633,13 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
            return false;
       });
 
-      if (scorers.length === 0) return <div className="text-xs text-slate-300 italic text-center py-2">-</div>;
+      if (scorers.length === 0) return <div className="text-xs text-indigo-300 italic text-center py-2">-</div>;
 
       return (
           <div className="space-y-1">
               {scorers.map((k, i) => (
-                  <div key={i} className="text-xs text-slate-600 flex items-center gap-1">
-                      <span className="w-4 text-slate-400 text-[10px] text-right">{k.round}'</span>
+                  <div key={i} className="text-xs text-white flex items-center gap-1">
+                      <span className="w-4 text-indigo-300 text-[10px] text-right">{k.round}'</span>
                       <span className="font-medium truncate">{String(k.player || '').split('(')[0]}</span>
                   </div>
               ))}
@@ -710,9 +741,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                              <h3 className="text-xs md:text-lg font-bold opacity-90 tracking-wide mb-3">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
                              
                              <div className="flex flex-row items-center justify-between w-full px-2">
-                                <div className="flex flex-col items-center flex-1">
+                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition ${selectedMatch.winner === 'A' || selectedMatch.winner === resolveTeam(selectedMatch.teamA).name ? 'bg-green-600/20 border border-green-400/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : ''}`}>
                                     {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">A</div>}
                                     <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamA).name}</span>
+                                    {selectedMatch.winner === 'A' && <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 shadow-sm">WINNER</span>}
                                 </div>
 
                                 <div className="text-center shrink-0 flex flex-col items-center px-2">
@@ -727,9 +759,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-center flex-1">
+                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition ${selectedMatch.winner === 'B' || selectedMatch.winner === resolveTeam(selectedMatch.teamB).name ? 'bg-green-600/20 border border-green-400/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : ''}`}>
                                     {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">B</div>}
                                     <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamB).name}</span>
+                                    {selectedMatch.winner === 'B' && <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 shadow-sm">WINNER</span>}
                                 </div>
                              </div>
 
@@ -756,33 +789,53 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                         {isAdmin && (
                             <div className="mt-6 border-t border-white/20 pt-4 px-2">
                                 <div className="text-indigo-200 text-xs font-bold mb-2 flex items-center justify-center gap-2">
-                                    <ClipboardCheck className="w-3 h-3" /> ผู้ดูแล: บันทึกผลด่วน (ไม่ต้องระบุคนยิง)
+                                    <ClipboardCheck className="w-3 h-3" /> ผู้ดูแล: บันทึกผลด่วน
                                 </div>
-                                <div className="flex items-center justify-center gap-2">
-                                    <input 
-                                        type="number" 
-                                        inputMode="numeric"
-                                        placeholder="0"
-                                        value={quickScoreA}
-                                        onChange={(e) => setQuickScoreA(e.target.value)}
-                                        className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
-                                    />
-                                    <span className="text-white font-bold">:</span>
-                                    <input 
-                                        type="number" 
-                                        inputMode="numeric"
-                                        placeholder="0"
-                                        value={quickScoreB}
-                                        onChange={(e) => setQuickScoreB(e.target.value)}
-                                        className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
-                                    />
-                                    <button 
-                                        onClick={handleQuickSaveResult}
-                                        disabled={isQuickSaving}
-                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50"
-                                    >
-                                        {isQuickSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : "บันทึกผล"}
-                                    </button>
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <input 
+                                            type="number" 
+                                            inputMode="numeric"
+                                            placeholder="0"
+                                            value={quickScoreA}
+                                            onChange={(e) => setQuickScoreA(e.target.value)}
+                                            className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
+                                        />
+                                        <span className="text-white font-bold">:</span>
+                                        <input 
+                                            type="number" 
+                                            inputMode="numeric"
+                                            placeholder="0"
+                                            value={quickScoreB}
+                                            onChange={(e) => setQuickScoreB(e.target.value)}
+                                            className="w-16 p-2 text-center rounded-lg text-slate-900 font-bold"
+                                        />
+                                        <button 
+                                            onClick={handleQuickSaveResult}
+                                            disabled={isQuickSaving}
+                                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50"
+                                        >
+                                            {isQuickSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : "บันทึกผล"}
+                                        </button>
+                                    </div>
+                                    {!selectedMatch.winner && (
+                                        <div className="flex gap-2 w-full justify-center">
+                                            <button 
+                                                onClick={() => handleWalkover('A')}
+                                                disabled={isQuickSaving}
+                                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-lg text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <Flag className="w-3 h-3" /> ทีม A ชนะบาย
+                                            </button>
+                                            <button 
+                                                onClick={() => handleWalkover('B')}
+                                                disabled={isQuickSaving}
+                                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-lg text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <Flag className="w-3 h-3" /> ทีม B ชนะบาย
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

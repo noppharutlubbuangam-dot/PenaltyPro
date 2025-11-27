@@ -89,6 +89,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [players, setPlayers] = useState(Array(7).fill(null).map((_, i) => ({
     sequence: i + 1,
     name: '',
+    number: '', // Added number field
     birthDate: '',
     photoFile: null as File | null,
     photoPreview: null as string | null
@@ -110,6 +111,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     const playersHtml = players.map(p => `
         <tr style="border-bottom: 1px solid #ddd;">
             <td style="padding: 8px; text-align: center;">${p.sequence}</td>
+            <td style="padding: 8px; text-align: center;">${p.number || '-'}</td>
             <td style="padding: 8px;">${p.name || '-'}</td>
             <td style="padding: 8px; text-align: center;">${p.birthDate || '-'}</td>
             <td style="padding: 4px; text-align: center;">
@@ -174,6 +176,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                 <thead>
                     <tr>
                         <th style="width: 40px; text-align: center;">#</th>
+                        <th style="width: 40px; text-align: center;">เบอร์</th>
                         <th>ชื่อ - นามสกุล</th>
                         <th style="width: 120px; text-align: center;">วัน/เดือน/ปีเกิด</th>
                         <th style="width: 60px; text-align: center;">รูปถ่าย</th>
@@ -264,8 +267,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         });
     } else {
         newPlayers[index] = { ...newPlayers[index], [field]: value };
+        setPlayers(newPlayers); // Ensure state updates for regular fields too
     }
-    setPlayers(newPlayers);
   };
   
   const updatePlayerDate = (index: number, value: string) => {
@@ -297,6 +300,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       setPlayers([...players, {
           sequence: players.length + 1,
           name: '',
+          number: '',
           birthDate: '',
           photoFile: null,
           photoPreview: null
@@ -377,8 +381,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       const processedPlayers = await Promise.all(players.map(async (p, idx) => {
         if (p.photoFile) setUploadStage(`กำลังอัปโหลดรูปนักกีฬาคนที่ ${p.sequence}...`);
         return {
-            sequence: p.sequence,
+            sequence: p.sequence, // Keep sequence but might be mapped to number in backend
             name: p.name,
+            number: p.number, // Send number specifically
             birthDate: p.birthDate,
             photoFile: p.photoFile ? await fileToBase64(p.photoFile) : null
         };
@@ -404,7 +409,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         logoFile: logoBase64,
         documentFile: docBase64,
         slipFile: slipBase64,
-        players: validPlayers,
+        players: validPlayers.map(p => ({
+            sequence: parseInt(p.number || p.sequence.toString()), // Prefer jersey number if available
+            name: p.name,
+            birthDate: p.birthDate,
+            photoFile: p.photoFile
+        })),
         registrationTime: new Date().toISOString()
       };
 
@@ -647,23 +657,23 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                 </button>
             </div>
             <p className="text-sm text-slate-500 bg-blue-50 p-3 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-blue-600" /> คลิกที่ไอคอนปฏิทินเพื่อเลือกวันเกิด ระบบจะแปลงเป็น พ.ศ. ให้
+                <AlertCircle className="w-4 h-4 text-blue-600" /> เลือกรูปถ่ายโดยการคลิกที่ไอคอนกล้อง
             </p>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {players.map((player, index) => (
                     <div key={index} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition relative group">
                         {/* Photo Section (Left) */}
-                        <div className="w-20 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative">
+                        <div className="w-20 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative group-hover:border-indigo-300 transition-colors">
                             {player.photoPreview ? (
-                                <img src={player.photoPreview} className="w-full h-full object-cover" />
+                                <img src={player.photoPreview} className="w-full h-full object-cover" alt="Preview" />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
                                     <User className="w-8 h-8 mb-1" />
                                     <span className="text-[10px] font-bold">No Photo</span>
                                 </div>
                             )}
-                            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                            <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
                                 <Camera className="w-6 h-6 text-white" />
                                 <input 
                                     type="file" 
@@ -678,10 +688,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 space-y-2">
                             <div className="flex gap-2">
                                 {/* Number / Sequence */}
-                                <div className="w-14">
-                                    <div className="w-full p-1.5 text-xs border border-slate-300 rounded text-center font-bold bg-slate-50 text-slate-500">
-                                    #{player.sequence}
-                                    </div>
+                                <div className="w-16">
+                                    <input 
+                                        type="number"
+                                        value={player.number}
+                                        onChange={(e) => updatePlayer(index, 'number', e.target.value)}
+                                        className="w-full p-1.5 text-xs border border-slate-300 rounded text-center font-bold bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                        placeholder="เบอร์"
+                                    />
                                 </div>
                                 {/* Name */}
                                 <div className="flex-1">
