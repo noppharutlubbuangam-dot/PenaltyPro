@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { NewsItem } from '../types';
 import { Calendar, Bell, X, FileText, Download, Share2 } from 'lucide-react';
 import { shareNews } from '../services/liffService';
@@ -6,10 +7,19 @@ import { shareNews } from '../services/liffService';
 interface NewsFeedProps {
   news: NewsItem[];
   isLoading?: boolean;
+  initialNewsId?: string | null;
 }
 
-const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
+const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId }) => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  // Auto-open specific news if deep linked
+  useEffect(() => {
+    if (initialNewsId && news.length > 0) {
+        const item = news.find(n => n.id === initialNewsId);
+        if (item) setSelectedNews(item);
+    }
+  }, [initialNewsId, news]);
 
   const handleShare = (e: React.MouseEvent, item: NewsItem) => {
       e.stopPropagation();
@@ -46,11 +56,6 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading }) => {
   return (
     <>
       <div className="w-full max-w-4xl mx-auto mb-8 animate-in slide-in-from-bottom-5">
-        <div className="flex items-center gap-2 mb-4 px-2">
-           <Bell className="w-5 h-5 text-orange-500" />
-           <h3 className="font-bold text-slate-800 text-lg">ข่าวประชาสัมพันธ์ล่าสุด</h3>
-        </div>
-        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            {sortedNews.map(item => (
                <div 

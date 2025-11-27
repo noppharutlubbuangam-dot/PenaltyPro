@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Match, Team, Player, AppSettings } from '../types';
+import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet } from '../services/sheetService';
 import { shareMatch } from '../services/liffService';
@@ -16,6 +15,7 @@ interface ScheduleListProps {
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   onStartMatch: (teamA: Team, teamB: Team, matchId: string) => void;
   config: AppSettings;
+  initialMatchId?: string | null;
 }
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
@@ -31,7 +31,6 @@ interface TeamSelectorProps {
 const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSelect, teams, title }) => {
     const [search, setSearch] = useState('');
     
-    // Reset search when opening
     useEffect(() => {
         if(isOpen) setSearch('');
     }, [isOpen]);
@@ -41,8 +40,8 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     const filtered = teams.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in duration-200">
+        <div className="fixed inset-0 z-[1100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-slate-800">{title || "เลือกทีม"}</h3>
                     <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
@@ -93,11 +92,10 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     );
 };
 
-const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config }) => {
+const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Delete & Reset States
   const [isDeleting, setIsDeleting] = useState(false);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   const [matchToReset, setMatchToReset] = useState<string | null>(null);
@@ -106,28 +104,29 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   
   const [activeMatchType, setActiveMatchType] = useState<'group' | 'knockout' | 'custom'>('group');
   
-  // Single Match Form (Edit Mode / Single Add)
   const [matchForm, setMatchForm] = useState({ id: '', teamA: '', teamB: '', date: '', time: '', venue: '', roundLabel: 'Group A' });
-  
-  // Bulk Match Form (Group Add Mode)
   const [bulkMatches, setBulkMatches] = useState<Array<{ tempId: string, teamA: string, teamB: string, time: string, venue: string }>>([]);
 
-  // Quick Result State (In Detail Modal)
   const [quickScoreA, setQuickScoreA] = useState('');
   const [quickScoreB, setQuickScoreB] = useState('');
   const [isQuickSaving, setIsQuickSaving] = useState(false);
 
-  // Edit Result State (In List View)
   const [isEditResultOpen, setIsEditResultOpen] = useState(false);
   const [editResultForm, setEditResultForm] = useState({ matchId: '', teamA: '', teamB: '', scoreA: '', scoreB: '' });
 
-  // Team Selector State
   const [selectorConfig, setSelectorConfig] = useState<{ 
       isOpen: boolean; 
       mode: 'singleA' | 'singleB' | 'bulkA' | 'bulkB'; 
       rowIndex?: number; 
       currentValue?: string;
   }>({ isOpen: false, mode: 'singleA' });
+
+  useEffect(() => {
+    if (initialMatchId && matches.length > 0) {
+        const found = matches.find(m => m.id === initialMatchId);
+        if (found) setSelectedMatch(found);
+    }
+  }, [initialMatchId, matches]);
 
   useEffect(() => {
     if (selectedMatch) {
@@ -153,10 +152,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   const handleOpenAdd = () => { 
       const today = new Date().toISOString().split('T')[0];
       setMatchForm({ id: '', teamA: '', teamB: '', date: today, time: '09:00', venue: '', roundLabel: 'Group A' });
-      
-      // Init bulk with one row
       setBulkMatches([{ tempId: Date.now().toString(), teamA: '', teamB: '', time: '09:00', venue: '' }]);
-      
       setActiveMatchType('group');
       setIsAddModalOpen(true); 
   };
@@ -215,11 +211,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               return;
           }
 
-          // Determine Winner
           let winnerName = null;
           if (sA > sB) winnerName = editResultForm.teamA;
           else if (sB > sA) winnerName = editResultForm.teamB;
-          // else Draw (null)
 
           const payload: any = {
             matchId: editResultForm.matchId,
@@ -263,12 +257,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   
   const handleResetMatch = async () => {
       if(!matchToReset) return;
-      setIsDeleting(true); // Reuse deleting state for loader
+      setIsDeleting(true); 
       try {
           const match = matches.find(m => m.id === matchToReset);
           if (!match) throw new Error("Match not found");
 
-          // Reset payload: score 0, winner null, status Scheduled
           const payload: any = {
               matchId: match.id,
               teamA: resolveTeam(match.teamA),
@@ -277,59 +270,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               scoreB: 0,
               winner: null, 
               roundLabel: match.roundLabel,
-              status: 'Scheduled', // This is key
+              status: 'Scheduled', 
               kicks: [],
               isFinished: false
           };
 
-          // We use saveMatchToSheet but send empty/default data to overwrite
-          // Note: saveMatchToSheet logic in service might default status to Finished if we don't be careful.
-          // Let's modify saveMatchToSheet call or use scheduleMatch with overwrite?
-          // Actually saveMatchToSheet overwrites column 10 to 'Finished'.
-          // To reset to 'Scheduled', we might need to use `scheduleMatch` effectively re-scheduling it.
-          // But `scheduleMatch` doesn't clear scores.
-          
-          // Let's rely on `saveMatchToSheet` but we might need to update the GAS script if it hardcodes 'Finished'.
-          // Looking at the provided `code.gs`:
-          // `if (rowIndex !== -1) { ... sheet.getRange(rowIndex, 10).setValue('Finished'); ... }`
-          // It seems it hardcodes 'Finished'.
-          
-          // However, `scheduleMatch` sets status to 'Scheduled'.
-          // So if we call `scheduleMatch` it updates columns.
-          // BUT `scheduleMatch` does NOT clear scores (Col 4, 5, 6).
-          
-          // So we need to call `saveMatchToSheet` with a trick OR assume the user is okay with `saveMatch` clearing it if we pass specific flag?
-          // The provided `code.gs` `saveMatch` function updates ScoreA, ScoreB, Winner and Status.
-          // Wait, `saveMatch` in GAS: `sheet.getRange(rowIndex, 10).setValue('Finished');` -> IT HARDCODES FINISHED.
-          
-          // FIX: We need to use `saveMatch` to clear scores, but since it forces 'Finished', this is tricky without modifying backend.
-          // BUT: `scheduleMatch` in GAS: `if (data.scheduledTime) { ... sheet.getRange(i+1, 7).setValue(data.scheduledTime); }`
-          // It doesn't clear scores.
-          
-          // Workaround: Send a `saveMatch` with empty winner to clear data, then `scheduleMatch` to set status back to 'Scheduled'.
-          // Or just use `saveMatch` and live with 'Finished' but 0-0? No, user wants it back to schedule.
-          
-          // Let's try sending `status: 'Scheduled'` in the payload and hope I can tweak `saveMatchToSheet` service to send it?
-          // The service `saveMatchToSheet` hardcodes `status: 'Finished'` inside the GAS `saveMatch` function?
-          // Yes: `sheet.getRange(rowIndex, 10).setValue('Finished');`
-          
-          // Ah, I missed that `scheduleMatch` in GAS sets `sheet.getRange(i+1, 10).setValue('Scheduled')` if it's a new match.
-          // If updating: `if (!rows[i][0] && data.matchId) ...`
-          
-          // Let's look at `saveMatch` in GAS again.
-          // It DOES NOT allow passing status.
-          
-          // **Strategy**: Since I cannot change GAS easily (per instructions I should try to minimize, but I already updated GAS in previous turn),
-          // I will assume `saveMatchToSheet` can be used to set scores to 0. 
-          // And `scheduleMatch` can be used to set status to `Scheduled`.
-          // So I will call `saveMatchToSheet` (clearing scores) THEN `scheduleMatch` (reseting status).
-          
           await saveMatchToSheet({
                ...payload,
                scoreA: 0, scoreB: 0, winner: null
-          }, ""); // This sets scores to 0 but status 'Finished'
+          }, ""); 
           
-          // Now force status back to Scheduled
           await scheduleMatch(
               match.id, 
               typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
@@ -362,7 +312,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       setIsSaving(true); 
       try { 
           if (matchForm.id) {
-              // Edit Single
               if (!matchForm.teamA || !matchForm.teamB || !matchForm.date || !matchForm.time) throw new Error("Missing Fields");
                
                let finalLabel = matchForm.roundLabel;
@@ -379,9 +328,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                   new Date(`${matchForm.date}T${matchForm.time}`).toISOString()
               );
           } else {
-              // Add New (Bulk or Single)
               if (activeMatchType === 'group') {
-                  const groupName = matchForm.roundLabel.replace('Group ', '');
                   for (const m of bulkMatches) {
                        if (!m.teamA || !m.teamB || !m.time) continue;
                        
@@ -431,11 +378,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         const tA = resolveTeam(selectedMatch.teamA);
         const tB = resolveTeam(selectedMatch.teamB);
 
-        // Determine Winner (Strictly based on score entered)
         let winnerName = null;
         if (sA > sB) winnerName = tA.name;
         else if (sB > sA) winnerName = tB.name;
-        // else Draw (null)
 
         const payload: any = {
             matchId: selectedMatch.id,
@@ -444,7 +389,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             scoreA: sA,
             scoreB: sB,
             winner: sA > sB ? 'A' : sB > sA ? 'B' : null,
-            kicks: [], // No kicks data for quick save
+            kicks: [], 
             isFinished: true
         };
 
@@ -503,7 +448,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       );
   };
 
-  // --- Team Selector Logic ---
   const currentGroup = activeMatchType === 'group' && matchForm.roundLabel.startsWith('Group ') 
     ? matchForm.roundLabel.replace('Group ', '').trim() 
     : null;
@@ -512,7 +456,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
     return teams.filter(t => {
         if (excludeName && t.name === excludeName) return false;
         if (currentGroup) {
-            // Check normalized group (case insensitive)
             if (t.group?.toUpperCase() !== currentGroup.toUpperCase()) return false;
         }
         return true;
@@ -582,6 +525,41 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       );
   };
 
+  // Helper to get scorers
+  const getScorers = (match: Match, teamName: string) => {
+      if (!match.kicks) return [];
+      // Note: In saveMatchToSheet, teamId is saved as the team NAME.
+      // So we filter by k.teamId === teamName, or if using old data, check both ID and Name.
+      return match.kicks.filter(k => 
+          (k.teamId === teamName || k.teamId === 'A' || k.teamId === 'B') && 
+          k.result === KickResult.GOAL
+      );
+  };
+
+  const renderScorers = (match: Match, teamName: string, side: 'A' | 'B') => {
+      const scorers = getScorers(match, teamName).filter(k => {
+           // Double check filtering if both A and B are mixed in legacy data
+           if (k.teamId === 'A' && side === 'A') return true;
+           if (k.teamId === 'B' && side === 'B') return true;
+           if (k.teamId === teamName) return true;
+           return false;
+      });
+
+      if (scorers.length === 0) return <div className="text-xs text-slate-300 italic text-center py-2">-</div>;
+
+      return (
+          <div className="space-y-1">
+              {scorers.map((k, i) => (
+                  <div key={i} className="text-xs text-slate-600 flex items-center gap-1">
+                      <span className="w-4 text-slate-400 text-[10px] text-right">{k.round}'</span>
+                      <span className="font-medium truncate">{k.player.split('(')[0]}</span>
+                  </div>
+              ))}
+          </div>
+      );
+  };
+
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 pb-24">
       
@@ -591,7 +569,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         onClose={() => setSelectorConfig(prev => ({ ...prev, isOpen: false }))}
         onSelect={handleTeamSelect}
         teams={getFilteredTeams(
-            // Logic to exclude the opponent if already selected
             selectorConfig.mode === 'singleA' ? matchForm.teamB : 
             selectorConfig.mode === 'singleB' ? matchForm.teamA :
             selectorConfig.mode === 'bulkA' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamB :
@@ -661,13 +638,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
         {/* Match Detail Modal */}
         {selectedMatch && (
-            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-                <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col max-h-[90vh]">
+            <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => setSelectedMatch(null)}>
+                <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full z-20"><X className="w-5 h-5" /></button>
                     
-                    {/* Compact Header for Mobile */}
                     <div className="bg-indigo-900 p-4 md:p-6 text-white text-center shrink-0 relative overflow-hidden">
-                        {/* Background Decoration */}
                         <div className="absolute top-0 left-0 w-32 h-32 bg-white opacity-5 rounded-full -translate-x-10 -translate-y-10 blur-2xl"></div>
                         <div className="absolute bottom-0 right-0 w-40 h-40 bg-indigo-500 opacity-20 rounded-full translate-x-10 translate-y-10 blur-3xl"></div>
                         
@@ -678,13 +653,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                              <h3 className="text-xs md:text-lg font-bold opacity-90 tracking-wide mb-3">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
                              
                              <div className="flex flex-row items-center justify-between w-full px-2">
-                                {/* Team A */}
                                 <div className="flex flex-col items-center flex-1">
                                     {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">A</div>}
                                     <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamA).name}</span>
                                 </div>
 
-                                {/* Score / VS */}
                                 <div className="text-center shrink-0 flex flex-col items-center px-2">
                                     {selectedMatch.winner ? (
                                         <div className="text-2xl md:text-5xl font-mono font-black bg-white/10 border border-white/20 px-3 py-1 md:px-6 md:py-2 rounded-lg backdrop-blur-sm shadow-inner whitespace-nowrap">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
@@ -697,12 +670,23 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     </div>
                                 </div>
 
-                                {/* Team B */}
                                 <div className="flex flex-col items-center flex-1">
                                     {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">B</div>}
                                     <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamB).name}</span>
                                 </div>
                              </div>
+
+                             {/* Scorers Section - Displayed only if winner is set and kicks exist */}
+                             {selectedMatch.winner && selectedMatch.kicks && selectedMatch.kicks.length > 0 && (
+                                 <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-4">
+                                     <div className="text-right border-r border-white/10 pr-4">
+                                         {renderScorers(selectedMatch, typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name, 'A')}
+                                     </div>
+                                     <div className="text-left pl-4">
+                                         {renderScorers(selectedMatch, typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name, 'B')}
+                                     </div>
+                                 </div>
+                             )}
                         </div>
 
                         {!selectedMatch.winner && (
@@ -766,8 +750,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
         {/* Add/Edit Match Modal */}
         {isAddModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
-                <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`}>
+            <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setIsAddModalOpen(false)}>
+                <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`} onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 className="text-lg font-bold text-slate-800">{matchForm.id ? 'แก้ไขตาราง' : 'เพิ่มตารางการแข่งขัน'}</h3>
                         <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
@@ -921,8 +905,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
         {/* Edit Result Modal */}
         {isEditResultOpen && (
-            <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
+            <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsEditResultOpen(false)}>
+                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                      <div className="flex justify-between items-center mb-4 border-b pb-2">
                          <h3 className="font-bold text-lg text-slate-800">แก้ไขผลการแข่งขัน</h3>
                          <button onClick={() => setIsEditResultOpen(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
@@ -947,8 +931,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
         {/* Delete / Reset Confirmation Modal */}
         {(matchToDelete || matchToReset) && (
-            <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200">
+            <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => { setMatchToDelete(null); setMatchToReset(null); }}>
+                <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-3 text-red-600 mb-4">
                         <AlertTriangle className="w-8 h-8" />
                         <h3 className="font-bold text-lg">ยืนยันการ{matchToReset ? 'รีเซ็ต' : 'ลบ'}?</h3>

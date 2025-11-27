@@ -1,3 +1,4 @@
+
 import { LIFF_ID, Match, NewsItem } from '../types';
 
 declare global {
@@ -21,6 +22,9 @@ export const shareNews = async (news: NewsItem) => {
       return;
   }
 
+  // Construct Deep Link
+  const liffUrl = `https://liff.line.me/${LIFF_ID}?view=news&id=${news.id}`;
+
   const flexMessage = {
     type: "flex",
     altText: `ข่าวสาร: ${news.title}`,
@@ -32,7 +36,7 @@ export const shareNews = async (news: NewsItem) => {
         "size": "full",
         "aspectRatio": "20:13",
         "aspectMode": "cover",
-        "action": { "type": "uri", "uri": "https://liff.line.me/" + LIFF_ID }
+        "action": { "type": "uri", "uri": liffUrl }
       } : undefined,
       "body": {
         "type": "box",
@@ -72,7 +76,7 @@ export const shareNews = async (news: NewsItem) => {
             "action": {
               "type": "uri",
               "label": "อ่านเพิ่มเติม",
-              "uri": "https://liff.line.me/" + LIFF_ID
+              "uri": liffUrl
             },
             "style": "primary",
             "color": "#1e40af"
@@ -96,6 +100,9 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
       return;
   }
 
+  // Construct Deep Link
+  const liffUrl = `https://liff.line.me/${LIFF_ID}?view=match_detail&id=${match.id}`;
+
   const isFinished = !!match.winner;
   const title = isFinished ? "ผลการแข่งขัน" : "โปรแกรมการแข่งขัน";
   const headerColor = isFinished ? "#166534" : "#1e40af"; 
@@ -118,7 +125,8 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
           { "type": "text", "text": match.roundLabel || "ทั่วไป", "color": "#e0e7ff", "size": "xs" }
         ],
         "backgroundColor": headerColor,
-        "paddingAll": "lg"
+        "paddingAll": "lg",
+        "action": { "type": "uri", "uri": liffUrl }
       },
       "body": {
         "type": "box",
@@ -170,7 +178,8 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
             "margin": "lg"
           }
         ],
-        "paddingAll": "lg"
+        "paddingAll": "lg",
+        "action": { "type": "uri", "uri": liffUrl }
       },
       "footer": {
         "type": "box",
@@ -178,7 +187,7 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
         "contents": [
           {
             "type": "button",
-            "action": { "type": "uri", "label": "ดูรายละเอียด", "uri": "https://liff.line.me/" + LIFF_ID },
+            "action": { "type": "uri", "label": "ดูรายละเอียด", "uri": liffUrl },
             "style": "primary",
             "color": headerColor
           }

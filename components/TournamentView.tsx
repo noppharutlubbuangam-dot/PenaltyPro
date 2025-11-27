@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Team, Match } from '../types';
 import { Trophy, Edit2, Check, ArrowRight, UserX, ShieldAlert, Sparkles, GripVertical, PlayCircle, AlertCircle, Lock, Eraser, MapPin, Clock, Calendar, RefreshCw, Minimize2, Maximize2 } from 'lucide-react';
@@ -281,8 +280,8 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
       </div>
       
       {walkoverModal && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in duration-200">
+          <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWalkoverModal(null)}>
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center gap-3 text-orange-600 mb-4 border-b pb-2">
                       <ShieldAlert className="w-6 h-6" />
                       <h3 className="font-bold text-lg">บันทึกผลชนะบาย / ปรับแพ้</h3>
