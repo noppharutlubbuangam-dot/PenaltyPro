@@ -18,7 +18,7 @@ import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, authenticateUser } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -450,9 +450,21 @@ function App() {
                       </div>
                   )}
                   {announcements.length > 0 && !isLoadingData && (
-                    <div className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-md flex items-start gap-3 mb-6 relative overflow-hidden">
-                        <div className="shrink-0 mt-0.5"><Bell className="w-5 h-5 text-yellow-400 animate-pulse" /></div>
-                        <div className="flex-1 pr-6"><h3 className="font-bold text-yellow-400 text-sm mb-1">ประกาศสำคัญ</h3><div className="relative h-12 overflow-hidden">{announcements.map((text, idx) => (<p key={idx} className={`text-xs text-slate-200 leading-relaxed absolute top-0 left-0 w-full transition-opacity duration-500 ${idx === announcementIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>{text}</p>))}</div></div>
+                    <div className="bg-white/10 border border-white/20 rounded-xl p-3 backdrop-blur-md flex items-center gap-3 mb-6 relative group">
+                        <div className="shrink-0"><Bell className="w-5 h-5 text-yellow-400 animate-pulse" /></div>
+                        <div className="flex-1 overflow-hidden relative h-12 flex items-center">
+                            {announcements.map((text, idx) => (
+                                <p key={idx} className={`text-xs text-slate-200 leading-relaxed absolute w-full transition-opacity duration-500 ${idx === announcementIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                                    {text}
+                                </p>
+                            ))}
+                        </div>
+                        {announcements.length > 1 && (
+                             <div className="flex items-center gap-1">
+                                <button onClick={() => setAnnouncementIndex(prev => (prev - 1 + announcements.length) % announcements.length)} className="p-1 hover:bg-white/20 rounded-full text-slate-300 hover:text-white transition"><ChevronLeft className="w-4 h-4" /></button>
+                                <button onClick={() => setAnnouncementIndex(prev => (prev + 1) % announcements.length)} className="p-1 hover:bg-white/20 rounded-full text-slate-300 hover:text-white transition"><ChevronRight className="w-4 h-4" /></button>
+                             </div>
+                        )}
                     </div>
                   )}
               </div>
