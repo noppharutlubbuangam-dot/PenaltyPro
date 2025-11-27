@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, ArrowRight, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Share2, Edit2, Trash2, PlayCircle, Video, Image, BarChart2, ImageIcon, Camera, Filter, Users, User, PlusCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
