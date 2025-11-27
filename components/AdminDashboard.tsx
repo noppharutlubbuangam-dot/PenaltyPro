@@ -1,8 +1,6 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData } from '../services/sheetService';
 
 interface AdminDashboardProps {
@@ -385,6 +383,188 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">ทีมทั้งหมด</p><p className="text-3xl font-bold text-indigo-600">{localTeams.length}</p></div><div className="p-3 bg-indigo-50 rounded-full"><Users className="w-6 h-6 text-indigo-600" /></div></div></div><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">รอการอนุมัติ</p><p className="text-3xl font-bold text-orange-500">{localTeams.filter(t => t.status !== 'Approved' && t.status !== 'Rejected').length}</p></div><div className="p-3 bg-orange-50 rounded-full"><ShieldAlert className="w-6 h-6 text-orange-500" /></div></div></div><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">อนุมัติแล้ว</p><p className="text-3xl font-bold text-green-600">{localTeams.filter(t => t.status === 'Approved').length}</p></div><div className="p-3 bg-green-50 rounded-full"><ShieldCheck className="w-6 h-6 text-green-600" /></div></div></div></div>
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="font-bold text-lg text-slate-800">รายชื่อทีมลงทะเบียน</h2><div className="flex gap-2 w-full md:w-auto"><div className="relative flex-1 md:w-64"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input type="text" placeholder="ค้นหาทีม / จังหวัด..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" /></div><button onClick={downloadCSV} className="flex items-center gap-2 text-sm px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-indigo-700 font-medium"><Download className="w-4 h-4" /> Export CSV</button><button onClick={onRefresh} className="text-sm px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600">รีเฟรช</button></div></div><div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-sm"><tr><th className="p-4 font-medium cursor-pointer hover:bg-slate-100" onClick={() => handleSort('name')}>ชื่อทีม/โรงเรียน</th><th className="p-4 font-medium cursor-pointer hover:bg-slate-100" onClick={() => handleSort('group')}>กลุ่ม</th><th className="p-4 font-medium">ผู้ติดต่อ</th><th className="p-4 font-medium text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('status')}>สถานะ</th><th className="p-4 font-medium text-right">จัดการ</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredTeams.map(team => (<tr key={team.id} className="hover:bg-slate-50"><td className="p-4"><div className="flex items-center gap-3">{team.logoUrl ? <img src={team.logoUrl} className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200" /> : <div className="w-10 h-10 rounded-lg bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-xs">{team.shortName}</div>}<div><p className="font-bold text-slate-800">{team.name}</p><p className="text-xs text-slate-500">{team.district}, {team.province}</p></div></div></td><td className="p-4">{team.group ? <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-bold">{team.group}</span> : <span className="text-slate-300 text-xs">-</span>}</td><td className="p-4 text-sm"><div className="flex items-center gap-2 group"><span>{team.managerPhone || team.coachPhone || team.directorName}</span><button onClick={() => copyToClipboard(team.managerPhone || team.coachPhone || '')} className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition"><Copy className="w-3 h-3" /></button></div><p className="text-xs text-slate-400">ผจก: {team.managerName}</p></td><td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${team.status === 'Approved' ? 'bg-green-100 text-green-800' : team.status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{team.status || 'Pending'}</span></td><td className="p-4 text-right"><button onClick={() => setSelectedTeam(team)} className="bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-2 ml-auto shadow-sm"><Eye className="w-4 h-4" /> รายละเอียด</button></td></tr>))} {filteredTeams.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>}</tbody></table></div></div>
             </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="animate-in fade-in duration-300 max-w-4xl mx-auto space-y-6">
+            {/* Competition Info */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><Trophy className="w-5 h-5 text-indigo-600"/> ข้อมูลการแข่งขัน</h3>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">ชื่อรายการแข่งขัน</label>
+                      <input type="text" value={configForm.competitionName} onChange={e => setConfigForm({...configForm, competitionName: e.target.value})} className="w-full p-2 border rounded-lg" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">โลโก้รายการ</label>
+                      <div className="flex items-center gap-4">
+                          <img src={settingsLogoPreview || 'https://via.placeholder.com/80'} className="w-16 h-16 object-contain border rounded-lg p-1" />
+                          <label className="cursor-pointer bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-100 transition">
+                              เปลี่ยนรูป
+                              <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleSettingsLogoChange(e.target.files[0])} />
+                          </label>
+                      </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Bank Info */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-indigo-600"/> ข้อมูลการชำระเงิน (สำหรับใบสมัคร)</h3>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">ธนาคาร</label>
+                      <input type="text" value={configForm.bankName} onChange={e => setConfigForm({...configForm, bankName: e.target.value})} className="w-full p-2 border rounded-lg" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">เลขบัญชี</label>
+                      <input type="text" value={configForm.bankAccount} onChange={e => setConfigForm({...configForm, bankAccount: e.target.value})} className="w-full p-2 border rounded-lg font-mono" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">ชื่อบัญชี</label>
+                      <input type="text" value={configForm.accountName} onChange={e => setConfigForm({...configForm, accountName: e.target.value})} className="w-full p-2 border rounded-lg" />
+                  </div>
+               </div>
+            </div>
+
+            {/* Location & Announcement */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-indigo-600"/> สถานที่และประกาศ</h3>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                   <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">สถานที่แข่งขัน</label>
+                      <input type="text" value={configForm.locationName} onChange={e => setConfigForm({...configForm, locationName: e.target.value})} className="w-full p-2 border rounded-lg" />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Google Maps Link</label>
+                      <input type="text" value={configForm.locationLink} onChange={e => setConfigForm({...configForm, locationLink: e.target.value})} className="w-full p-2 border rounded-lg" />
+                   </div>
+               </div>
+               <div>
+                   <label className="block text-sm font-bold text-slate-700 mb-1">ประกาศตัววิ่ง (คั่นด้วย |)</label>
+                   <textarea value={configForm.announcement} onChange={e => setConfigForm({...configForm, announcement: e.target.value})} className="w-full p-2 border rounded-lg h-24" placeholder="เช่น ยินดีต้อนรับสู่งาน | เริ่มแข่ง 09.00 น."></textarea>
+               </div>
+            </div>
+
+            {/* Security */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-indigo-600"/> ความปลอดภัย</h3>
+               <div>
+                   <label className="block text-sm font-bold text-slate-700 mb-1">Admin PIN (สำหรับเริ่มแข่ง/Login แบบ PIN)</label>
+                   <input type="text" value={configForm.adminPin || '1234'} onChange={e => setConfigForm({...configForm, adminPin: e.target.value})} className="w-full max-w-xs p-2 border rounded-lg font-mono tracking-widest" />
+               </div>
+            </div>
+
+            <button onClick={handleSaveConfig} disabled={isSavingSettings} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
+                {isSavingSettings ? <Loader2 className="w-5 h-5 animate-spin"/> : <Save className="w-5 h-5"/>} บันทึกการตั้งค่าทั้งหมด
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'news' && (
+          <div className="animate-in fade-in duration-300 grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Form Side */}
+              <div className="lg:col-span-1 space-y-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-4">
+                      <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2" id="news-form-anchor">
+                          {isEditingNews ? <Edit3 className="w-5 h-5 text-orange-500"/> : <Plus className="w-5 h-5 text-green-500"/>} 
+                          {isEditingNews ? 'แก้ไขข่าว' : 'เพิ่มข่าวใหม่'}
+                      </h3>
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-1">หัวข้อข่าว</label>
+                              <input type="text" value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="ระบุหัวข้อ..." />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-1">เนื้อหา</label>
+                              <textarea value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} className="w-full p-2 border rounded-lg h-32" placeholder="รายละเอียด..."></textarea>
+                          </div>
+                          
+                          {/* Image Upload */}
+                          <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-1">รูปภาพประกอบ</label>
+                              <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:bg-slate-50 transition relative">
+                                  {newsForm.imagePreview ? (
+                                      <div className="relative">
+                                          <img src={newsForm.imagePreview} className="max-h-32 mx-auto rounded" />
+                                          <button onClick={() => setNewsForm({...newsForm, imageFile: null, imagePreview: null})} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full"><X className="w-3 h-3"/></button>
+                                      </div>
+                                  ) : (
+                                      <label className="cursor-pointer block">
+                                          <Image className="w-8 h-8 text-slate-300 mx-auto mb-2"/>
+                                          <span className="text-xs text-slate-400">คลิกเพื่ออัปโหลด</span>
+                                          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                              if (e.target.files?.[0]) {
+                                                  const file = e.target.files[0];
+                                                  if(validateFile(file, 'image')) {
+                                                      setNewsForm({...newsForm, imageFile: file, imagePreview: URL.createObjectURL(file)});
+                                                  }
+                                              }
+                                          }} />
+                                      </label>
+                                  )}
+                              </div>
+                          </div>
+
+                          {/* Doc Upload */}
+                          <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-1">เอกสารแนบ (PDF)</label>
+                               <div className="flex items-center gap-2">
+                                   <label className="cursor-pointer bg-slate-50 border border-slate-300 px-3 py-2 rounded-lg text-sm hover:bg-slate-100 transition flex items-center gap-2 flex-1 justify-center">
+                                      <Paperclip className="w-4 h-4 text-slate-500"/> 
+                                      <span className="truncate max-w-[150px]">{newsForm.docFile ? newsForm.docFile.name : 'เลือกไฟล์...'}</span>
+                                      <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => {
+                                          if (e.target.files?.[0]) {
+                                              const file = e.target.files[0];
+                                              if(validateFile(file, 'doc')) {
+                                                  setNewsForm({...newsForm, docFile: file});
+                                              }
+                                          }
+                                      }} />
+                                  </label>
+                                  {newsForm.docFile && <button onClick={() => setNewsForm({...newsForm, docFile: null})} className="text-red-500 p-2 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button>}
+                               </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-2">
+                              {isEditingNews && <button onClick={() => { setIsEditingNews(false); setNewsForm({ id: null, title: '', content: '', imageFile: null, imagePreview: null, docFile: null }); }} className="flex-1 py-2 border border-slate-300 rounded-lg font-bold text-slate-500">ยกเลิก</button>}
+                              <button onClick={handleSaveNews} disabled={isSavingNews} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow flex items-center justify-center gap-2">
+                                  {isSavingNews ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} {isEditingNews ? 'บันทึกแก้ไข' : 'โพสต์ข่าว'}
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* List Side */}
+              <div className="lg:col-span-2 space-y-4">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2"><Bell className="w-5 h-5"/> รายการข่าวสาร ({news.length})</h3>
+                  {news.length === 0 ? (
+                      <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400">ยังไม่มีข่าวสาร</div>
+                  ) : (
+                      news.slice().reverse().map(item => (
+                          <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex gap-4 group">
+                              <div className="w-24 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                                  {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300"><Image className="w-8 h-8"/></div>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-start">
+                                      <h4 className="font-bold text-slate-800 line-clamp-1">{item.title}</h4>
+                                      <span className="text-xs text-slate-400 shrink-0">{new Date(item.timestamp).toLocaleDateString('th-TH')}</span>
+                                  </div>
+                                  <p className="text-sm text-slate-500 line-clamp-2 mt-1">{item.content}</p>
+                                  {item.documentUrl && <div className="mt-2 text-xs text-indigo-600 flex items-center gap-1"><Paperclip className="w-3 h-3"/> มีเอกสารแนบ</div>}
+                                  
+                                  <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition">
+                                      <button onClick={() => handleEditNews(item)} className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded hover:bg-orange-100 font-bold flex items-center gap-1"><Edit3 className="w-3 h-3"/> แก้ไข</button>
+                                      <button onClick={() => triggerDeleteNews(item.id)} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100 font-bold flex items-center gap-1"><Trash2 className="w-3 h-3"/> ลบ</button>
+                                  </div>
+                              </div>
+                          </div>
+                      ))
+                  )}
+              </div>
+          </div>
         )}
 
         {/* Edit Form Modal */}
