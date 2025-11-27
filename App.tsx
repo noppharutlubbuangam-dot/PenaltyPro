@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -36,6 +38,7 @@ function App() {
   // Deep Linking State
   const [initialMatchId, setInitialMatchId] = useState<string | null>(null);
   const [initialNewsId, setInitialNewsId] = useState<string | null>(null);
+  const [initialTeamId, setInitialTeamId] = useState<string | null>(null);
 
   // Data State
   const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
@@ -83,10 +86,11 @@ function App() {
 
   // Handle Deep Linking after data is loaded
   useEffect(() => {
-      if (!isLoadingData && matchesLog.length > 0) {
+      if (!isLoadingData && availableTeams.length > 0) {
           const params = new URLSearchParams(window.location.search);
           const view = params.get('view');
           const id = params.get('id');
+          const teamId = params.get('teamId');
 
           if (view === 'match_detail' && id) {
               setInitialMatchId(id);
@@ -100,9 +104,18 @@ function App() {
               setCurrentView('standings');
           } else if (view === 'tournament') {
               setCurrentView('tournament');
+          } else if (view === 'admin' && teamId) {
+              setInitialTeamId(teamId);
+              // Auto prompt login if not admin
+              if (!isAdmin) {
+                  setIsLoginOpen(true);
+                  setCurrentView('admin');
+              } else {
+                  setCurrentView('admin');
+              }
           }
       }
-  }, [isLoadingData, matchesLog.length]); 
+  }, [isLoadingData, availableTeams.length, isAdmin]); 
 
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => {
     const id = Date.now().toString();
@@ -279,16 +292,30 @@ function App() {
   };
   const showBottomNav = currentView !== 'match';
 
+  // Helper function to resolve team object from ID or Name or Object
+  const resolveTeam = (t: string | Team | null | undefined): Team => {
+    // Safely handle null/undefined
+    if (!t) return { id: 'unknown', name: 'Unknown Team', shortName: 'N/A', color: '#94a3b8', logoUrl: '' } as Team;
+    
+    // If it's already a Team object, return it
+    if (typeof t === 'object' && 'name' in t) return t as Team;
+    
+    // If string, try to find in availableTeams, otherwise mock a basic team object
+    const teamName = typeof t === 'string' ? t : 'Unknown';
+    return availableTeams.find(team => team.name === teamName) || { 
+        id: 'temp', 
+        name: teamName, 
+        color: '#94a3b8', 
+        logoUrl: '',
+        shortName: teamName.substring(0, 3).toUpperCase()
+    } as Team;
+  };
+
   // Helper for Home Page Recent Results
   const recentFinishedMatches = matchesLog
       .filter(m => m.winner)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 3);
-
-  const resolveTeam = (t: string | Team) => {
-    if (typeof t === 'object') return t;
-    return availableTeams.find(team => team.name === t) || { name: t, logoUrl: '' } as Team;
-  };
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-24" style={{ fontFamily: "'Kanit', sans-serif" }}>
@@ -319,7 +346,18 @@ function App() {
         />
       )}
       {currentView === 'standings' && <StandingsView matches={matchesLog} teams={availableTeams} onBack={() => setCurrentView('home')} isLoading={isLoadingData} />}
-      {currentView === 'admin' && isAdmin && <AdminDashboard teams={availableTeams} players={availablePlayers} settings={appConfig} onLogout={() => { setIsAdmin(false); setCurrentView('home'); }} onRefresh={loadData} news={newsItems} showNotification={showNotification} />}
+      {currentView === 'admin' && (
+          <AdminDashboard 
+            teams={availableTeams} 
+            players={availablePlayers} 
+            settings={appConfig} 
+            onLogout={() => { setIsAdmin(false); setCurrentView('home'); }} 
+            onRefresh={loadData} 
+            news={newsItems} 
+            showNotification={showNotification}
+            initialTeamId={initialTeamId}
+          />
+      )}
 
       {currentView === 'home' && (
         <div className="min-h-screen bg-slate-100">

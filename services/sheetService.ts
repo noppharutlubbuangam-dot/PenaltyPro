@@ -34,20 +34,23 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
     
     const data = JSON.parse(text);
     
-    if (data.status === 'error') {
+    if (data && data.status === 'error') {
         throw new Error(data.message);
     }
+    
+    // Safely handle data.config being undefined/null
+    const configData = (data && data.config) ? data.config : {};
 
     return {
-        teams: data.teams || [],
-        players: data.players || [],
-        matches: data.matches || [],
+        teams: (data && data.teams) || [],
+        players: (data && data.players) || [],
+        matches: (data && data.matches) || [],
         config: {
-            ...data.config,
-            adminPin: data.config.adminPin || '1234' // Ensure fallback or mapped from sheet
-        } || {},
-        schools: data.schools || [],
-        news: data.news || []
+            ...configData,
+            adminPin: configData.adminPin || '1234' // Ensure fallback
+        },
+        schools: (data && data.schools) || [],
+        news: (data && data.news) || []
     };
   } catch (error) {
     console.error("Failed to fetch from Google Sheet:", error);
@@ -186,11 +189,11 @@ export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName
     } catch (error) { return false; }
 }
 
-export const registerTeam = async (data: RegistrationData): Promise<boolean> => {
+export const registerTeam = async (data: RegistrationData): Promise<string | null> => {
   const payload = {
     action: 'register',
-    schoolName: data.schoolName, // Ensure parameter name matches backend expectations (Code.gs expects schoolName)
-    shortName: data.shortName, // Pass generated shortName
+    schoolName: data.schoolName, 
+    shortName: data.shortName, 
     color: data.color,
     logoFile: data.logoFile,
     documentFile: data.documentFile,
@@ -203,7 +206,7 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
     managerPhone: data.managerPhone,
     coachName: data.coachName,
     coachPhone: data.coachPhone,
-    registrationTime: data.registrationTime, // Pass Timestamp
+    registrationTime: data.registrationTime, 
     players: data.players.map(p => ({
         name: p.name,
         number: p.sequence,
@@ -213,15 +216,22 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
     }))
   };
   try {
-    await fetch(API_URL, {
+    const response = await fetch(API_URL, {
       method: 'POST',
-      mode: 'no-cors',
-      redirect: 'follow',
+      redirect: 'follow', // Changed from no-cors to follow to get response
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
-    return true;
-  } catch (error) { return false; }
+    
+    if (response.ok) {
+        const result = await response.json();
+        return result.teamId || null;
+    }
+    return null;
+  } catch (error) { 
+      console.error("Register Error", error);
+      return null; 
+  }
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {

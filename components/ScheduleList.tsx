@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw } from 'lucide-react';
@@ -142,9 +143,23 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   const scheduledMatches = matches.filter(m => !m.winner).sort((a, b) => new Date(a.scheduledTime || a.date).getTime() - new Date(b.scheduledTime || b.date).getTime());
   const finishedMatches = matches.filter(m => m.winner).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const resolveTeam = (teamIdOrName: string | Team) => {
-      if (typeof teamIdOrName === 'object') return teamIdOrName;
-      return teams.find(t => t.id === teamIdOrName || t.name === teamIdOrName) || { name: teamIdOrName, id: 'unknown', color: '#ccc', logoUrl: '' } as Team;
+  // Helper function to resolve team object from ID or Name or Object
+  const resolveTeam = (t: string | Team | null | undefined): Team => {
+    // Safely handle null/undefined
+    if (!t) return { id: 'unknown', name: 'Unknown Team', shortName: 'N/A', color: '#94a3b8', logoUrl: '' } as Team;
+    
+    // If it's already a Team object, return it
+    if (typeof t === 'object' && 'name' in t) return t as Team;
+    
+    // If string, try to find in availableTeams, otherwise mock a basic team object
+    const teamName = typeof t === 'string' ? t : 'Unknown';
+    return teams.find(team => team.name === teamName) || { 
+        id: 'temp', 
+        name: teamName, 
+        color: '#94a3b8', 
+        logoUrl: '',
+        shortName: teamName.substring(0, 3).toUpperCase()
+    } as Team;
   };
 
   const formatDate = (dateStr: string) => { try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(e) { return dateStr; } };

@@ -1,8 +1,9 @@
 
 
-import React, { useState, useEffect } from 'react';
-import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera } from 'lucide-react';
 import { registerTeam, fileToBase64 } from '../services/sheetService';
+import { shareRegistration } from '../services/liffService';
 import { RegistrationData, AppSettings, School as SchoolType } from '../types';
 
 interface RegistrationFormProps {
@@ -57,6 +58,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [registeredData, setRegisteredData] = useState<RegistrationData | null>(null);
+  const [registeredTeamId, setRegisteredTeamId] = useState<string | null>(null);
   
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState('');
@@ -82,7 +85,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [coachName, setCoachName] = useState('');
   const [coachPhone, setCoachPhone] = useState('');
 
-  // 3. Players
+  // 3. Players (Dynamic)
   const [players, setPlayers] = useState(Array(7).fill(null).map((_, i) => ({
     sequence: i + 1,
     name: '',
@@ -109,7 +112,11 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
             <td style="padding: 8px; text-align: center;">${p.sequence}</td>
             <td style="padding: 8px;">${p.name || '-'}</td>
             <td style="padding: 8px; text-align: center;">${p.birthDate || '-'}</td>
-            <td style="padding: 8px; text-align: center;">${p.photoPreview ? '<span style="color:green;">✔ แนบรูปแล้ว</span>' : '<span style="color:red;">✘ ไม่มีรูป</span>'}</td>
+            <td style="padding: 4px; text-align: center;">
+                ${p.photoPreview 
+                    ? `<img src="${p.photoPreview}" style="width: 40px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #eee;" />` 
+                    : '<span style="color:#ccc;">-</span>'}
+            </td>
         </tr>
     `).join('');
 
@@ -119,24 +126,24 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
           <title>ใบสมัคร - ${schoolName}</title>
           <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;700&display=swap" rel="stylesheet">
           <style>
-            body { font-family: 'Kanit', sans-serif; padding: 40px; color: #333; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .section { margin-bottom: 20px; }
-            .section-title { font-size: 18px; font-weight: bold; background: #f0f0f0; padding: 5px 10px; margin-bottom: 10px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-            .label { font-weight: bold; font-size: 14px; color: #666; }
-            .value { font-size: 16px; }
+            body { font-family: 'Kanit', sans-serif; padding: 40px; color: #333; line-height: 1.5; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .section { margin-bottom: 20px; break-inside: avoid; }
+            .section-title { font-size: 16px; font-weight: bold; background: #f0f0f0; padding: 5px 10px; margin-bottom: 10px; border-left: 4px solid #333; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; font-size: 14px; }
+            .label { font-weight: bold; color: #666; }
+            .value { font-size: 14px; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { background: #eee; padding: 8px; text-align: left; font-size: 14px; }
+            th { background: #eee; padding: 8px; text-align: left; font-size: 14px; border-bottom: 2px solid #ddd; }
             td { padding: 8px; font-size: 14px; }
-            .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 20px; }
-            @media print { button { display: none; } }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 20px; }
+            @media print { button { display: none; } body { padding: 0; } }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>ใบสมัครเข้าร่วมการแข่งขัน</h1>
-            <h2>${config.competitionName}</h2>
+            <h1 style="margin: 0; font-size: 24px;">ใบสมัครเข้าร่วมการแข่งขัน</h1>
+            <h2 style="margin: 5px 0; font-size: 18px;">${config.competitionName}</h2>
           </div>
 
           <div class="section">
@@ -162,14 +169,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
           </div>
 
           <div class="section">
-            <div class="section-title">3. รายชื่อนักกีฬา</div>
+            <div class="section-title">3. รายชื่อนักกีฬา (${players.length} คน)</div>
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 50px; text-align: center;">ลำดับ</th>
+                        <th style="width: 40px; text-align: center;">#</th>
                         <th>ชื่อ - นามสกุล</th>
                         <th style="width: 120px; text-align: center;">วัน/เดือน/ปีเกิด</th>
-                        <th style="width: 100px; text-align: center;">รูปถ่าย</th>
+                        <th style="width: 60px; text-align: center;">รูปถ่าย</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -179,9 +186,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
           </div>
           
           <div class="footer">
-             เอกสารนี้ถูกสร้างจากระบบ Penalty Pro Recorder | ลงทะเบียนเมื่อ: ${new Date().toLocaleDateString('th-TH')}
+             เอกสารนี้ถูกสร้างจากระบบ Penalty Pro Recorder | ลงทะเบียนเมื่อ: ${new Date().toLocaleString('th-TH')}
              <br/><br/>
-             ลงชื่อ ....................................................... ผู้รับรองข้อมูล
+             <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 50px;">
+                <div style="text-align: center;">
+                    .......................................................<br/>
+                    ( ${managerName || '.......................................'} )<br/>
+                    ผู้จัดการทีม
+                </div>
+                <div style="text-align: center;">
+                    .......................................................<br/>
+                    ( ${directorName || '.......................................'} )<br/>
+                    ผู้อำนวยการโรงเรียน
+                </div>
+             </div>
           </div>
 
           <script>
@@ -193,6 +211,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
+  };
+
+  const handleShare = () => {
+      if (registeredData && registeredTeamId) {
+          shareRegistration(registeredData, registeredTeamId);
+      }
   };
 
   useEffect(() => {
@@ -220,7 +244,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     const limit = type === 'image' ? MAX_IMAGE_SIZE : MAX_DOC_SIZE;
     if (file.size > limit) {
         notify("ไฟล์ใหญ่เกินไป", `ขนาดไฟล์ต้องไม่เกิน ${limit / 1024 / 1024}MB (ระบบจะพยายามบีบอัด)`, "info");
-        // We will try to compress, so don't return false immediately for images
         if(type === 'doc') return false; 
     }
     return true;
@@ -229,14 +252,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const updatePlayer = (index: number, field: string, value: any) => {
     const newPlayers = [...players];
     if (field === 'photoFile' && value) {
-        // Compress Image immediately upon selection
         compressImage(value).then(compressed => {
              const url = URL.createObjectURL(compressed);
              newPlayers[index] = { ...newPlayers[index], photoFile: compressed, photoPreview: url };
              setPlayers(newPlayers);
         }).catch(err => {
              console.error("Compression failed", err);
-             // Fallback to original
              const url = URL.createObjectURL(value);
              newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: url };
              setPlayers(newPlayers);
@@ -248,7 +269,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   };
   
   const updatePlayerDate = (index: number, value: string) => {
-      // Auto-format DD/MM/YYYY
       let cleaned = value.replace(/[^0-9]/g, '');
       if (cleaned.length > 8) cleaned = cleaned.substring(0, 8);
       
@@ -261,6 +281,31 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       }
       
       updatePlayer(index, 'birthDate', formatted);
+  };
+
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+      if (e.target.value) {
+          const date = new Date(e.target.value);
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear() + 543; // Convert to BE
+          updatePlayer(index, 'birthDate', `${day}/${month}/${year}`);
+      }
+  };
+
+  const addPlayer = () => {
+      setPlayers([...players, {
+          sequence: players.length + 1,
+          name: '',
+          birthDate: '',
+          photoFile: null,
+          photoPreview: null
+      }]);
+  };
+
+  const removePlayer = (index: number) => {
+      const newPlayers = players.filter((_, i) => i !== index).map((p, i) => ({ ...p, sequence: i + 1 }));
+      setPlayers(newPlayers);
   };
 
   const handleLogoChange = async (file: File) => {
@@ -294,27 +339,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     s.name.toLowerCase().includes(schoolName.toLowerCase()) && schoolName.length > 0
   );
 
-  // Helper to generate Thai-English Acronym
+  // Helper to generate Thai-English Acronym (Mock)
   const generateThaiAcronym = (name: string): string => {
-      // If pure English/Numbers, perform standard acronym
       if (/^[A-Za-z0-9\s]+$/.test(name)) {
           const parts = name.split(/\s+/);
           if (parts.length === 1) return name.substring(0, 3).toUpperCase();
           return parts.slice(0, 3).map(p => p[0]).join('').toUpperCase();
       }
-
-      // Thai Logic: Remove "โรงเรียน" prefix if present
-      let cleanName = name.replace(/^โรงเรียน/, '').trim();
-      
-      // Heuristic: Map common first letters of words
-      // Simple approach: Pick first char of first 3 significant segments
-      // Using regex to split by spaces or zero-width breaks isn't perfect in JS for Thai without lib
-      // So we fallback to mapping consonants.
-      
-      // NOTE: This is a mock logic. In real-world, use a proper transliteration lib or user input.
-      // Here we simply return empty to let backend/user decide, OR generate random 3 chars if lazy.
-      // Better UX: Ask user to input it in Admin Dashboard later, or generate a Placeholder "T01"
-      
       return "T" + Math.floor(Math.random() * 100).toString().padStart(2, '0');
   };
 
@@ -333,30 +364,29 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     setUploadStage("เตรียมข้อมูล...");
 
     try {
-      setUploadStage("กำลังอัปโหลดโลโก้ทีม...");
+      setUploadStage("กำลังบีบอัดและอัปโหลดโลโก้ทีม...");
       const logoBase64 = teamLogo ? await fileToBase64(teamLogo) : null;
       setUploadProgress(25);
 
       setUploadStage("กำลังอัปโหลดเอกสาร...");
       const docBase64 = await fileToBase64(documentFile);
       const slipBase64 = await fileToBase64(slipFile);
-      setUploadProgress(50);
+      setUploadProgress(40);
 
       setUploadStage("กำลังประมวลผลข้อมูลผู้เล่น...");
-      const processedPlayers = await Promise.all(players.map(async (p) => ({
-        sequence: p.sequence,
-        name: p.name,
-        birthDate: p.birthDate,
-        photoFile: p.photoFile ? await fileToBase64(p.photoFile) : null
-      })));
-      setUploadProgress(75);
+      const processedPlayers = await Promise.all(players.map(async (p, idx) => {
+        if (p.photoFile) setUploadStage(`กำลังอัปโหลดรูปนักกีฬาคนที่ ${p.sequence}...`);
+        return {
+            sequence: p.sequence,
+            name: p.name,
+            birthDate: p.birthDate,
+            photoFile: p.photoFile ? await fileToBase64(p.photoFile) : null
+        };
+      }));
+      setUploadProgress(80);
 
       const validPlayers = processedPlayers.filter(p => p.name.trim() !== '');
-      
-      // Combine Colors
       const combinedColors = JSON.stringify([primaryColor, secondaryColor]);
-      
-      // Generate ShortName (Basic Logic)
       const shortName = generateThaiAcronym(schoolName);
 
       const payload: RegistrationData = {
@@ -375,14 +405,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         documentFile: docBase64,
         slipFile: slipBase64,
         players: validPlayers,
-        registrationTime: new Date().toISOString() // Add Timestamp
+        registrationTime: new Date().toISOString()
       };
 
       setUploadStage("กำลังบันทึกลงฐานข้อมูล...");
-      await registerTeam(payload);
-      setUploadProgress(100);
-      setUploadStage("เสร็จสิ้น!");
-      setIsSuccess(true);
+      const teamId = await registerTeam(payload);
+      
+      if (teamId) {
+          setRegisteredData(payload);
+          setRegisteredTeamId(teamId);
+          setUploadProgress(100);
+          setUploadStage("เสร็จสิ้น!");
+          setIsSuccess(true);
+      } else {
+          throw new Error("Server did not return Team ID");
+      }
     } catch (error) {
       console.error(error);
       notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล (โปรดลองใหม่)", "error");
@@ -400,12 +437,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         <h2 className="text-3xl font-bold text-slate-800 mb-2">ลงทะเบียนเรียบร้อย</h2>
         <p className="text-slate-500 mb-8 text-lg">ข้อมูลใบสมัครและเอกสารของคุณถูกส่งเข้าสู่ระบบแล้ว<br/>สถานะปัจจุบัน: <span className="text-yellow-600 font-bold">รอตรวจสอบ (Pending)</span></p>
         
-        <div className="flex flex-col md:flex-row gap-4 w-full max-w-md">
-            <button onClick={handleDownloadPDF} className="flex-1 px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
-                <Printer className="w-5 h-5" /> พิมพ์ / ดาวน์โหลด PDF
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl">
+            <button onClick={handleDownloadPDF} className="px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
+                <Printer className="w-5 h-5" /> พิมพ์ PDF
             </button>
-            <button onClick={onBack} className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition">
-                กลับสู่หน้าหลัก
+            <button onClick={handleShare} className="px-6 py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
+                <Share2 className="w-5 h-5" /> แชร์ LINE
+            </button>
+            <button onClick={onBack} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition">
+                กลับหน้าหลัก
             </button>
         </div>
       </div>
@@ -416,16 +456,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 my-8 relative">
       
       {isSubmitting && (
-          <div className="absolute inset-0 z-[60] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-8">
-              <div className="w-full max-w-md space-y-4">
-                  <div className="flex justify-between text-slate-600 font-bold">
-                      <span>{uploadStage}</span>
-                      <span>{uploadProgress}%</span>
+          <div className="absolute inset-0 z-[60] bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8">
+              <div className="w-full max-w-md space-y-6 text-center">
+                  <div className="relative w-24 h-24 mx-auto">
+                      <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center font-bold text-indigo-600">{uploadProgress}%</div>
                   </div>
-                  <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-600 transition-all duration-500 ease-out" style={{ width: `${uploadProgress}%` }}></div>
+                  <div>
+                      <h3 className="text-xl font-bold text-slate-800 mb-2">{uploadStage}</h3>
+                      <p className="text-sm text-slate-500">กรุณาอย่าปิดหน้าต่างนี้จนกว่าจะเสร็จสิ้น</p>
                   </div>
-                  <p className="text-center text-sm text-slate-400">ระบบกำลังบีบอัดรูปภาพและอัปโหลด กรุณารอสักครู่...</p>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden w-full">
+                      <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                  </div>
               </div>
           </div>
       )}
@@ -436,7 +480,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
             <ArrowLeft className="w-6 h-6" />
         </button>
         <div>
-            <h2 className="font-bold text-2xl">ใบสมัครแข่งขันยิงจุดโทษ</h2>
+            <h2 className="font-bold text-2xl">ใบสมัครแข่งขัน</h2>
             <p className="text-indigo-200 text-sm">{config.competitionName}</p>
         </div>
       </div>
@@ -596,47 +640,89 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
              <div className="flex items-center gap-2 text-xl font-bold text-slate-800 border-b pb-2 justify-between">
                 <div className="flex items-center gap-2">
                     <User className="w-6 h-6 text-indigo-600" />
-                    <h3>3. รายชื่อนักกีฬา (7 คน)</h3>
+                    <h3>3. รายชื่อนักกีฬา ({players.length} คน)</h3>
                 </div>
+                <button onClick={addPlayer} className="flex items-center gap-1 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition font-bold">
+                    <Plus className="w-4 h-4" /> เพิ่มคน
+                </button>
             </div>
             <p className="text-sm text-slate-500 bg-blue-50 p-3 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-blue-600" /> สามารถกรอกวันเกิดเป็น พ.ศ. หรือ ค.ศ. ก็ได้ (เช่น 15/04/2555) ระบบจะแปลงให้อัตโนมัติ
+                <AlertCircle className="w-4 h-4 text-blue-600" /> คลิกที่ไอคอนปฏิทินเพื่อเลือกวันเกิด ระบบจะแปลงเป็น พ.ศ. ให้
             </p>
             
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {players.map((player, index) => (
-                    <div key={index} className="flex flex-col md:flex-row gap-3 items-start md:items-center bg-slate-50 p-4 rounded-lg border border-slate-200">
-                        <div className="flex items-center justify-center w-8 h-8 bg-slate-200 rounded-full font-bold text-slate-600 shrink-0">
-                            {player.sequence}
-                        </div>
-                        <div className="flex-1 w-full">
-                            <input 
-                                type="text" 
-                                placeholder="ชื่อ - นามสกุล" 
-                                value={player.name}
-                                onChange={(e) => updatePlayer(index, 'name', e.target.value)}
-                                className="w-full p-2 border border-slate-300 rounded"
-                            />
-                        </div>
-                        <div className="w-full md:w-40 relative">
-                            <input 
-                                type="text" 
-                                placeholder="วว/ดด/ปปปป" 
-                                value={player.birthDate}
-                                onChange={(e) => updatePlayerDate(index, e.target.value)}
-                                className="w-full p-2 border border-slate-300 rounded text-center"
-                                maxLength={10}
-                            />
-                            <div className="text-[10px] text-slate-400 text-center mt-1">เช่น 12/08/2555</div>
-                        </div>
-                         <div className="w-full md:w-auto">
-                            <label className={`cursor-pointer border px-3 py-2 rounded flex items-center gap-2 text-sm whitespace-nowrap transition ${player.photoFile ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-600'}`}>
-                                {player.photoPreview ? (
-                                    <img src={player.photoPreview} className="w-5 h-5 rounded-full object-cover" />
-                                ) : <ImageIcon className="w-4 h-4"/>}
-                                {player.photoFile ? 'เปลี่ยนรูป' : 'รูปถ่าย'}
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => updatePlayer(index, 'photoFile', e.target.files?.[0] || null)} />
+                    <div key={index} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition relative group">
+                        {/* Photo Section (Left) */}
+                        <div className="w-20 h-24 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200 relative">
+                            {player.photoPreview ? (
+                                <img src={player.photoPreview} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                                    <User className="w-8 h-8 mb-1" />
+                                    <span className="text-[10px] font-bold">No Photo</span>
+                                </div>
+                            )}
+                            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                                <Camera className="w-6 h-6 text-white" />
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={(e) => updatePlayer(index, 'photoFile', e.target.files?.[0] || null)} 
+                                />
                             </label>
+                        </div>
+
+                        {/* Inputs Section (Right) */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 space-y-2">
+                            <div className="flex gap-2">
+                                {/* Number / Sequence */}
+                                <div className="w-14">
+                                    <div className="w-full p-1.5 text-xs border border-slate-300 rounded text-center font-bold bg-slate-50 text-slate-500">
+                                    #{player.sequence}
+                                    </div>
+                                </div>
+                                {/* Name */}
+                                <div className="flex-1">
+                                    <input 
+                                        type="text" 
+                                        value={player.name}
+                                        onChange={(e) => updatePlayer(index, 'name', e.target.value)}
+                                        className="w-full p-1.5 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none" 
+                                        placeholder="ชื่อ-นามสกุล" 
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Birth Date */}
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    value={player.birthDate || ''}
+                                    onChange={(e) => updatePlayerDate(index, e.target.value)}
+                                    className="w-full p-1.5 pl-7 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    placeholder="วว/ดด/ปปปป"
+                                    maxLength={10}
+                                />
+                                <div 
+                                    className="absolute left-2 top-1.5 cursor-pointer text-slate-400 hover:text-indigo-600"
+                                    onClick={() => (document.getElementById(`date-picker-${index}`) as HTMLInputElement)?.showPicker()}
+                                >
+                                    <Calendar className="w-3.5 h-3.5" />
+                                </div>
+                                <input 
+                                    type="date" 
+                                    id={`date-picker-${index}`}
+                                    className="sr-only" 
+                                    onChange={(e) => handleDateSelect(e, index)}
+                                />
+                            </div>
+
+                            {/* Delete Button (if > 1 player) */}
+                            {players.length > 1 && (
+                                <button onClick={() => removePlayer(index)} className="text-red-500 text-[10px] flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition w-fit"><Trash2 className="w-3 h-3" /> ลบคนนี้</button>
+                            )}
                         </div>
                     </div>
                 ))}

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem } from '../types';
 import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar } from 'lucide-react';
@@ -12,12 +13,13 @@ interface AdminDashboardProps {
   onRefresh: () => void;
   news?: NewsItem[];
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  initialTeamId?: string | null;
 }
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_DOC_SIZE = 3 * 1024 * 1024;   // 3MB
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, players: initialPlayers, settings, onLogout, onRefresh, news = [], showNotification }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, players: initialPlayers, settings, onLogout, onRefresh, news = [], showNotification, initialTeamId }) => {
   const [activeTab, setActiveTab] = useState<'teams' | 'settings' | 'news'>('teams');
   const [localTeams, setLocalTeams] = useState<Team[]>(initialTeams);
   const [localPlayers, setLocalPlayers] = useState<Player[]>(initialPlayers);
@@ -59,6 +61,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
     setLocalPlayers(initialPlayers);
   }, [initialTeams, initialPlayers]);
   
+  // Auto-open team modal if initialTeamId is provided
+  useEffect(() => {
+      if (initialTeamId && localTeams.length > 0) {
+          const found = localTeams.find(t => t.id === initialTeamId);
+          if (found) {
+              setSelectedTeam(found);
+          }
+      }
+  }, [initialTeamId, localTeams]);
+
   useEffect(() => {
       setConfigForm(settings);
       setSettingsLogoPreview(settings.competitionLogo);
