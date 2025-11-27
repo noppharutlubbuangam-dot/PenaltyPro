@@ -283,11 +283,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           // 1. Delete the existing match
           await deleteMatch(match.id);
           
-          // 2. Re-create the match as scheduled.
-          // IMPORTANT: We generate a NEW ID (or append suffix) to ensure old kicks in the DB
-          // (which are linked by ID) are effectively "orphaned" or reset.
-          // If we reuse the same ID, the backend might still link old kicks to this match.
-          const newMatchId = `${match.id}_R${Date.now().toString().slice(-4)}`;
+          // 2. Re-create the match as scheduled with a NEW ID.
+          // This orphans the old kicks in the backend 'Kicks' sheet since they are tied to the old ID.
+          // This effectively "deletes" them from the application's perspective.
+          const newMatchId = `M_${Date.now()}_RESET`;
 
           await scheduleMatch(
               newMatchId, 
@@ -301,7 +300,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' (ล้างผลยิงประตู) เรียบร้อย", "success");
           setMatchToReset(null);
           setSelectedMatch(null);
-          if(onRefresh) onRefresh();
+          
+          // Force refresh immediately
+          if(onRefresh) {
+             setTimeout(() => onRefresh(), 1500); // Small delay to allow backend propagation
+          }
 
       } catch (e) {
           console.error(e);
@@ -721,37 +724,37 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             <div className="space-y-3">
                 {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
                 return (
-                    <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col items-center gap-4 opacity-80 hover:opacity-100 transition cursor-pointer">
+                    <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-3 md:p-4 flex flex-col items-center gap-3 opacity-80 hover:opacity-100 transition cursor-pointer">
                         <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
                              {/* Date/Time Mobile */}
-                            <div className="flex justify-between w-full md:w-auto md:flex-col md:items-start min-w-[120px] text-slate-400 text-xs border-b md:border-b-0 pb-2 md:pb-0 mb-2 md:mb-0">
+                            <div className="flex justify-between w-full md:w-auto md:flex-col md:items-start min-w-[120px] text-slate-400 text-[10px] md:text-xs border-b md:border-b-0 pb-2 md:pb-0 mb-1 md:mb-0">
                                 <span>{formatDate(match.date)}</span>
                                 <span>{match.roundLabel?.split(':')[0]}</span>
                             </div>
 
-                            <div className="flex-1 flex items-center justify-center gap-2 md:gap-4 w-full">
+                            <div className="flex-1 w-full grid grid-cols-[1fr_auto_1fr] md:flex md:items-center md:justify-center gap-2 md:gap-4 items-center">
                                 {/* Team A */}
-                                <div className={`flex items-center justify-center md:justify-end gap-2 md:gap-3 flex-1 w-full overflow-hidden ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}>
-                                    <span className="font-bold text-base md:text-lg truncate text-right w-full">{tA.name}</span>
-                                    {tA.logoUrl && <img src={tA.logoUrl} className="w-8 h-8 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
+                                <div className={`flex items-center justify-end gap-2 md:gap-3 w-full overflow-hidden ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                    <span className="font-bold text-sm md:text-lg truncate text-right w-full">{tA.name}</span>
+                                    {tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
                                 </div>
 
                                 {/* Score */}
-                                <div className="bg-slate-800 text-white px-3 py-1 md:px-4 rounded-lg font-mono font-bold text-lg shadow-inner whitespace-nowrap shrink-0">
+                                <div className="bg-slate-800 text-white px-3 py-1 md:px-4 rounded-lg font-mono font-bold text-base md:text-lg shadow-inner whitespace-nowrap shrink-0 text-center min-w-[60px]">
                                     {match.scoreA} - {match.scoreB}
                                 </div>
 
                                 {/* Team B */}
-                                <div className={`flex items-center justify-center md:justify-start gap-2 md:gap-3 flex-1 w-full overflow-hidden ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>
-                                    {tB.logoUrl && <img src={tB.logoUrl} className="w-8 h-8 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
-                                    <span className="font-bold text-base md:text-lg truncate text-left w-full">{tB.name}</span>
+                                <div className={`flex items-center justify-start gap-2 md:gap-3 w-full overflow-hidden ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                    {tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
+                                    <span className="font-bold text-sm md:text-lg truncate text-left w-full">{tB.name}</span>
                                 </div>
                             </div>
 
                             <div className="hidden md:flex min-w-[100px] justify-end"><Trophy className="w-5 h-5 text-yellow-500" /></div>
                         </div>
 
-                        <div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2 flex-wrap">
+                        <div className="w-full pt-2 mt-1 border-t border-slate-200 flex justify-end gap-2 flex-wrap">
                             <button onClick={(e) => handleShare(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>
                             {isAdmin && (
                                 <>

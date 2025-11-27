@@ -1,16 +1,18 @@
 
-import React from 'react';
-import { Team, Standing } from '../types';
-import { Trophy, ArrowLeft, Calendar, LayoutGrid } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { Team, Standing, Match, Kick, KickResult } from '../types';
+import { Trophy, ArrowLeft, Calendar, LayoutGrid, X, User, Phone, MapPin, Grid, Info, BarChart3, History } from 'lucide-react';
 
 interface StandingsViewProps {
-  matches: any[]; 
+  matches: Match[]; 
   teams: Team[];
   onBack: () => void;
   isLoading?: boolean;
 }
 
 const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, isLoading }) => {
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   
   if (isLoading) {
       return (
@@ -48,28 +50,27 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
     if (!m.winner || m.winner === '') return; 
     
     // STRICT FILTER FOR GROUP STAGE
-    // Check if the round label contains "Group" (case insensitive) or "กลุ่ม" or "สาย"
     const label = m.roundLabel || '';
     if (!label.toLowerCase().match(/group|กลุ่ม|สาย/)) return;
 
-    const teamA = standings[m.teamA];
-    const teamB = standings[m.teamB];
+    const teamA = standings[typeof m.teamA === 'object' ? m.teamA.name : m.teamA];
+    const teamB = standings[typeof m.teamB === 'object' ? m.teamB.name : m.teamB];
     
     if (teamA && teamB) {
         teamA.played++;
         teamB.played++;
-        const scoreA = parseInt(m.scoreA || '0');
-        const scoreB = parseInt(m.scoreB || '0');
+        const scoreA = parseInt(m.scoreA.toString() || '0');
+        const scoreB = parseInt(m.scoreB.toString() || '0');
         teamA.goalsFor += scoreA;
         teamA.goalsAgainst += scoreB;
         teamB.goalsFor += scoreB;
         teamB.goalsAgainst += scoreA;
 
-        if (m.winner === m.teamA) {
+        if (m.winner === 'A' || m.winner === teamA.teamName) {
             teamA.won++;
             teamA.points += 3;
             teamB.lost++;
-        } else if (m.winner === m.teamB) {
+        } else if (m.winner === 'B' || m.winner === teamB.teamName) {
             teamB.won++;
             teamB.points += 3;
             teamA.lost++;
@@ -130,7 +131,14 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {groupedStandings[groupName].map((team, index) => (
-                                        <tr key={team.teamId} className="hover:bg-slate-50 transition">
+                                        <tr 
+                                            key={team.teamId} 
+                                            className="hover:bg-slate-50 transition cursor-pointer"
+                                            onClick={() => {
+                                                const realTeam = teams.find(t => t.id === team.teamId);
+                                                if (realTeam) setSelectedTeam(realTeam);
+                                            }}
+                                        >
                                             <td className="p-3 text-center font-bold text-slate-400">
                                                 {index + 1}
                                             </td>
@@ -174,11 +182,11 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
                         matches.slice().reverse().map((m, idx) => (
                             <div key={idx} className="p-4 flex flex-col md:flex-row items-center justify-between hover:bg-slate-50 gap-4">
                                 <div className="flex items-center justify-center gap-6 flex-1">
-                                    <div className="text-right flex-1 font-bold text-slate-700">{m.teamA}</div>
+                                    <div className="text-right flex-1 font-bold text-slate-700">{typeof m.teamA === 'string' ? m.teamA : m.teamA.name}</div>
                                     <div className="bg-slate-100 px-4 py-2 rounded-lg font-mono font-bold text-xl text-indigo-600 shadow-inner border border-slate-200">
                                         {m.scoreA} - {m.scoreB}
                                     </div>
-                                    <div className="text-left flex-1 font-bold text-slate-700">{m.teamB}</div>
+                                    <div className="text-left flex-1 font-bold text-slate-700">{typeof m.teamB === 'string' ? m.teamB : m.teamB.name}</div>
                                 </div>
                                 <div className="text-xs text-slate-400 md:w-32 text-center">
                                     {new Date(m.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit'})}
@@ -189,9 +197,183 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
                 </div>
             </div>
 
+            {selectedTeam && (
+                <TeamDetailModal 
+                    team={selectedTeam} 
+                    matches={matches} 
+                    onClose={() => setSelectedTeam(null)} 
+                />
+            )}
         </div>
     </div>
   );
+};
+
+interface TeamDetailModalProps {
+    team: Team;
+    matches: Match[];
+    onClose: () => void;
+}
+
+const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClose }) => {
+    const [tab, setTab] = useState<'info' | 'form' | 'stats'>('info');
+    const [formLimit, setFormLimit] = useState(5);
+
+    // Calculate Form (Last 5 matches)
+    const teamMatches = matches
+        .filter(m => {
+            const nameA = typeof m.teamA === 'string' ? m.teamA : m.teamA.name;
+            const nameB = typeof m.teamB === 'string' ? m.teamB : m.teamB.name;
+            return (nameA === team.name || nameB === team.name) && m.winner;
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const recentMatches = teamMatches.slice(0, formLimit);
+
+    // Calculate Player Stats
+    const playerGoals: Record<string, number> = {};
+    matches.forEach(m => {
+        if (m.kicks) {
+            m.kicks.forEach(k => {
+                if (k.result === KickResult.GOAL && (k.teamId === team.name || k.teamId === 'A' && (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === team.name || k.teamId === 'B' && (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) === team.name)) {
+                    // Clean player name (remove number if present like "Name #10")
+                    let pName = k.player.trim();
+                    if (pName.includes('(#')) {
+                         pName = pName.split('(#')[0].trim();
+                    } else {
+                         // Fallback heuristic if no standard format
+                         pName = pName.replace(/[0-9]/g, '').replace('#','').trim();
+                    }
+                    if(!pName) pName = "ไม่ระบุชื่อ";
+                    playerGoals[pName] = (playerGoals[pName] || 0) + 1;
+                }
+            });
+        }
+    });
+    
+    const topScorers = Object.entries(playerGoals)
+        .map(([name, goals]) => ({ name, goals }))
+        .sort((a, b) => b.goals - a.goals);
+
+    return (
+        <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="bg-slate-900 p-6 text-white relative shrink-0">
+                    <button onClick={onClose} className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 p-2 rounded-full transition"><X className="w-5 h-5"/></button>
+                    <div className="flex flex-col items-center">
+                        {team.logoUrl ? (
+                            <img src={team.logoUrl} className="w-20 h-20 bg-white rounded-2xl p-1 mb-3 shadow-lg object-contain" />
+                        ) : (
+                            <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center text-2xl font-bold mb-3">
+                                {team.shortName}
+                            </div>
+                        )}
+                        <h2 className="text-xl font-bold text-center">{team.name}</h2>
+                        {team.group && <span className="mt-1 px-3 py-1 bg-indigo-600 rounded-full text-xs font-bold shadow-sm">Group {team.group}</span>}
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex border-b shrink-0">
+                    <button onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'info' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><Info className="w-4 h-4"/> ข้อมูล</button>
+                    <button onClick={() => setTab('form')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'form' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><History className="w-4 h-4"/> ฟอร์ม</button>
+                    <button onClick={() => setTab('stats')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${tab === 'stats' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50' : 'text-slate-500 hover:bg-slate-50'}`}><BarChart3 className="w-4 h-4"/> สถิติ</button>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 overflow-y-auto bg-slate-50 flex-1">
+                    {tab === 'info' && (
+                        <div className="space-y-4">
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm"><MapPin className="w-4 h-4 text-indigo-500"/> ที่ตั้ง</h4>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div><span className="text-slate-400 text-xs block">อำเภอ</span>{team.district}</div>
+                                    <div><span className="text-slate-400 text-xs block">จังหวัด</span>{team.province}</div>
+                                </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm"><User className="w-4 h-4 text-indigo-500"/> บุคลากร</h4>
+                                <div className="space-y-3 text-sm">
+                                    <div><span className="text-slate-400 text-xs block">ผอ.โรงเรียน</span>{team.directorName || '-'}</div>
+                                    <div className="flex justify-between">
+                                        <div><span className="text-slate-400 text-xs block">ผู้จัดการทีม</span>{team.managerName || '-'}</div>
+                                        {team.managerPhone && <a href={`tel:${team.managerPhone}`} className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded text-xs flex items-center gap-1 h-fit"><Phone className="w-3 h-3"/> โทร</a>}
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <div><span className="text-slate-400 text-xs block">ผู้ฝึกสอน</span>{team.coachName || '-'}</div>
+                                        {team.coachPhone && <a href={`tel:${team.coachPhone}`} className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded text-xs flex items-center gap-1 h-fit"><Phone className="w-3 h-3"/> โทร</a>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'form' && (
+                        <div className="space-y-3">
+                            {recentMatches.length > 0 ? (
+                                <>
+                                    {recentMatches.map(m => {
+                                        const isHome = (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === team.name;
+                                        const opponent = isHome ? (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) : (typeof m.teamA === 'string' ? m.teamA : m.teamA.name);
+                                        const myScore = isHome ? m.scoreA : m.scoreB;
+                                        const opScore = isHome ? m.scoreB : m.scoreA;
+                                        const isWin = (m.winner === 'A' && isHome) || (m.winner === 'B' && !isHome) || (m.winner === team.name);
+                                        
+                                        return (
+                                            <div key={m.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-10 rounded-full ${isWin ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                                    <div>
+                                                        <div className="text-xs text-slate-400">{new Date(m.date).toLocaleDateString('th-TH', {day:'numeric', month:'short'})} • {m.roundLabel?.split(':')[0]}</div>
+                                                        <div className="font-bold text-slate-700 text-sm">vs {opponent}</div>
+                                                    </div>
+                                                </div>
+                                                <div className={`text-xl font-mono font-black ${isWin ? 'text-green-600' : 'text-slate-400'}`}>
+                                                    {myScore}-{opScore}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {teamMatches.length > formLimit && (
+                                        <button onClick={() => setFormLimit(prev => prev + 5)} className="w-full py-2 text-xs text-slate-500 bg-slate-200 rounded-lg hover:bg-slate-300 font-bold">
+                                            ดูเพิ่มเติม
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center text-slate-400 py-8">ยังไม่มีประวัติการแข่งขัน</div>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'stats' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                            <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-500 uppercase flex justify-between">
+                                <span>ผู้เล่น</span>
+                                <span>ประตู (จุดโทษ)</span>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                                {topScorers.length > 0 ? topScorers.map((p, i) => (
+                                    <div key={p.name} className="p-3 flex justify-between items-center">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                {i + 1}
+                                            </div>
+                                            <span className="font-medium text-slate-700 text-sm">{p.name}</span>
+                                        </div>
+                                        <div className="font-mono font-bold text-indigo-600">{p.goals}</div>
+                                    </div>
+                                )) : (
+                                    <div className="text-center text-slate-400 py-6 text-sm">ไม่มีข้อมูลการทำประตู</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default StandingsView;
