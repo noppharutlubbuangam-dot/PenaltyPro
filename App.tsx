@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -17,7 +18,7 @@ import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, authenticateUser } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -29,7 +30,30 @@ const DEFAULT_SETTINGS: AppSettings = {
   locationName: "-",
   locationLink: "",
   announcement: "",
-  adminPin: "1234" 
+  adminPin: "1234",
+  registrationFee: 0,
+  fundraisingGoal: 0,
+  objectiveTitle: "",
+  objectiveDescription: "",
+  objectiveImageUrl: ""
+};
+
+// Haversine formula to calculate distance
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d.toFixed(1);
+};
+
+const deg2rad = (deg: number) => {
+  return deg * (Math.PI / 180);
 };
 
 function App() {
@@ -70,6 +94,10 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; isDangerous?: boolean; } | null>(null);
+  
+  // User Location
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [distanceToVenue, setDistanceToVenue] = useState<string | null>(null);
 
   // Announcement State
   const [announcementIndex, setAnnouncementIndex] = useState(0);
@@ -78,12 +106,10 @@ function App() {
   useEffect(() => {
     const init = async () => {
         await initializeLiff();
-        const liffUser = await checkSession(); // Returns basic profile from LIFF or LocalStorage
+        const liffUser = await checkSession(); 
         
         if (liffUser) {
-            // Attempt to sync with backend to get Role
             try {
-                // If it's a LINE user, auth with backend using LINE ID
                 if (liffUser.type === 'line') {
                     const backendUser = await authenticateUser({
                         authType: 'line',
@@ -98,11 +124,9 @@ function App() {
                         setCurrentUser(liffUser);
                     }
                 } else if (liffUser.role) {
-                    // Already has role (from local storage credentials)
                     setCurrentUser(liffUser);
                     if (liffUser.role === 'admin') setIsAdmin(true);
                 } else {
-                    // Guest/Legacy
                     setCurrentUser(liffUser);
                 }
             } catch (e) {
@@ -113,7 +137,27 @@ function App() {
     };
     loadData();
     init();
+
+    // Get User Location
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                });
+            },
+            (error) => console.log("Geolocation error:", error)
+        );
+    }
   }, []);
+
+  useEffect(() => {
+      if (userLocation && appConfig.locationLat && appConfig.locationLng) {
+          const dist = calculateDistance(userLocation.lat, userLocation.lng, appConfig.locationLat, appConfig.locationLng);
+          setDistanceToVenue(dist);
+      }
+  }, [userLocation, appConfig.locationLat, appConfig.locationLng]);
 
   useEffect(() => {
       if (announcements.length > 1) {
@@ -124,7 +168,7 @@ function App() {
       }
   }, [announcements.length]);
 
-  // Handle Deep Linking after data is loaded
+  // Deep Linking logic...
   useEffect(() => {
       if (!isLoadingData && availableTeams.length > 0) {
           const params = new URLSearchParams(window.location.search);
@@ -147,7 +191,6 @@ function App() {
           } else if (view === 'admin' && teamId) {
               setInitialTeamId(teamId);
               if (!isAdmin) {
-                  // If not already admin, redirect to login
                   setIsLoginOpen(true);
                   setCurrentView('admin');
               } else {
@@ -196,13 +239,10 @@ function App() {
   const handleUserLoginSuccess = (user: UserProfile) => {
       setCurrentUser(user);
       if (user.role === 'admin') setIsAdmin(true);
-      
-      // Store credentials user in local storage to persist session
       if (user.type === 'credentials') {
           localStorage.setItem('penalty_pro_user', JSON.stringify(user));
       }
-      
-      showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName} (${user.role || 'Member'})`, "success");
+      showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success");
   };
 
   const handleLogout = () => {
@@ -230,11 +270,9 @@ function App() {
   };
 
   const handleStartMatchRequest = (teamA: Team, teamB: Team, matchId?: string) => {
-    // Check if user is Admin OR Staff (Scorekeeper)
     if (isAdmin || (currentUser && currentUser.role === 'staff')) {
         startMatchSession(teamA, teamB, matchId);
     } else {
-        // Fallback to PIN for non-staff
         setPendingMatchSetup({ teamA, teamB, matchId });
         setIsPinOpen(true); 
     }
@@ -249,7 +287,6 @@ function App() {
     }
   };
 
-  // ... (Win Condition, Record Kick, Update Kick, etc. remain unchanged) ...
   const checkWinCondition = (state: MatchState): MatchState => {
     const kicksA = state.kicks.filter(k => k.teamId === 'A');
     const kicksB = state.kicks.filter(k => k.teamId === 'B');
@@ -330,6 +367,11 @@ function App() {
     return availableTeams.find(team => team.name === teamName) || { id: 'temp', name: teamName, color: '#94a3b8', logoUrl: '', shortName: teamName.substring(0, 3).toUpperCase() } as Team;
   };
 
+  // Fundraising Calculation
+  const approvedTeamsCount = availableTeams.filter(t => t.status === 'Approved').length;
+  const estimatedIncome = approvedTeamsCount * (appConfig.registrationFee || 0);
+  const fundraisingProgress = appConfig.fundraisingGoal ? Math.min(100, (estimatedIncome / appConfig.fundraisingGoal) * 100) : 0;
+
   const liveMatches = matchesLog.filter(m => m.livestreamUrl && !m.winner);
   const recentFinishedMatches = matchesLog.filter(m => m.winner).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
 
@@ -337,13 +379,11 @@ function App() {
     <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-24" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={loadData} currentSettings={appConfig} />
-      {/* Admin Login Dialog (Fallback for PIN) */}
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
       <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={appConfig.adminPin || "1234"} title="กรุณากรอกรหัสเริ่มแข่ง" />
-      {/* New User Login Dialog */}
       <UserLoginDialog isOpen={isUserLoginOpen} onClose={() => setIsUserLoginOpen(false)} onLoginSuccess={handleUserLoginSuccess} />
-
-      {/* ... (Modals: confirmModal, editingKick remain same) ... */}
+      
+      {/* Modals */}
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
       {editingKick && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1100] p-4 backdrop-blur-sm" onClick={() => setEditingKick(null)}><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
 
@@ -357,18 +397,16 @@ function App() {
         <div className="min-h-screen bg-slate-100">
           {connectionError && <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-between gap-4"><div className="flex items-center gap-2 text-red-700 text-sm font-bold"><WifiOff className="w-4 h-4" /><span>{connectionError}</span></div><button onClick={loadData} className="text-xs bg-white border border-red-200 text-red-600 px-2 py-1 rounded hover:bg-red-50">ลองใหม่</button></div>}
           
+          {/* Top Bar */}
           <div className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm px-4 py-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
                   <img src={appConfig.competitionLogo || "https://via.placeholder.com/40"} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
                   <h1 className="font-bold text-slate-800 truncate max-w-[120px] sm:max-w-[200px] text-sm sm:text-base">{appConfig.competitionName}</h1>
               </div>
               <div className="flex items-center gap-2">
-                  {/* Register Button separated */}
                   <button onClick={handleRegisterClick} className="bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-green-700 transition">
                       <UserPlus className="w-3 h-3" /> สมัครแข่ง
                   </button>
-
-                  {/* Profile / Login */}
                   {currentUser ? (
                       <div className="flex items-center gap-2 pl-2 ml-2 border-l border-slate-200">
                           {currentUser.pictureUrl ? (
@@ -392,7 +430,7 @@ function App() {
               </div>
           </div>
 
-          {/* ... (Banner, Live Section, Match Setup, Menu Grid - Same as before) ... */}
+          {/* Banner & Hero */}
           <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 pb-12 relative overflow-hidden transition-all duration-300">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
               <div className="relative z-10 max-w-4xl mx-auto">
@@ -421,6 +459,75 @@ function App() {
           </div>
 
           <div className="max-w-4xl mx-auto px-4 -mt-8 relative z-20 space-y-6">
+              
+              {/* Fundraising & Objective Card */}
+              {appConfig.objectiveTitle && (
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-2">
+                      <div className="flex flex-col md:flex-row">
+                          {appConfig.objectiveImageUrl && (
+                              <div className="w-full md:w-1/3 h-48 md:h-auto bg-slate-100 relative">
+                                  <img src={appConfig.objectiveImageUrl} className="w-full h-full object-cover" />
+                                  <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1">
+                                      <Heart className="w-3 h-3 fill-white" /> วัตถุประสงค์
+                                  </div>
+                              </div>
+                          )}
+                          <div className="p-6 flex-1 flex flex-col justify-center">
+                              <h3 className="text-lg font-bold text-slate-800 mb-1">{appConfig.objectiveTitle}</h3>
+                              <p className="text-sm text-slate-500 mb-4 line-clamp-3">{appConfig.objectiveDescription}</p>
+                              
+                              {appConfig.fundraisingGoal && appConfig.fundraisingGoal > 0 && (
+                                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                      <div className="flex justify-between items-end mb-2">
+                                          <div>
+                                              <p className="text-xs text-slate-400 mb-1">ยอดสนับสนุนปัจจุบัน</p>
+                                              <p className="text-xl font-bold text-indigo-600">฿{estimatedIncome.toLocaleString()}</p>
+                                          </div>
+                                          <div className="text-right">
+                                              <p className="text-xs text-slate-400 mb-1">เป้าหมาย</p>
+                                              <p className="text-sm font-bold text-slate-600">฿{appConfig.fundraisingGoal.toLocaleString()}</p>
+                                          </div>
+                                      </div>
+                                      <div className="w-full bg-slate-200 rounded-full h-2.5 mb-1 overflow-hidden">
+                                          <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-1000 ease-out" style={{ width: `${fundraisingProgress}%` }}></div>
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 text-right">{fundraisingProgress.toFixed(1)}%</p>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {/* Advanced Location Card */}
+              {appConfig.locationLink && (
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 shrink-0">
+                              <MapPin className="w-6 h-6" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-slate-800 text-sm">สถานที่: {appConfig.locationName}</h3>
+                              {distanceToVenue ? (
+                                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <Target className="w-3 h-3 text-blue-500" /> ห่างจากคุณ {distanceToVenue} กม.
+                                  </p>
+                              ) : (
+                                  <p className="text-xs text-slate-400 mt-0.5">คลิกนำทางเพื่อดูเส้นทาง</p>
+                              )}
+                          </div>
+                      </div>
+                      <a 
+                          href={appConfig.locationLink} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-blue-200 transition"
+                      >
+                          <Navigation className="w-4 h-4" /> <span className="hidden sm:inline">นำทาง</span>
+                      </a>
+                  </div>
+              )}
+
               {/* LIVE SECTION */}
               {liveMatches.length > 0 && (
                 <div className="space-y-3">

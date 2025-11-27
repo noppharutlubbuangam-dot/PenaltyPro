@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData } from '../services/sheetService';
 
 interface AdminDashboardProps {
@@ -49,6 +50,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   
   // Settings Logo Preview
   const [settingsLogoPreview, setSettingsLogoPreview] = useState<string | null>(null);
+  const [objectiveImagePreview, setObjectiveImagePreview] = useState<string | null>(null);
 
   // Reject Modal State
   const [rejectModal, setRejectModal] = useState<{ isOpen: boolean, teamId: string | null }>({ isOpen: false, teamId: null });
@@ -72,6 +74,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   useEffect(() => {
       setConfigForm(settings);
       setSettingsLogoPreview(settings.competitionLogo);
+      setObjectiveImagePreview(settings.objectiveImageUrl || null);
   }, [settings]);
 
   useEffect(() => {
@@ -198,6 +201,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       } catch (e) {
           console.error("Logo Error", e);
       }
+  };
+
+  const handleObjectiveImageChange = async (file: File) => {
+      if (!file) return;
+      if (!validateFile(file, 'image')) return;
+      try {
+          const preview = URL.createObjectURL(file);
+          setObjectiveImagePreview(preview);
+          const base64 = await fileToBase64(file);
+          setConfigForm(prev => ({ ...prev, objectiveImageUrl: base64 }));
+      } catch (e) { console.error("Obj Img Error", e); }
   };
 
   const handleSaveConfig = async () => { setIsSavingSettings(true); await saveSettings(configForm); await onRefresh(); setIsSavingSettings(false); notify("สำเร็จ", "บันทึกการตั้งค่าเรียบร้อย", "success"); };
@@ -387,6 +401,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
         {activeTab === 'settings' && (
           <div className="animate-in fade-in duration-300 max-w-4xl mx-auto space-y-6">
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
+                 <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+                 <div>
+                     <p className="text-sm text-blue-800 font-bold mb-1">การจัดการอีเวนต์</p>
+                     <p className="text-xs text-blue-600">คุณสามารถเปลี่ยนชื่อการแข่งขัน, สถานที่ และวัตถุประสงค์ได้ที่นี่ เพื่อรองรับการจัดแข่งในครั้งถัดไป</p>
+                 </div>
+            </div>
+
             {/* Competition Info */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><Trophy className="w-5 h-5 text-indigo-600"/> ข้อมูลการแข่งขัน</h3>
@@ -407,6 +429,75 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                   </div>
                </div>
             </div>
+            
+            {/* Fundraising & Objectives (NEW) */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><Heart className="w-5 h-5 text-pink-600"/> วัตถุประสงค์และการระดมทุน</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">หัวข้อวัตถุประสงค์ (เช่น ระดมทุนสร้างห้องสมุด)</label>
+                        <input type="text" value={configForm.objectiveTitle || ''} onChange={e => setConfigForm({...configForm, objectiveTitle: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="ระบุชื่อโครงการ..." />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">รายละเอียดโครงการ</label>
+                        <textarea value={configForm.objectiveDescription || ''} onChange={e => setConfigForm({...configForm, objectiveDescription: e.target.value})} className="w-full p-2 border rounded-lg h-24" placeholder="อธิบายรายละเอียดสิ่งที่ต้องการพัฒนา..."></textarea>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">ค่าสมัครต่อทีม (บาท)</label>
+                            <input type="number" value={configForm.registrationFee || 0} onChange={e => setConfigForm({...configForm, registrationFee: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg" />
+                            <p className="text-xs text-slate-400 mt-1">*ใช้คำนวณยอดระดมทุน</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">เป้าหมายยอดเงิน (บาท)</label>
+                            <input type="number" value={configForm.fundraisingGoal || 0} onChange={e => setConfigForm({...configForm, fundraisingGoal: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg" />
+                        </div>
+                    </div>
+                     <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">รูปภาพโครงการ (สิ่งที่อยากสร้าง/พัฒนา)</label>
+                      <div className="flex items-center gap-4 border p-3 rounded-lg border-dashed">
+                          {objectiveImagePreview ? (
+                              <img src={objectiveImagePreview} className="h-24 object-contain rounded" />
+                          ) : <div className="h-24 w-24 bg-slate-100 rounded flex items-center justify-center text-slate-400 text-xs">No Image</div>}
+                          <label className="cursor-pointer bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-100 transition">
+                              อัปโหลดรูป
+                              <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleObjectiveImageChange(e.target.files[0])} />
+                          </label>
+                      </div>
+                  </div>
+                </div>
+            </div>
+
+            {/* Location & Announcement */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-indigo-600"/> สถานที่และพิกัด</h3>
+               <div className="space-y-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">ชื่อสถานที่แข่งขัน</label>
+                          <input type="text" value={configForm.locationName} onChange={e => setConfigForm({...configForm, locationName: e.target.value})} className="w-full p-2 border rounded-lg" />
+                       </div>
+                       <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Google Maps Link</label>
+                          <input type="text" value={configForm.locationLink} onChange={e => setConfigForm({...configForm, locationLink: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="https://maps.app.goo.gl/..." />
+                       </div>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                       <div className="col-span-2 text-xs font-bold text-slate-500 flex items-center gap-1"><Target className="w-3 h-3"/> พิกัด GPS (เพื่อคำนวณระยะทาง)</div>
+                       <div>
+                           <input type="number" step="any" placeholder="Latitude (ละติจูด)" value={configForm.locationLat || ''} onChange={e => setConfigForm({...configForm, locationLat: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg text-sm" />
+                       </div>
+                       <div>
+                           <input type="number" step="any" placeholder="Longitude (ลองจิจูด)" value={configForm.locationLng || ''} onChange={e => setConfigForm({...configForm, locationLng: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg text-sm" />
+                       </div>
+                       <p className="col-span-2 text-[10px] text-slate-400">หาพิกัดได้จาก Google Maps (คลิกขวาที่จุด > เลือกตัวเลขพิกัด)</p>
+                   </div>
+               </div>
+               <div className="mt-4 border-t pt-4">
+                   <label className="block text-sm font-bold text-slate-700 mb-1">ประกาศตัววิ่ง (คั่นด้วย |)</label>
+                   <textarea value={configForm.announcement} onChange={e => setConfigForm({...configForm, announcement: e.target.value})} className="w-full p-2 border rounded-lg h-20" placeholder="เช่น ยินดีต้อนรับสู่งาน | เริ่มแข่ง 09.00 น."></textarea>
+               </div>
+            </div>
 
             {/* Bank Info */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -424,25 +515,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                       <label className="block text-sm font-bold text-slate-700 mb-1">ชื่อบัญชี</label>
                       <input type="text" value={configForm.accountName} onChange={e => setConfigForm({...configForm, accountName: e.target.value})} className="w-full p-2 border rounded-lg" />
                   </div>
-               </div>
-            </div>
-
-            {/* Location & Announcement */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><MapPin className="w-5 h-5 text-indigo-600"/> สถานที่และประกาศ</h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">สถานที่แข่งขัน</label>
-                      <input type="text" value={configForm.locationName} onChange={e => setConfigForm({...configForm, locationName: e.target.value})} className="w-full p-2 border rounded-lg" />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Google Maps Link</label>
-                      <input type="text" value={configForm.locationLink} onChange={e => setConfigForm({...configForm, locationLink: e.target.value})} className="w-full p-2 border rounded-lg" />
-                   </div>
-               </div>
-               <div>
-                   <label className="block text-sm font-bold text-slate-700 mb-1">ประกาศตัววิ่ง (คั่นด้วย |)</label>
-                   <textarea value={configForm.announcement} onChange={e => setConfigForm({...configForm, announcement: e.target.value})} className="w-full p-2 border rounded-lg h-24" placeholder="เช่น ยินดีต้อนรับสู่งาน | เริ่มแข่ง 09.00 น."></textarea>
                </div>
             </div>
 

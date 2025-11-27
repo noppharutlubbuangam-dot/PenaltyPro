@@ -1,3 +1,4 @@
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -16,7 +17,18 @@ export interface AppSettings {
   locationName: string;
   locationLink: string;
   announcement: string;
-  adminPin?: string; // New Field for Secure Recording
+  adminPin?: string; 
+  
+  // New: Location Coordinates
+  locationLat?: number;
+  locationLng?: number;
+
+  // New: Fundraising & Objective
+  registrationFee?: number; // ค่าสมัครต่อทีม
+  fundraisingGoal?: number; // เป้าหมายยอดเงิน
+  objectiveTitle?: string; // ชื่อโครงการ (เช่น สร้างห้องสมุด)
+  objectiveDescription?: string; // รายละเอียด
+  objectiveImageUrl?: string; // รูปภาพสิ่งที่อยากสร้าง/พัฒนา
 }
 
 export interface NewsItem {
