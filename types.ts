@@ -1,4 +1,3 @@
-
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -149,9 +148,11 @@ export interface Standing {
 
 export interface UserProfile {
   userId: string;
+  username?: string;
   displayName: string;
   pictureUrl?: string;
   statusMessage?: string;
-  type: 'line' | 'guest';
-  phoneNumber?: string; // Optional for Guest login
+  type: 'line' | 'guest' | 'credentials';
+  phoneNumber?: string; 
+  role?: 'admin' | 'staff' | 'user';
 }

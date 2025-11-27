@@ -1,5 +1,4 @@
-
-import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick } from '../types';
+import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
@@ -55,6 +54,42 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
     console.error("Failed to fetch from Google Sheet:", error);
     throw error;
   }
+};
+
+export const authenticateUser = async (data: any): Promise<UserProfile | null> => {
+    // data structure: { authType: 'login'|'register'|'line', username?, password?, displayName?, phone?, lineUserId?, pictureUrl? }
+    const payload = {
+        action: 'auth',
+        ...data
+    };
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'error') {
+                throw new Error(result.message);
+            }
+            return {
+                userId: result.userId,
+                username: result.username,
+                displayName: result.displayName,
+                pictureUrl: result.pictureUrl,
+                type: data.authType === 'line' ? 'line' : 'credentials',
+                phoneNumber: result.phoneNumber,
+                role: result.role
+            };
+        }
+        throw new Error("Network response was not ok");
+    } catch (error: any) {
+        console.error("Auth Error", error);
+        throw error; // Re-throw to handle in UI
+    }
 };
 
 // ... (Rest of the functions remain unchanged) ...
@@ -125,9 +160,6 @@ export const scheduleMatch = async (matchId: string, teamA: string, teamB: strin
           roundLabel, 
           venue: venue || '', 
           scheduledTime: scheduledTime || '',
-          // Assuming backend supports these or ignores them if not. 
-          // If backend Code.gs needs update, the user will need to update it.
-          // For now we send them in case the backend saves extra props dynamically.
           livestreamUrl,
           livestreamCover
       })
@@ -164,7 +196,6 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
     winner: matchState.winner === 'A' ? teamAName : matchState.teamB.name || matchState.teamB, // Ensure winner is string name
     summary: summary,
     kicks: matchState.kicks ? matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : teamBName })) : [],
-    // Add Live Fields if they exist in the state (passed from Admin)
     livestreamUrl: matchState.livestreamUrl,
     livestreamCover: matchState.livestreamCover
   };
