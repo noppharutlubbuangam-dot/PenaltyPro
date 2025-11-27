@@ -283,9 +283,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           // 1. Delete the existing match
           await deleteMatch(match.id);
           
-          // 2. Re-create the match as scheduled (same ID to preserve if needed, or new one)
+          // 2. Re-create the match as scheduled.
+          // IMPORTANT: We generate a NEW ID (or append suffix) to ensure old kicks in the DB
+          // (which are linked by ID) are effectively "orphaned" or reset.
+          // If we reuse the same ID, the backend might still link old kicks to this match.
+          const newMatchId = `${match.id}_R${Date.now().toString().slice(-4)}`;
+
           await scheduleMatch(
-              match.id, 
+              newMatchId, 
               typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
               typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
               match.roundLabel || '',
@@ -293,7 +298,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               match.scheduledTime
           );
 
-          if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' เรียบร้อย", "success");
+          if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' (ล้างผลยิงประตู) เรียบร้อย", "success");
           setMatchToReset(null);
           setSelectedMatch(null);
           if(onRefresh) onRefresh();
@@ -627,8 +632,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           <div className={`flex flex-wrap gap-2 ${side === 'A' ? 'justify-end' : 'justify-start'}`}>
               {scorers.map((k, i) => (
                   <div key={i} className="text-xs font-bold text-indigo-900 bg-white/90 shadow-sm border border-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap">
-                      <span className="text-indigo-400 font-mono text-[10px] border-r border-indigo-100 pr-1.5">{k.round}'</span>
-                      <span className="font-black">{String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span>
+                      <span>⚽ {String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span>
+                      <span className="text-indigo-400 font-mono text-[10px] border-l border-indigo-100 pl-1.5 ml-1">({k.round}')</span>
                   </div>
               ))}
           </div>
@@ -666,11 +671,44 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                         const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB);
                         return (
                             <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative cursor-pointer">
-                                <div className="flex flex-col md:flex-row items-center w-full gap-4"><div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-500 text-sm"><span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(match.scheduledTime || match.date)}</span>{match.scheduledTime && <span className="flex items-center gap-1 text-indigo-600 font-bold"><Clock className="w-3 h-3" /> {formatTime(match.scheduledTime)}</span>}</div><div className="flex-1 flex items-center justify-center gap-4 w-full"><div className="flex items-center justify-end gap-3 flex-1"><span className="font-bold text-slate-800 text-lg truncate">{tA.name}</span>{tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}</div><div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap">VS</div><div className="flex items-center justify-start gap-3 flex-1">{tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 object-contain rounded bg-slate-50"/> : <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}<span className="font-bold text-slate-800 text-lg truncate">{tB.name}</span></div></div><div className="min-w-[150px] flex flex-col items-center md:items-end text-sm gap-1"><span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel?.split(':')[0] || 'รอบทั่วไป'}</span>{match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}</div></div>
-                                <div className="w-full pt-3 mt-1 border-t border-slate-100 flex justify-end gap-2">
-                                    <button onClick={(e) => handleStart(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100"><PlayCircle className="w-3 h-3" /> บันทึกผล</button>
-                                    <button onClick={(e) => handleShare(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ LINE</button>
-                                    {isAdmin && <><button onClick={(e) => handleEditMatch(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold"><Edit2 className="w-3 h-3" /> แก้ไข</button><button onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /> ลบ</button></>}
+                                
+                                {/* Responsive Scheduled Match Layout */}
+                                <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
+                                    {/* Date/Time Group */}
+                                    <div className="flex md:flex-col items-center md:items-start justify-center min-w-[120px] text-slate-500 text-sm gap-2 md:gap-0 w-full md:w-auto bg-slate-50 md:bg-transparent p-2 md:p-0 rounded-lg">
+                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDate(match.scheduledTime || match.date)}</span>
+                                        {match.scheduledTime && <span className="flex items-center gap-1 text-indigo-600 font-bold"><Clock className="w-3 h-3" /> {formatTime(match.scheduledTime)}</span>}
+                                    </div>
+
+                                    {/* Matchup Group */}
+                                    <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 w-full py-2 md:py-0">
+                                        {/* Team A */}
+                                        <div className="flex items-center justify-center md:justify-end gap-3 flex-1 w-full">
+                                            <span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-right w-full">{tA.name}</span>
+                                            {tA.logoUrl ? <img src={tA.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xs font-bold">A</div>}
+                                        </div>
+                                        
+                                        {/* VS Badge */}
+                                        <div className="px-3 py-1 bg-slate-100 rounded text-xs text-slate-500 font-bold whitespace-nowrap shrink-0">VS</div>
+                                        
+                                        {/* Team B */}
+                                        <div className="flex items-center justify-center md:justify-start gap-3 flex-1 w-full">
+                                            {tB.logoUrl ? <img src={tB.logoUrl} className="w-8 h-8 md:w-10 md:h-10 object-contain rounded bg-slate-50 shrink-0"/> : <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-bold">B</div>}
+                                            <span className="font-bold text-slate-800 text-base md:text-lg truncate text-center md:text-left w-full">{tB.name}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Info Group */}
+                                    <div className="w-full md:w-auto min-w-[150px] flex flex-row md:flex-col items-center justify-between md:justify-end md:items-end text-sm gap-1 border-t md:border-t-0 pt-2 md:pt-0 mt-1 md:mt-0">
+                                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold">{match.roundLabel?.split(':')[0] || 'รอบทั่วไป'}</span>
+                                        {match.venue && <span className="flex items-center gap-1 text-slate-500 text-xs"><MapPin className="w-3 h-3" /> {match.venue}</span>}
+                                    </div>
+                                </div>
+                                
+                                <div className="w-full pt-3 mt-1 border-t border-slate-100 flex justify-end gap-2 flex-wrap">
+                                    <button onClick={(e) => handleStart(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-100"><PlayCircle className="w-3 h-3" /> บันทึกผล</button>
+                                    <button onClick={(e) => handleShare(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ LINE</button>
+                                    {isAdmin && <><button onClick={(e) => handleEditMatch(e, match)} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold"><Edit2 className="w-3 h-3" /></button><button onClick={(e) => { e.stopPropagation(); setMatchToDelete(match.id); }} className="flex-none flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs font-bold"><Trash2 className="w-3 h-3" /></button></>}
                                 </div>
                             </div>
                         );
@@ -684,23 +722,43 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                 {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
                 return (
                     <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col items-center gap-4 opacity-80 hover:opacity-100 transition cursor-pointer">
-                        <div className="flex flex-col md:flex-row items-center w-full gap-4">
-                            <div className="flex flex-col items-center md:items-start min-w-[120px] text-slate-400 text-xs"><span>{formatDate(match.date)}</span><span>{match.roundLabel?.split(':')[0]}</span></div>
-                            <div className="flex-1 flex items-center justify-center gap-4 w-full">
-                                <div className={`flex items-center justify-end gap-3 flex-1 ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}><span className="font-bold text-lg truncate">{tA.name}</span>{tA.logoUrl && <img src={tA.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}</div>
-                                <div className="bg-slate-800 text-white px-4 py-1 rounded-lg font-mono font-bold text-lg shadow-inner">{match.scoreA} - {match.scoreB}</div>
-                                <div className={`flex items-center justify-start gap-3 flex-1 ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>{tB.logoUrl && <img src={tB.logoUrl} className="w-6 h-6 object-contain rounded opacity-80"/>}<span className="font-bold text-lg truncate">{tB.name}</span></div>
+                        <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
+                             {/* Date/Time Mobile */}
+                            <div className="flex justify-between w-full md:w-auto md:flex-col md:items-start min-w-[120px] text-slate-400 text-xs border-b md:border-b-0 pb-2 md:pb-0 mb-2 md:mb-0">
+                                <span>{formatDate(match.date)}</span>
+                                <span>{match.roundLabel?.split(':')[0]}</span>
                             </div>
-                            <div className="min-w-[100px] flex justify-end"><Trophy className="w-5 h-5 text-yellow-500" /></div>
+
+                            <div className="flex-1 flex items-center justify-center gap-2 md:gap-4 w-full">
+                                {/* Team A */}
+                                <div className={`flex items-center justify-center md:justify-end gap-2 md:gap-3 flex-1 w-full overflow-hidden ${match.winner === 'A' || match.winner === tA.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                    <span className="font-bold text-base md:text-lg truncate text-right w-full">{tA.name}</span>
+                                    {tA.logoUrl && <img src={tA.logoUrl} className="w-8 h-8 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
+                                </div>
+
+                                {/* Score */}
+                                <div className="bg-slate-800 text-white px-3 py-1 md:px-4 rounded-lg font-mono font-bold text-lg shadow-inner whitespace-nowrap shrink-0">
+                                    {match.scoreA} - {match.scoreB}
+                                </div>
+
+                                {/* Team B */}
+                                <div className={`flex items-center justify-center md:justify-start gap-2 md:gap-3 flex-1 w-full overflow-hidden ${match.winner === 'B' || match.winner === tB.name ? 'text-green-600' : 'text-slate-600'}`}>
+                                    {tB.logoUrl && <img src={tB.logoUrl} className="w-8 h-8 md:w-6 md:h-6 object-contain rounded opacity-80 shrink-0"/>}
+                                    <span className="font-bold text-base md:text-lg truncate text-left w-full">{tB.name}</span>
+                                </div>
+                            </div>
+
+                            <div className="hidden md:flex min-w-[100px] justify-end"><Trophy className="w-5 h-5 text-yellow-500" /></div>
                         </div>
-                        <div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2">
-                            <button onClick={(e) => handleShare(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>
+
+                        <div className="w-full pt-3 mt-1 border-t border-slate-200 flex justify-end gap-2 flex-wrap">
+                            <button onClick={(e) => handleShare(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[#00B900] hover:bg-[#009900] text-white text-xs font-bold"><Share2 className="w-3 h-3" /> แชร์ผล</button>
                             {isAdmin && (
                                 <>
-                                    <button onClick={(e) => handleOpenEditResult(e, match)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold">
+                                    <button onClick={(e) => handleOpenEditResult(e, match)} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold">
                                         <Edit2 className="w-3 h-3" /> แก้ไขผล
                                     </button>
-                                    <button onClick={(e) => { e.stopPropagation(); setMatchToReset(match.id); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold">
+                                    <button onClick={(e) => { e.stopPropagation(); setMatchToReset(match.id); }} className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 text-xs font-bold">
                                         <RotateCcw className="w-3 h-3" /> รีเซ็ต
                                     </button>
                                 </>
@@ -1047,7 +1105,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                     </div>
                     <p className="text-slate-600 mb-6">
                         {matchToReset 
-                            ? "การรีเซ็ตจะล้างผลการแข่งขัน คะแนน และผู้ชนะ กลับไปเป็นสถานะ 'รอแข่ง' (Scheduled) แต่จะไม่ลบรายการออกจากตาราง"
+                            ? "การรีเซ็ตจะล้างผลการแข่งขัน คะแนน และผู้ชนะ กลับไปเป็นสถานะ 'รอแข่ง' (Scheduled) และล้างข้อมูลการยิงประตูทั้งหมด"
                             : "คุณต้องการลบตารางการแข่งขันนี้ใช่หรือไม่?"
                         }
                     </p>

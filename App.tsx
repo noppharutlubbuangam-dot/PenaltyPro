@@ -229,9 +229,10 @@ function App() {
          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] });
          
          setIsSaving(true);
+         // Backend's saveMatch function automatically saves kicks if they are included in the payload.
+         // We do not need to call saveKicksToSheet separately to avoid double recording.
          Promise.all([
              saveMatchToSheet(nextState, ""),
-             saveKicksToSheet(nextState.kicks, nextState.matchId || `M${Date.now()}`, nextState.teamA.name, nextState.teamB.name)
          ]).then(() => { 
              setIsSaving(false); 
              loadData(); 
