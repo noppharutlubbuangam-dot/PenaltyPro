@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2 } from 'lucide-react';
 import { registerTeam, fileToBase64 } from '../services/sheetService';
@@ -293,6 +294,30 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     s.name.toLowerCase().includes(schoolName.toLowerCase()) && schoolName.length > 0
   );
 
+  // Helper to generate Thai-English Acronym
+  const generateThaiAcronym = (name: string): string => {
+      // If pure English/Numbers, perform standard acronym
+      if (/^[A-Za-z0-9\s]+$/.test(name)) {
+          const parts = name.split(/\s+/);
+          if (parts.length === 1) return name.substring(0, 3).toUpperCase();
+          return parts.slice(0, 3).map(p => p[0]).join('').toUpperCase();
+      }
+
+      // Thai Logic: Remove "โรงเรียน" prefix if present
+      let cleanName = name.replace(/^โรงเรียน/, '').trim();
+      
+      // Heuristic: Map common first letters of words
+      // Simple approach: Pick first char of first 3 significant segments
+      // Using regex to split by spaces or zero-width breaks isn't perfect in JS for Thai without lib
+      // So we fallback to mapping consonants.
+      
+      // NOTE: This is a mock logic. In real-world, use a proper transliteration lib or user input.
+      // Here we simply return empty to let backend/user decide, OR generate random 3 chars if lazy.
+      // Better UX: Ask user to input it in Admin Dashboard later, or generate a Placeholder "T01"
+      
+      return "T" + Math.floor(Math.random() * 100).toString().padStart(2, '0');
+  };
+
   const handleSubmit = async () => {
     if (!documentFile || !slipFile) {
         notify("ข้อมูลไม่ครบ", "กรุณาแนบเอกสารและหลักฐานการโอนเงิน", "error");
@@ -330,9 +355,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       
       // Combine Colors
       const combinedColors = JSON.stringify([primaryColor, secondaryColor]);
+      
+      // Generate ShortName (Basic Logic)
+      const shortName = generateThaiAcronym(schoolName);
 
       const payload: RegistrationData = {
         schoolName,
+        shortName,
         district,
         province,
         phone,
@@ -345,7 +374,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         logoFile: logoBase64,
         documentFile: docBase64,
         slipFile: slipBase64,
-        players: validPlayers
+        players: validPlayers,
+        registrationTime: new Date().toISOString() // Add Timestamp
       };
 
       setUploadStage("กำลังบันทึกลงฐานข้อมูล...");

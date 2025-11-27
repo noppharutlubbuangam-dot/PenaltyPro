@@ -109,6 +109,7 @@ export interface MatchState {
 
 export interface RegistrationData {
   schoolName: string;
+  shortName?: string;
   district: string;
   province: string;
   phone: string;
@@ -121,6 +122,7 @@ export interface RegistrationData {
   logoFile: string | null; 
   documentFile: string | null; 
   slipFile: string | null; 
+  registrationTime?: string;
   players: {
     sequence: number; 
     name: string;

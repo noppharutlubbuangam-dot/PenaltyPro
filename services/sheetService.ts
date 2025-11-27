@@ -190,6 +190,7 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
   const payload = {
     action: 'register',
     schoolName: data.schoolName, // Ensure parameter name matches backend expectations (Code.gs expects schoolName)
+    shortName: data.shortName, // Pass generated shortName
     color: data.color,
     logoFile: data.logoFile,
     documentFile: data.documentFile,
@@ -202,6 +203,7 @@ export const registerTeam = async (data: RegistrationData): Promise<boolean> => 
     managerPhone: data.managerPhone,
     coachName: data.coachName,
     coachPhone: data.coachPhone,
+    registrationTime: data.registrationTime, // Pass Timestamp
     players: data.players.map(p => ({
         name: p.name,
         number: p.sequence,

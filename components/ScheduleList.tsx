@@ -594,7 +594,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               {scorers.map((k, i) => (
                   <div key={i} className="text-xs text-slate-600 flex items-center gap-1">
                       <span className="w-4 text-slate-400 text-[10px] text-right">{k.round}'</span>
-                      <span className="font-medium truncate">{k.player.split('(')[0]}</span>
+                      <span className="font-medium truncate">{String(k.player || '').split('(')[0]}</span>
                   </div>
               ))}
           </div>
