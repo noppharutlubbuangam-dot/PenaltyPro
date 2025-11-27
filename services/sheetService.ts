@@ -180,11 +180,18 @@ export const deleteMatch = async (matchId: string) => {
   } catch (error) { return false; }
 };
 
-export const saveMatchToSheet = async (matchState: MatchState | any, summary: string) => {
+export const saveMatchToSheet = async (matchState: MatchState | any, summary: string, skipKicks: boolean = false) => {
   // Support both MatchState and generic object for Admin Edits
-  const teamAName = matchState.teamA.name || matchState.teamA;
-  const teamBName = matchState.teamB.name || matchState.teamB;
+  // Ensure we get string names even if objects are passed
+  const teamAName = typeof matchState.teamA === 'object' ? matchState.teamA.name : matchState.teamA;
+  const teamBName = typeof matchState.teamB === 'object' ? matchState.teamB.name : matchState.teamB;
   
+  // Resolve Winner Name Correctly
+  let resolvedWinner = matchState.winner;
+  if (matchState.winner === 'A') resolvedWinner = teamAName;
+  else if (matchState.winner === 'B') resolvedWinner = teamBName;
+  // If matchState.winner is already the name (e.g. from existing DB record), keep it.
+
   const payload = {
     action: 'saveMatch',
     // Check matchState.id (from Schedule List) OR matchState.matchId (from Game) to prevent duplicates
@@ -193,12 +200,14 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
     teamB: teamBName,
     scoreA: matchState.scoreA,
     scoreB: matchState.scoreB,
-    winner: matchState.winner === 'A' ? teamAName : matchState.teamB.name || matchState.teamB, // Ensure winner is string name
+    winner: resolvedWinner, 
     summary: summary,
-    kicks: matchState.kicks ? matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : teamBName })) : [],
+    // IMPORTANT: If skipKicks is true, we send an empty array so the backend doesn't append duplicates
+    kicks: (skipKicks || !matchState.kicks) ? [] : matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : (k.teamId === 'B' ? teamBName : k.teamId) })),
     livestreamUrl: matchState.livestreamUrl,
     livestreamCover: matchState.livestreamCover
   };
+  
   try {
     await fetch(API_URL, {
       method: 'POST',

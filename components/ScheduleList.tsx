@@ -417,8 +417,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           setAiSummary(summary);
           
           // Save the summary to the match record immediately
+          // IMPORTANT: Pass winner as stored to avoid overwriting logic in sheetService
           const matchPayload = { ...selectedMatch, summary: summary };
-          await saveMatchToSheet(matchPayload, "AI Summary Added");
+          // Pass true for skipKicks to avoid duplicate kick logs
+          await saveMatchToSheet(matchPayload, "AI Summary Added", true);
 
       } catch (error) {
           console.error("AI Gen Error", error);

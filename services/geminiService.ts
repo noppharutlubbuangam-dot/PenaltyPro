@@ -3,9 +3,12 @@ import { KickResult, Kick } from '../types';
 
 // Initialize Gemini Client
 const getAiClient = () => {
+  // หากต้องการ Hardcode API Key เพื่อทดสอบ สามารถใส่ตรงนี้ได้ (ไม่แนะนำสำหรับ Production)
+  // const apiKey = "YOUR_GEMINI_API_KEY"; 
   const apiKey = process.env.API_KEY;
+  
   if (!apiKey) {
-    console.warn("API_KEY is missing in process.env");
+    console.warn("API_KEY is missing. Please check your .env file.");
     return null;
   }
   return new GoogleGenAI({ apiKey });
@@ -21,16 +24,12 @@ export const generateCommentary = async (
 
   try {
     const prompt = `
-      คุณคือนักพากย์ฟุตบอลชาวไทยที่ตื่นเต้นและเร้าใจ (น้ำเสียง: เอกราช เก่งทุกทาง หรือ น้าหัง)
-      ช่วยบรรยายจังหวะการยิงจุดโทษนี้สั้นๆ 1 ประโยค เป็นภาษาไทย:
+      สวมบทบาทนักพากย์ฟุตบอลไทย (เสียงตื่นเต้น):
+      บรรยายจังหวะจุดโทษนี้สั้นๆ 1 ประโยค:
+      นักเตะ: ${player} (${team})
+      ผล: ${result === 'GOAL' ? 'เข้าประตู' : result === 'SAVED' ? 'โดนเซฟ' : 'ยิงพลาด'}
       
-      สถานการณ์:
-      - นักเตะ: ${player} (ทีม ${team})
-      - ผลลัพธ์: ${result === 'GOAL' ? 'ยิงเข้าประตู' : result === 'SAVED' ? 'โดนผู้รักษาประตูเซฟ' : 'ยิงพลาดออกนอกกรอบ'}
-      
-      คำแนะนำ:
-      - ใช้คำศัพท์ฟุตบอลไทย เช่น "เรียบร้อยครับ!", "โอ้โห! ซูเปอร์เซฟ", "น่าเสียดายครับลูกนี้"
-      - ไม่ต้องใส่เครื่องหมายคำพูด
+      คำแนะนำ: ใช้คำศัพท์บอลไทย เช่น "เรียบร้อยครับ", "ซูเปอร์เซฟ", "ชนเสา"
     `;
 
     const response = await ai.models.generateContent({
@@ -54,32 +53,32 @@ export const generateMatchSummary = async (
   kicks: Kick[]
 ): Promise<string> => {
   const ai = getAiClient();
-  if (!ai) return "Analysis unavailable.";
+  if (!ai) return "Analysis unavailable (Please configure API_KEY).";
 
   try {
-    // Simplify kick data for token efficiency
-    const kickLog = kicks.map(k => 
-      `คนที่ ${k.round} ทีม ${k.teamId}: ${k.result}`
-    ).join(', ');
+    // 1. Extract Scorers & Heroes
+    const scorersA = kicks.filter(k => k.teamId === 'A' && k.result === KickResult.GOAL).map(k => k.player.split('(')[0].trim());
+    const scorersB = kicks.filter(k => k.teamId === 'B' && k.result === KickResult.GOAL).map(k => k.player.split('(')[0].trim());
+    const savedKicks = kicks.filter(k => k.result === KickResult.SAVED);
+    
+    // 2. Determine Winner Name
+    const winnerName = winner === 'A' ? teamA : winner === 'B' ? teamB : winner || 'เสมอ';
 
     const prompt = `
-      คุณคือนักข่าวกีฬาฟุตบอลอาชีพ (สายบอลไทย)
-      ช่วยเขียน "พาดหัวข่าว" และ "เนื้อข่าวสรุปสั้นๆ" (Breaking News) สำหรับการดวลจุดโทษแมตช์นี้:
+      คุณคือนักข่าวกีฬาสายฟุตบอลไทย เขียนสรุปผลการแข่งสั้นๆ (Breaking News) เพื่อส่งทาง LINE (ห้ามยาวเกินไป):
       
-      ข้อมูลการแข่ง:
-      - คู่แข่งขัน: ${teamA} พบ ${teamB}
-      - สกอร์รวม: ${scoreA} - ${scoreB}
-      - ผู้ชนะ: ${winner === 'A' ? teamA : winner === 'B' ? teamB : 'เสมอ'}
-      - เหตุการณ์ยิงจุดโทษ: ${kickLog}
-
-      รูปแบบการตอบ:
-      [พาดหัวข่าวสั้นๆ เร้าใจ]
+      ข้อมูล:
+      - คู่แข่ง: ${teamA} ${scoreA} - ${scoreB} ${teamB}
+      - ผู้ชนะ: ${winnerName}
+      - ผู้ยิงจุดโทษเข้าฝั่ง ${teamA}: ${scorersA.length > 0 ? scorersA.join(', ') : 'ไม่มี'}
+      - ผู้ยิงจุดโทษเข้าฝั่ง ${teamB}: ${scorersB.length > 0 ? scorersB.join(', ') : 'ไม่มี'}
+      - การเซฟจุดโทษ: มีการเซฟ ${savedKicks.length} ลูก
       
-      [เนื้อหาข่าว 1 ย่อหน้า]
-      - บรรยายความสูสีและบรรยากาศกดดัน
-      - ระบุจุดเปลี่ยนสำคัญ (ใครพลาด หรือใครเซฟได้)
-      - จบด้วยการแสดงความยินดีกับผู้ชนะ
-      - ใช้ภาษาข่าวฟุตบอลที่อ่านสนุก ตื่นเต้น
+      คำสั่ง:
+      1. เขียนพาดหัวข่าว 1 บรรทัดให้เร้าใจ (ใส่ Emoji ได้)
+      2. เขียนเนื้อหาข่าวสั้นๆ 2-3 บรรทัด สรุปความดุเดือด เอ่ยชมคนที่ยิงเข้าหรือผู้รักษาประตู (ถ้ามีข้อมูล)
+      3. จบด้วยการยินดีกับผู้ชนะ
+      4. **สำคัญ:** รวมทั้งหมดห้ามเกิน 300 ตัวอักษร เพื่อไม่ให้ข้อความยาวเกินไปใน Flex Message
     `;
 
     const response = await ai.models.generateContent({
@@ -90,6 +89,6 @@ export const generateMatchSummary = async (
     return response.text || "ไม่สามารถสร้างบทสรุปได้";
   } catch (error) {
     console.error("Error generating summary:", error);
-    return "เกิดข้อผิดพลาดในการสร้างบทสรุป";
+    return "เกิดข้อผิดพลาดในการสร้างบทสรุป (API Error)";
   }
 };
