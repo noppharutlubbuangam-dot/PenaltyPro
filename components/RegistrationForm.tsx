@@ -255,19 +255,36 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const updatePlayer = (index: number, field: string, value: any) => {
     const newPlayers = [...players];
     if (field === 'photoFile' && value) {
+        // Show preview immediately using the original file
+        const immediateUrl = URL.createObjectURL(value);
+        newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: immediateUrl };
+        setPlayers(newPlayers);
+        
+        // Then try to compress and update state again if successful
         compressImage(value).then(compressed => {
-             const url = URL.createObjectURL(compressed);
-             newPlayers[index] = { ...newPlayers[index], photoFile: compressed, photoPreview: url };
-             setPlayers(newPlayers);
+             // We can keep the immediate URL or revoke it and create new one
+             // For simplicity, we just update the file object to be the compressed one.
+             // The preview can stay as is, or be updated.
+             const compressedUrl = URL.createObjectURL(compressed);
+             const currentPlayers = [...players];
+             // Need to re-fetch state in a functional update to be safe, but for now:
+             // We just update the array in place if the user hasn't changed it? 
+             // To avoid complexity, we just update the photoFile property silently 
+             // in a way that doesn't disrupt UI if user is typing.
+             // Actually, react state update is enough.
+             
+             // Let's just update the file.
+             setPlayers(prev => {
+                 const updated = [...prev];
+                 updated[index] = { ...updated[index], photoFile: compressed };
+                 return updated;
+             });
         }).catch(err => {
-             console.error("Compression failed", err);
-             const url = URL.createObjectURL(value);
-             newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: url };
-             setPlayers(newPlayers);
+             console.error("Compression failed, using original", err);
         });
     } else {
         newPlayers[index] = { ...newPlayers[index], [field]: value };
-        setPlayers(newPlayers); // Ensure state updates for regular fields too
+        setPlayers(newPlayers); 
     }
   };
   
@@ -673,7 +690,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                                     <span className="text-[10px] font-bold">No Photo</span>
                                 </div>
                             )}
-                            <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                            <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition z-10">
                                 <Camera className="w-6 h-6 text-white" />
                                 <input 
                                     type="file" 
@@ -688,13 +705,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                         <div className="flex-1 min-w-0 flex flex-col justify-center h-full py-1 space-y-2">
                             <div className="flex gap-2">
                                 {/* Number / Sequence */}
-                                <div className="w-16">
+                                <div className="w-20">
                                     <input 
                                         type="number"
                                         value={player.number}
                                         onChange={(e) => updatePlayer(index, 'number', e.target.value)}
                                         className="w-full p-1.5 text-xs border border-slate-300 rounded text-center font-bold bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                        placeholder="เบอร์"
+                                        placeholder="เบอร์เสื้อ"
                                     />
                                 </div>
                                 {/* Name */}

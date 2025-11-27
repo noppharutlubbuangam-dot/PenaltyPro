@@ -275,28 +275,15 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       if(!matchToReset) return;
       setIsDeleting(true); 
       try {
+          // Because backend `saveMatch` forces status='Finished',
+          // we must delete and recreate the match to reset status to 'Scheduled'.
           const match = matches.find(m => m.id === matchToReset);
           if (!match) throw new Error("Match not found");
-
-          const payload: any = {
-              matchId: match.id,
-              teamA: resolveTeam(match.teamA),
-              teamB: resolveTeam(match.teamB),
-              scoreA: 0,
-              scoreB: 0,
-              winner: null, 
-              roundLabel: match.roundLabel,
-              status: 'Scheduled', 
-              kicks: [],
-              isFinished: false
-          };
-
-          // Explicitly clear winner and scores
-          await saveMatchToSheet({
-               ...payload,
-               scoreA: 0, scoreB: 0, winner: "" // Send empty string or null to clear
-          }, "Reset by Admin"); 
           
+          // 1. Delete the existing match
+          await deleteMatch(match.id);
+          
+          // 2. Re-create the match as scheduled (same ID to preserve if needed, or new one)
           await scheduleMatch(
               match.id, 
               typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
@@ -306,8 +293,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               match.scheduledTime
           );
 
-          if(showNotification) showNotification("สำเร็จ", "รีเซ็ตผลการแข่งขันเรียบร้อย", "success");
+          if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' เรียบร้อย", "success");
           setMatchToReset(null);
+          setSelectedMatch(null);
           if(onRefresh) onRefresh();
 
       } catch (e) {
@@ -633,14 +621,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
            return false;
       });
 
-      if (scorers.length === 0) return <div className="text-xs text-indigo-300 italic text-center py-2">-</div>;
+      if (scorers.length === 0) return <div className="text-xs text-indigo-300 italic text-center py-2 opacity-50">-</div>;
 
       return (
-          <div className="space-y-1">
+          <div className={`flex flex-wrap gap-2 ${side === 'A' ? 'justify-end' : 'justify-start'}`}>
               {scorers.map((k, i) => (
-                  <div key={i} className="text-xs text-white flex items-center gap-1">
-                      <span className="w-4 text-indigo-300 text-[10px] text-right">{k.round}'</span>
-                      <span className="font-medium truncate">{String(k.player || '').split('(')[0]}</span>
+                  <div key={i} className="text-xs font-bold text-indigo-900 bg-white/90 shadow-sm border border-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="text-indigo-400 font-mono text-[10px] border-r border-indigo-100 pr-1.5">{k.round}'</span>
+                      <span className="font-black">{String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span>
                   </div>
               ))}
           </div>
@@ -740,39 +728,49 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                              )}
                              <h3 className="text-xs md:text-lg font-bold opacity-90 tracking-wide mb-3">{selectedMatch.roundLabel?.split(':')[0] || 'การแข่งขัน'}</h3>
                              
-                             <div className="flex flex-row items-center justify-between w-full px-2">
-                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition ${selectedMatch.winner === 'A' || selectedMatch.winner === resolveTeam(selectedMatch.teamA).name ? 'bg-green-600/20 border border-green-400/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : ''}`}>
+                             <div className="flex flex-row items-center justify-between w-full px-2 gap-4">
+                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition-all duration-300 relative ${selectedMatch.winner === 'A' || selectedMatch.winner === resolveTeam(selectedMatch.teamA).name ? 'bg-gradient-to-b from-green-600/30 to-green-900/40 border-2 border-green-400 shadow-[0_0_20px_rgba(34,197,94,0.4)] scale-105 z-10' : 'opacity-80'}`}>
                                     {resolveTeam(selectedMatch.teamA).logoUrl ? <img src={resolveTeam(selectedMatch.teamA).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">A</div>}
-                                    <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamA).name}</span>
-                                    {selectedMatch.winner === 'A' && <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 shadow-sm">WINNER</span>}
+                                    <span className="mt-2 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamA).name}</span>
+                                    {selectedMatch.winner === 'A' && (
+                                        <div className="absolute -top-3 bg-yellow-400 text-yellow-900 text-[10px] md:text-xs font-black px-3 py-1 rounded-full shadow-lg flex items-center gap-1 border border-yellow-200">
+                                            <Trophy className="w-3 h-3" /> WINNER
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="text-center shrink-0 flex flex-col items-center px-2">
                                     {selectedMatch.winner ? (
-                                        <div className="text-2xl md:text-5xl font-mono font-black bg-white/10 border border-white/20 px-3 py-1 md:px-6 md:py-2 rounded-lg backdrop-blur-sm shadow-inner whitespace-nowrap">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
+                                        <div className="text-3xl md:text-6xl font-mono font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] whitespace-nowrap">{selectedMatch.scoreA} - {selectedMatch.scoreB}</div>
                                     ) : (
                                         <div className="text-xl md:text-2xl font-bold text-indigo-200/50 my-1">VS</div>
                                     )}
-                                    <div className="mt-1 flex flex-col items-center gap-0.5 text-indigo-200 text-[10px] md:text-xs">
+                                    <div className="mt-2 flex flex-col items-center gap-0.5 text-indigo-200 text-[10px] md:text-xs">
                                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(selectedMatch.scheduledTime || selectedMatch.date)}</span>
                                         <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(selectedMatch.scheduledTime || selectedMatch.date)} น.</span>
                                     </div>
                                 </div>
 
-                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition ${selectedMatch.winner === 'B' || selectedMatch.winner === resolveTeam(selectedMatch.teamB).name ? 'bg-green-600/20 border border-green-400/50 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : ''}`}>
+                                <div className={`flex flex-col items-center flex-1 p-2 rounded-xl transition-all duration-300 relative ${selectedMatch.winner === 'B' || selectedMatch.winner === resolveTeam(selectedMatch.teamB).name ? 'bg-gradient-to-b from-green-600/30 to-green-900/40 border-2 border-green-400 shadow-[0_0_20px_rgba(34,197,94,0.4)] scale-105 z-10' : 'opacity-80'}`}>
                                     {resolveTeam(selectedMatch.teamB).logoUrl ? <img src={resolveTeam(selectedMatch.teamB).logoUrl} className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-xl p-1 object-contain shadow-md" /> : <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl font-bold">B</div>}
-                                    <span className="mt-1 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamB).name}</span>
-                                    {selectedMatch.winner === 'B' && <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 shadow-sm">WINNER</span>}
+                                    <span className="mt-2 font-bold text-xs md:text-xl leading-tight line-clamp-1 max-w-[80px] md:max-w-none">{resolveTeam(selectedMatch.teamB).name}</span>
+                                    {selectedMatch.winner === 'B' && (
+                                        <div className="absolute -top-3 bg-yellow-400 text-yellow-900 text-[10px] md:text-xs font-black px-3 py-1 rounded-full shadow-lg flex items-center gap-1 border border-yellow-200">
+                                            <Trophy className="w-3 h-3" /> WINNER
+                                        </div>
+                                    )}
                                 </div>
                              </div>
 
                              {/* Scorers Section - Displayed only if winner is set and kicks exist */}
                              {selectedMatch.winner && selectedMatch.kicks && selectedMatch.kicks.length > 0 && (
-                                 <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-4">
+                                 <div className="mt-6 pt-4 border-t border-white/10 grid grid-cols-2 gap-4">
                                      <div className="text-right border-r border-white/10 pr-4">
+                                         <h5 className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold mb-2">Penalties</h5>
                                          {renderScorers(selectedMatch, typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name, 'A')}
                                      </div>
                                      <div className="text-left pl-4">
+                                         <h5 className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold mb-2">Penalties</h5>
                                          {renderScorers(selectedMatch, typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name, 'B')}
                                      </div>
                                  </div>
