@@ -16,18 +16,31 @@ export const initializeLiff = async () => {
   }
 };
 
+// Helper to truncate text safely
+const truncate = (str: string, length: number) => {
+  if (!str) return "";
+  if (str.length <= length) return str;
+  return str.substring(0, length - 3) + "...";
+};
+
 export const shareMatchSummary = async (match: Match, summary: string, teamAName: string, teamBName: string, competitionName: string = "Penalty Pro Recorder") => {
     if (!window.liff?.isLoggedIn()) {
         window.liff?.login();
         return;
     }
 
+    // LINE Flex Message Limits:
+    // altText: Max 400 chars
+    // Text component: Max length varies, but safe limit is around 1000-2000 for complex bubbles
+    const safeSummary = truncate(summary || "สรุปผลการแข่งขัน", 1000);
+    const safeAltText = truncate(`ข่าวด่วน: ${teamAName} vs ${teamBName} - ${summary || ''}`, 400);
+
     const flexMessage = {
         type: "flex",
-        altText: `ข่าวด่วน: ${teamAName} vs ${teamBName}`,
+        altText: safeAltText,
         contents: {
             "type": "bubble",
-            "size": "giga",
+            "size": "mega", // Use mega instead of giga for better compatibility
             "header": {
                 "type": "box",
                 "layout": "vertical",
@@ -46,9 +59,9 @@ export const shareMatchSummary = async (match: Match, summary: string, teamAName
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            { "type": "text", "text": teamAName, "align": "center", "weight": "bold", "size": "sm", "wrap": true, "flex": 1, "gravity": "center" },
+                            { "type": "text", "text": truncate(teamAName, 20), "align": "center", "weight": "bold", "size": "sm", "wrap": true, "flex": 1, "gravity": "center" },
                             { "type": "text", "text": `${match.scoreA} - ${match.scoreB}`, "align": "center", "weight": "bold", "size": "4xl", "color": "#1e3a8a", "flex": 0, "margin": "md" },
-                            { "type": "text", "text": teamBName, "align": "center", "weight": "bold", "size": "sm", "wrap": true, "flex": 1, "gravity": "center" }
+                            { "type": "text", "text": truncate(teamBName, 20), "align": "center", "weight": "bold", "size": "sm", "wrap": true, "flex": 1, "gravity": "center" }
                         ],
                         "alignItems": "center"
                     },
@@ -70,7 +83,7 @@ export const shareMatchSummary = async (match: Match, summary: string, teamAName
                 "contents": [
                     {
                         "type": "text",
-                        "text": summary,
+                        "text": safeSummary,
                         "wrap": true,
                         "size": "sm",
                         "color": "#334155",
@@ -88,7 +101,7 @@ export const shareMatchSummary = async (match: Match, summary: string, teamAName
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            { "type": "text", "text": competitionName, "size": "xxs", "color": "#94a3b8", "flex": 1, "align": "start" },
+                            { "type": "text", "text": truncate(competitionName, 25), "size": "xxs", "color": "#94a3b8", "flex": 1, "align": "start" },
                             { "type": "text", "text": "Penalty Pro", "size": "xxs", "color": "#94a3b8", "flex": 1, "align": "end", "weight": "bold" }
                         ],
                         "margin": "md"
@@ -101,9 +114,9 @@ export const shareMatchSummary = async (match: Match, summary: string, teamAName
 
     try {
         await window.liff.shareTargetPicker([flexMessage]);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Share Summary Failed", error);
-        alert("ไม่สามารถแชร์ได้ (กรุณาเปิดใน LINE)");
+        alert(`ไม่สามารถแชร์ได้: ${error.message || "ข้อความยาวเกินไปหรือรูปแบบไม่ถูกต้อง"}`);
     }
 };
 
@@ -183,7 +196,7 @@ export const sharePlayerCardFlex = async (player: Player, team: Team, stats: any
                     // Name & Team
                     {
                         "type": "text",
-                        "text": player.name,
+                        "text": truncate(player.name, 25),
                         "weight": "bold",
                         "size": "xl",
                         "color": "#ffffff",
@@ -193,7 +206,7 @@ export const sharePlayerCardFlex = async (player: Player, team: Team, stats: any
                     },
                     {
                         "type": "text",
-                        "text": team.name,
+                        "text": truncate(team.name, 30),
                         "size": "xs",
                         "color": "#94a3b8",
                         "align": "center",
@@ -251,7 +264,7 @@ export const shareRegistration = async (data: RegistrationData, teamId: string) 
 
   const flexMessage = {
     type: "flex",
-    altText: `ใบสมัคร: ${data.schoolName}`,
+    altText: `ใบสมัคร: ${truncate(data.schoolName, 20)}`,
     contents: {
       "type": "bubble",
       "header": {
@@ -275,7 +288,7 @@ export const shareRegistration = async (data: RegistrationData, teamId: string) 
         "contents": [
           {
             "type": "text",
-            "text": data.schoolName,
+            "text": truncate(data.schoolName, 50),
             "weight": "bold",
             "size": "xl",
             "color": "#1F2937",
@@ -283,7 +296,7 @@ export const shareRegistration = async (data: RegistrationData, teamId: string) 
           },
           {
             "type": "text",
-            "text": `ทีม: ${data.schoolName} (${data.shortName})`,
+            "text": `ทีม: ${truncate(data.schoolName, 30)} (${data.shortName})`,
             "size": "sm",
             "color": "#4B5563",
             "margin": "md",
@@ -369,10 +382,10 @@ export const shareNews = async (news: NewsItem) => {
 
   const flexMessage = {
     type: "flex",
-    altText: `ข่าวสาร: ${news.title}`,
+    altText: truncate(`ข่าวสาร: ${news.title}`, 400),
     contents: {
       "type": "bubble",
-      "size": "giga",
+      "size": "mega",
       "hero": news.imageUrl ? {
         "type": "image",
         "url": news.imageUrl,
@@ -387,7 +400,7 @@ export const shareNews = async (news: NewsItem) => {
         "contents": [
           {
             "type": "text",
-            "text": news.title,
+            "text": truncate(news.title, 100),
             "weight": "bold",
             "size": "xl",
             "wrap": true
@@ -401,7 +414,7 @@ export const shareNews = async (news: NewsItem) => {
           },
           {
             "type": "text",
-            "text": news.content,
+            "text": truncate(news.content, 200),
             "size": "sm",
             "color": "#666666",
             "wrap": true,
@@ -490,14 +503,14 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
                        "type": "box",
                        "layout": "vertical",
                        "contents": scorersA.map(name => ({
-                           "type": "text", "text": `• ${name}`, "size": "xxs", "color": "#4B5563", "wrap": true
+                           "type": "text", "text": `• ${truncate(name, 15)}`, "size": "xxs", "color": "#4B5563", "wrap": true
                        }))
                    },
                    {
                        "type": "box",
                        "layout": "vertical",
                        "contents": scorersB.map(name => ({
-                           "type": "text", "text": `• ${name}`, "size": "xxs", "color": "#4B5563", "wrap": true, "align": "end"
+                           "type": "text", "text": `• ${truncate(name, 15)}`, "size": "xxs", "color": "#4B5563", "wrap": true, "align": "end"
                        }))
                    }
                ]
@@ -515,7 +528,7 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
             "layout": "vertical",
             "contents": [
               { "type": "image", "url": teamALogo || "https://via.placeholder.com/100?text=A", "size": "md", "aspectMode": "cover", "aspectRatio": "1:1" },
-              { "type": "text", "text": teamAName, "align": "center", "size": "xs", "wrap": true, "weight": "bold", "margin": "sm" }
+              { "type": "text", "text": truncate(teamAName, 15), "align": "center", "size": "xs", "wrap": true, "weight": "bold", "margin": "sm" }
             ],
             "width": "35%"
           },
@@ -534,7 +547,7 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
             "layout": "vertical",
             "contents": [
               { "type": "image", "url": teamBLogo || "https://via.placeholder.com/100?text=B", "size": "md", "aspectMode": "cover", "aspectRatio": "1:1" },
-              { "type": "text", "text": teamBName, "align": "center", "size": "xs", "wrap": true, "weight": "bold", "margin": "sm" }
+              { "type": "text", "text": truncate(teamBName, 15), "align": "center", "size": "xs", "wrap": true, "weight": "bold", "margin": "sm" }
             ],
             "width": "35%"
           }
@@ -559,10 +572,10 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
 
   const flexMessage = {
     type: "flex",
-    altText: `${title}: ${teamAName} vs ${teamBName}`,
+    altText: truncate(`${title}: ${teamAName} vs ${teamBName}`, 400),
     contents: {
       "type": "bubble",
-      "size": "giga", 
+      "size": "mega", 
       "header": {
         "type": "box",
         "layout": "vertical",
