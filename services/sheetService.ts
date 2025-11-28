@@ -56,7 +56,7 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
-export const generateGeminiContent = async (prompt: string): Promise<string> => {
+export const generateGeminiContent = async (prompt: string, model: string = 'gemini-1.5-flash'): Promise<string> => {
     try {
         // Use no-cors mode carefully, but for getting data back we usually need CORS or a proxy.
         // Google Apps Script Web App "text/plain" hack usually allows simple POSTs.
@@ -66,7 +66,8 @@ export const generateGeminiContent = async (prompt: string): Promise<string> => 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ 
                 action: 'aiGenerate', 
-                prompt: prompt 
+                prompt: prompt,
+                model: model 
             })
         });
 
@@ -96,10 +97,10 @@ export const generateGeminiContent = async (prompt: string): Promise<string> => 
         const errMsg = (error.message || error.toString()).toLowerCase();
         
         if (errMsg.includes("quota") || errMsg.includes("429")) {
-             return "⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - กรุณาเปลี่ยน Model ใน Code.gs เป็น 'gemini-1.5-flash-latest' หรือรอสักครู่";
+             return "⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - กรุณาลองเปลี่ยน Model หรือรอสักครู่";
         }
         if (errMsg.includes("not found") || errMsg.includes("not supported")) {
-             return "⚠️ AI Error: ไม่พบโมเดล (Model Not Found) - กรุณาแก้ Code.gs เป็น 'gemini-1.5-flash-latest'";
+             return `⚠️ AI Error: ไม่พบโมเดล '${model}' - กรุณาลองเลือก Model อื่นในรายการ`;
         }
         if (errMsg.includes("permission") || errMsg.includes("auth")) {
              return "⚠️ AI Error: ปัญหาเรื่องสิทธิ์ - กรุณาตรวจสอบ Authorize ใน Apps Script";

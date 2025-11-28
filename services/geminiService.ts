@@ -26,7 +26,8 @@ export const generateMatchSummary = async (
   scoreA: number,
   scoreB: number,
   winner: string | null,
-  kicks: Kick[]
+  kicks: Kick[],
+  model: string = 'gemini-1.5-flash' // Added Model parameter
 ): Promise<string> => {
   try {
     // 1. Extract Scorers & Heroes (Clean Names)
@@ -54,11 +55,11 @@ export const generateMatchSummary = async (
       3. ประโยคปิดท้ายมันส์ๆ
     `;
 
-    // Call Proxy
-    const text = await generateGeminiContent(prompt);
+    // Call Proxy with model
+    const text = await generateGeminiContent(prompt, model);
     return text || "ระบบ AI กำลังประมวลผล...";
   } catch (error) {
     console.error("Error generating summary:", error);
-    return "ไม่สามารถสร้างบทสรุปได้";
+    throw error;
   }
 };

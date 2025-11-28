@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
-import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare, Cpu } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
 import { generateMatchSummary } from '../services/geminiService';
 import { shareMatch, shareMatchSummary } from '../services/liffService';
@@ -20,6 +20,12 @@ interface ScheduleListProps {
 }
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
+const AI_MODELS = [
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (แนะนำ)' },
+    { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash (Latest)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+];
 
 interface TeamSelectorProps {
     isOpen: boolean;
@@ -132,6 +138,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   // AI Summary State
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [selectedAiModel, setSelectedAiModel] = useState('gemini-1.5-flash');
 
   useEffect(() => {
     if (initialMatchId) {
@@ -395,7 +402,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       } catch (e) { if (showNotification) showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error"); } finally { setIsQuickSaving(false); }
   };
 
-  // AI Summary Logic
+  // AI Summary Logic with Model Selection
   const handleGenerateSummary = async () => {
       if (!selectedMatch) return;
       setIsGeneratingSummary(true);
@@ -405,14 +412,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           
           const summary = await generateMatchSummary(
               tA, tB, selectedMatch.scoreA, selectedMatch.scoreB, 
-              selectedMatch.winner || '', selectedMatch.kicks || []
+              selectedMatch.winner || '', selectedMatch.kicks || [],
+              selectedAiModel // Pass selected model
           );
           setAiSummary(summary);
           
-          // Save the summary to the match record immediately
-          // IMPORTANT: Pass winner as stored to avoid overwriting logic in sheetService
           const matchPayload = { ...selectedMatch, summary: summary };
-          // Pass true for skipKicks to avoid duplicate kick logs
           await saveMatchToSheet(matchPayload, "AI Summary Added", true);
 
       } catch (error) {
@@ -429,186 +434,23 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
      shareMatchSummary(selectedMatch, aiSummary, tA, tB);
   };
   
+  // ... (No changes to rest of logic) ...
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
-  
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
-  
-  const calculateAge = (birthDateString?: string) => { 
-      if (!birthDateString) return '-'; 
-      const parts = birthDateString.split('/'); 
-      let birthDate: Date; 
-      if (parts.length === 3) birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); 
-      else birthDate = new Date(birthDateString); 
-      if (isNaN(birthDate.getTime())) return '-'; 
-      const today = new Date(); 
-      let age = today.getFullYear() - birthDate.getFullYear(); 
-      if (today.getMonth() < birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--; 
-      return age; 
-  };
-
-  const getEmbedUrl = (url: string) => {
-      if (!url) return null;
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
-          let videoId = '';
-          if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
-          else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
-          if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-      }
-      if (url.includes('facebook.com')) {
-          const encodedUrl = encodeURIComponent(url);
-          return `https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=false&t=0&autoplay=1`;
-      }
-      return null;
-  };
-
-  const renderRoster = (teamName: string) => {
-      const team = teams.find(t => t.name === teamName);
-      if (!team) return <div className="text-center text-slate-400 py-4">ไม่พบข้อมูลทีม</div>;
-      const roster = players.filter(p => p.teamId === team.id);
-      return (
-          <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  {team.logoUrl && <img src={team.logoUrl} className="w-8 h-8 object-contain" />}
-                  <div><div className="font-bold text-slate-800 text-sm">{team.name}</div><div className="text-xs text-slate-500">{team.managerName ? `ผจก: ${team.managerName}` : ''}</div></div>
-              </div>
-              {roster.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2">
-                      {roster.map(p => (
-                          <div key={p.id} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded-lg shadow-sm hover:shadow-md transition">
-                              <div className="w-16 h-20 bg-slate-200 rounded-md overflow-hidden shrink-0 border border-slate-200">
-                                   {p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><User className="w-6 h-6" /></div>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1"><span className="text-xl font-black text-indigo-700 font-mono italic">#{p.number}</span><span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.position || 'Player'}</span></div>
-                                  <div className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{p.name}</div>
-                                  <div className="flex items-center gap-2 text-[10px] text-slate-500"><span>เกิด: {p.birthDate || '-'}</span><span className="bg-indigo-50 text-indigo-600 px-1 rounded font-bold">อายุ {calculateAge(p.birthDate)}</span></div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              ) : <div className="text-center text-slate-400 text-xs py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ไม่มีรายชื่อนักกีฬา</div>}
-          </div>
-      );
-  };
-
-  const getFilteredTeams = (excludeName?: string) => {
-    const currentGroup = activeMatchType === 'group' && matchForm.roundLabel.startsWith('Group ') ? matchForm.roundLabel.replace('Group ', '').trim() : null;
-    return teams.filter(t => {
-        if (excludeName && t.name === excludeName) return false;
-        if (currentGroup && t.group?.toUpperCase() !== currentGroup.toUpperCase()) return false;
-        return true;
-    });
-  };
-
+  const calculateAge = (birthDateString?: string) => { if (!birthDateString) return '-'; const parts = birthDateString.split('/'); let birthDate: Date; if (parts.length === 3) birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])); else birthDate = new Date(birthDateString); if (isNaN(birthDate.getTime())) return '-'; const today = new Date(); let age = today.getFullYear() - birthDate.getFullYear(); if (today.getMonth() < birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--; return age; };
+  const getEmbedUrl = (url: string) => { if (!url) return null; if (url.includes('youtube.com') || url.includes('youtu.be')) { let videoId = ''; if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0]; else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0]; if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1`; } if (url.includes('facebook.com')) { const encodedUrl = encodeURIComponent(url); return `https://www.facebook.com/plugins/video.php?href=${encodedUrl}&show_text=false&t=0&autoplay=1`; } return null; };
+  const renderRoster = (teamName: string) => { const team = teams.find(t => t.name === teamName); if (!team) return <div className="text-center text-slate-400 py-4">ไม่พบข้อมูลทีม</div>; const roster = players.filter(p => p.teamId === team.id); return ( <div className="space-y-3"> <div className="flex items-center gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100"> {team.logoUrl && <img src={team.logoUrl} className="w-8 h-8 object-contain" />} <div><div className="font-bold text-slate-800 text-sm">{team.name}</div><div className="text-xs text-slate-500">{team.managerName ? `ผจก: ${team.managerName}` : ''}</div></div> </div> {roster.length > 0 ? ( <div className="grid grid-cols-1 gap-2"> {roster.map(p => ( <div key={p.id} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded-lg shadow-sm hover:shadow-md transition"> <div className="w-16 h-20 bg-slate-200 rounded-md overflow-hidden shrink-0 border border-slate-200"> {p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><User className="w-6 h-6" /></div>} </div> <div className="flex-1 min-w-0"> <div className="flex items-center gap-2 mb-1"><span className="text-xl font-black text-indigo-700 font-mono italic">#{p.number}</span><span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{p.position || 'Player'}</span></div> <div className="font-bold text-slate-800 text-sm truncate leading-tight mb-1">{p.name}</div> <div className="flex items-center gap-2 text-[10px] text-slate-500"><span>เกิด: {p.birthDate || '-'}</span><span className="bg-indigo-50 text-indigo-600 px-1 rounded font-bold">อายุ {calculateAge(p.birthDate)}</span></div> </div> </div> ))} </div> ) : <div className="text-center text-slate-400 text-xs py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ไม่มีรายชื่อนักกีฬา</div>} </div> ); };
+  const getFilteredTeams = (excludeName?: string) => { const currentGroup = activeMatchType === 'group' && matchForm.roundLabel.startsWith('Group ') ? matchForm.roundLabel.replace('Group ', '').trim() : null; return teams.filter(t => { if (excludeName && t.name === excludeName) return false; if (currentGroup && t.group?.toUpperCase() !== currentGroup.toUpperCase()) return false; return true; }); };
   const openTeamSelector = (mode: 'singleA' | 'singleB' | 'bulkA' | 'bulkB', rowIndex?: number, currentVal?: string) => setSelectorConfig({ isOpen: true, mode, rowIndex, currentValue: currentVal });
-  const handleTeamSelect = (team: Team) => {
-      const { mode, rowIndex } = selectorConfig;
-      if (mode === 'singleA') setMatchForm(prev => ({ ...prev, teamA: team.name }));
-      else if (mode === 'singleB') setMatchForm(prev => ({ ...prev, teamB: team.name }));
-      else if (mode === 'bulkA' && typeof rowIndex === 'number') updateBulkRow(rowIndex, 'teamA', team.name);
-      else if (mode === 'bulkB' && typeof rowIndex === 'number') updateBulkRow(rowIndex, 'teamB', team.name);
-  };
-
+  const handleTeamSelect = (team: Team) => { const { mode, rowIndex } = selectorConfig; if (mode === 'singleA') setMatchForm(prev => ({ ...prev, teamA: team.name })); else if (mode === 'singleB') setMatchForm(prev => ({ ...prev, teamB: team.name })); else if (mode === 'bulkA' && typeof rowIndex === 'number') updateBulkRow(rowIndex, 'teamA', team.name); else if (mode === 'bulkB' && typeof rowIndex === 'number') updateBulkRow(rowIndex, 'teamB', team.name); };
   const addBulkRow = () => { const last = bulkMatches[bulkMatches.length - 1]; setBulkMatches([...bulkMatches, { tempId: Date.now().toString(), teamA: '', teamB: '', time: last ? last.time : '09:00', venue: last ? last.venue : '' }]); };
   const removeBulkRow = (idx: number) => { if (bulkMatches.length > 1) setBulkMatches(bulkMatches.filter((_, i) => i !== idx)); };
   const updateBulkRow = (idx: number, field: keyof typeof bulkMatches[0], value: string) => { const newRows = [...bulkMatches]; newRows[idx] = { ...newRows[idx], [field]: value }; setBulkMatches(newRows); };
-
-  const TeamSelectionButton = ({ value, placeholder, onClick, disabled }: { value: string, placeholder: string, onClick: () => void, disabled?: boolean }) => {
-      const team = teams.find(t => t.name === value);
-      return (
-        <button type="button" onClick={onClick} disabled={disabled} className={`w-full p-2.5 border rounded-lg flex items-center justify-between text-left transition ${disabled ? 'bg-slate-50 opacity-50 cursor-not-allowed' : 'bg-white hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100'}`}>
-            <div className="flex items-center gap-2 overflow-hidden">{team ? (<>{team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded-md object-contain border border-slate-100 p-0.5" /> : <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-500">{team.name.substring(0,1)}</div>}<span className="font-bold text-slate-700 truncate text-sm">{team.name}</span></>) : (<span className="text-slate-400 text-sm flex items-center gap-1"><Users className="w-4 h-4"/> {placeholder}</span>)}</div><ChevronDown className="w-4 h-4 text-slate-300" />
-        </button>
-      );
-  };
-
-  const renderScorers = (match: Match, teamName: string, side: 'A' | 'B') => {
-      const scorers = (match.kicks || []).filter(k => (k.teamId === teamName || k.teamId === 'A' || k.teamId === 'B') && k.result === KickResult.GOAL).filter(k => { if (k.teamId === 'A' && side === 'A') return true; if (k.teamId === 'B' && side === 'B') return true; if (k.teamId === teamName) return true; return false; });
-      if (scorers.length === 0) return <div className="text-xs text-indigo-300 italic text-center py-2 opacity-50">-</div>;
-      return (<div className={`flex flex-wrap gap-2 ${side === 'A' ? 'justify-end' : 'justify-start'}`}>{scorers.map((k, i) => (<div key={i} className="text-xs font-bold text-indigo-900 bg-white/90 shadow-sm border border-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap"><span>⚽ {String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span><span className="text-indigo-400 font-mono text-[10px] border-l border-indigo-100 pl-1.5 ml-1">({k.round}')</span></div>))}</div>);
-  };
-
-  const calculateTeamStats = (teamName: string) => {
-      const teamFinishedMatches = matches.filter(m => m.winner && (
-          (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === teamName ||
-          (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) === teamName
-      ));
-      
-      const totalPlayed = teamFinishedMatches.length;
-      let wins = 0;
-      let goals = 0;
-      let form: ('W'|'L')[] = [];
-
-      teamFinishedMatches.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(m => {
-          const isA = (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === teamName;
-          const isWinner = m.winner === (isA ? 'A' : 'B') || m.winner === teamName;
-          
-          if (isWinner) wins++;
-          goals += isA ? m.scoreA : m.scoreB;
-          form.push(isWinner ? 'W' : 'L');
-      });
-
-      return {
-          played: totalPlayed,
-          wins,
-          goals,
-          winRate: totalPlayed > 0 ? Math.round((wins / totalPlayed) * 100) : 0,
-          form: form.slice(-5) // Last 5
-      };
-  };
-
-  const renderStatsComparison = (tA: Team, tB: Team) => {
-      const statsA = calculateTeamStats(tA.name);
-      const statsB = calculateTeamStats(tB.name);
-      
-      const StatBar = ({ label, valA, valB, suffix = '' }: { label: string, valA: number, valB: number, suffix?: string }) => {
-          const total = valA + valB;
-          const percentA = total === 0 ? 50 : (valA / total) * 100;
-          return (
-              <div className="mb-4">
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-slate-600">{valA}{suffix}</span>
-                      <span className="text-slate-400">{label}</span>
-                      <span className="text-slate-600">{valB}{suffix}</span>
-                  </div>
-                  <div className="flex h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="bg-blue-500 h-full" style={{ width: `${percentA}%` }}></div>
-                      <div className="bg-red-500 h-full" style={{ width: `${100 - percentA}%` }}></div>
-                  </div>
-              </div>
-          );
-      };
-
-      return (
-          <div className="p-4 space-y-6">
-              <div className="grid grid-cols-2 gap-8 text-center">
-                  <div>
-                      <h4 className="font-bold text-slate-800 truncate">{tA.name}</h4>
-                      <div className="flex justify-center gap-1 mt-1">
-                          {statsA.form.map((r, i) => (
-                              <span key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white ${r === 'W' ? 'bg-green-500' : 'bg-red-500'}`}>{r}</span>
-                          ))}
-                      </div>
-                  </div>
-                  <div>
-                      <h4 className="font-bold text-slate-800 truncate">{tB.name}</h4>
-                      <div className="flex justify-center gap-1 mt-1">
-                          {statsB.form.map((r, i) => (
-                              <span key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white ${r === 'W' ? 'bg-green-500' : 'bg-red-500'}`}>{r}</span>
-                          ))}
-                      </div>
-                  </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                  <StatBar label="Matches Played" valA={statsA.played} valB={statsB.played} />
-                  <StatBar label="Win Rate" valA={statsA.winRate} valB={statsB.winRate} suffix="%" />
-                  <StatBar label="Total Goals" valA={statsA.goals} valB={statsB.goals} />
-              </div>
-          </div>
-      );
-  };
+  const TeamSelectionButton = ({ value, placeholder, onClick, disabled }: { value: string, placeholder: string, onClick: () => void, disabled?: boolean }) => { const team = teams.find(t => t.name === value); return ( <button type="button" onClick={onClick} disabled={disabled} className={`w-full p-2.5 border rounded-lg flex items-center justify-between text-left transition ${disabled ? 'bg-slate-50 opacity-50 cursor-not-allowed' : 'bg-white hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100'}`}> <div className="flex items-center gap-2 overflow-hidden">{team ? (<>{team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded-md object-contain border border-slate-100 p-0.5" /> : <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-500">{team.name.substring(0,1)}</div>}<span className="font-bold text-slate-700 truncate text-sm">{team.name}</span></>) : (<span className="text-slate-400 text-sm flex items-center gap-1"><Users className="w-4 h-4"/> {placeholder}</span>)}</div><ChevronDown className="w-4 h-4 text-slate-300" /> </button> ); };
+  const renderScorers = (match: Match, teamName: string, side: 'A' | 'B') => { const scorers = (match.kicks || []).filter(k => (k.teamId === teamName || k.teamId === 'A' || k.teamId === 'B') && k.result === KickResult.GOAL).filter(k => { if (k.teamId === 'A' && side === 'A') return true; if (k.teamId === 'B' && side === 'B') return true; if (k.teamId === teamName) return true; return false; }); if (scorers.length === 0) return <div className="text-xs text-indigo-300 italic text-center py-2 opacity-50">-</div>; return (<div className={`flex flex-wrap gap-2 ${side === 'A' ? 'justify-end' : 'justify-start'}`}>{scorers.map((k, i) => (<div key={i} className="text-xs font-bold text-indigo-900 bg-white/90 shadow-sm border border-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap"><span>⚽ {String(k.player || '').split('(')[0].replace(/[#0-9]/g, '').trim()}</span><span className="text-indigo-400 font-mono text-[10px] border-l border-indigo-100 pl-1.5 ml-1">({k.round}')</span></div>))}</div>); };
+  const calculateTeamStats = (teamName: string) => { const teamFinishedMatches = matches.filter(m => m.winner && ( (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === teamName || (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) === teamName )); const totalPlayed = teamFinishedMatches.length; let wins = 0; let goals = 0; let form: ('W'|'L')[] = []; teamFinishedMatches.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(m => { const isA = (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === teamName; const isWinner = m.winner === (isA ? 'A' : 'B') || m.winner === teamName; if (isWinner) wins++; goals += isA ? m.scoreA : m.scoreB; form.push(isWinner ? 'W' : 'L'); }); return { played: totalPlayed, wins, goals, winRate: totalPlayed > 0 ? Math.round((wins / totalPlayed) * 100) : 0, form: form.slice(-5) }; };
+  const renderStatsComparison = (tA: Team, tB: Team) => { const statsA = calculateTeamStats(tA.name); const statsB = calculateTeamStats(tB.name); const StatBar = ({ label, valA, valB, suffix = '' }: { label: string, valA: number, valB: number, suffix?: string }) => { const total = valA + valB; const percentA = total === 0 ? 50 : (valA / total) * 100; return ( <div className="mb-4"> <div className="flex justify-between text-xs font-bold mb-1"> <span className="text-slate-600">{valA}{suffix}</span> <span className="text-slate-400">{label}</span> <span className="text-slate-600">{valB}{suffix}</span> </div> <div className="flex h-2 bg-slate-100 rounded-full overflow-hidden"> <div className="bg-blue-500 h-full" style={{ width: `${percentA}%` }}></div> <div className="bg-red-500 h-full" style={{ width: `${100 - percentA}%` }}></div> </div> </div> ); }; return ( <div className="p-4 space-y-6"> <div className="grid grid-cols-2 gap-8 text-center"> <div> <h4 className="font-bold text-slate-800 truncate">{tA.name}</h4> <div className="flex justify-center gap-1 mt-1"> {statsA.form.map((r, i) => ( <span key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white ${r === 'W' ? 'bg-green-500' : 'bg-red-500'}`}>{r}</span> ))} </div> </div> <div> <h4 className="font-bold text-slate-800 truncate">{tB.name}</h4> <div className="flex justify-center gap-1 mt-1"> {statsB.form.map((r, i) => ( <span key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white ${r === 'W' ? 'bg-green-500' : 'bg-red-500'}`}>{r}</span> ))} </div> </div> </div> <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm"> <StatBar label="Matches Played" valA={statsA.played} valB={statsB.played} /> <StatBar label="Win Rate" valA={statsA.winRate} valB={statsB.winRate} suffix="%" /> <StatBar label="Total Goals" valA={statsA.goals} valB={statsB.goals} /> </div> </div> ); };
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 pb-24">
@@ -616,6 +458,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       <TeamSelectorModal isOpen={selectorConfig.isOpen} onClose={() => setSelectorConfig(prev => ({ ...prev, isOpen: false }))} onSelect={handleTeamSelect} teams={getFilteredTeams(selectorConfig.mode === 'singleA' ? matchForm.teamB : selectorConfig.mode === 'singleB' ? matchForm.teamA : selectorConfig.mode === 'bulkA' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamB : selectorConfig.mode === 'bulkB' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamA : undefined)} title={selectorConfig.mode.includes('A') ? "เลือกทีมเหย้า" : "เลือกทีมเยือน"} />
 
       <div className="max-w-4xl mx-auto">
+        {/* ... (Existing code for list and filters) ... */}
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4"><button onClick={onBack} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition text-slate-600"><ArrowLeft className="w-5 h-5" /></button><h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Calendar className="w-6 h-6 text-blue-600" /> ตารางการแข่งขัน</h1></div>
             {isAdmin && <button onClick={handleOpenAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow hover:bg-indigo-700 transition font-bold text-sm"><Plus className="w-4 h-4" /> เพิ่มคู่แข่ง</button>}
@@ -623,8 +466,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
         {/* Schedule List with Filters */}
         <div className="mb-8">
-            <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-blue-500">โปรแกรมการแข่งขัน</h2>
-            {/* ... (Filters and List - No changes) ... */}
+            {/* ... Filters UI ... */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 sticky top-0 z-20">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="relative flex-1">
@@ -637,8 +479,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                     </div>
                 </div>
             </div>
-            {/* ... (Match List - No Changes) ... */}
-            {/* (Omitted for brevity, logic remains identical to original file) */}
+            {/* ... Match List ... */}
              {isLoading ? (
                 <div className="space-y-3">
                    {Array(3).fill(0).map((_, i) => <div key={i} className="bg-white rounded-xl shadow-sm p-4 h-24 animate-pulse"></div>)}
@@ -668,7 +509,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     const tB = resolveTeam(match.teamB);
                                     return (
                                         <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center gap-4 hover:shadow-md transition relative cursor-pointer">
-                                            {/* ... (Match Content) ... */}
                                              <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
                                                 <div className="flex md:flex-col items-center md:items-start justify-center min-w-[100px] text-slate-500 text-sm gap-2 md:gap-0 w-full md:w-auto bg-slate-50 md:bg-transparent p-2 md:p-0 rounded-lg shrink-0">
                                                     {match.scheduledTime ? (
@@ -703,7 +543,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             )}
         </div>
 
-        {/* Finished Matches List (No changes here) */}
+        {/* Finished Matches List */}
         <div>
             <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-green-500">ผลการแข่งขัน</h2>
             <div className="space-y-3">
@@ -738,7 +578,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                     <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full z-[60] transition"><X className="w-5 h-5" /></button>
 
                     <div className="overflow-y-auto flex-1 custom-scrollbar">
-                         {/* ... (Video and Header sections remain same) ... */}
+                         {/* ... Header ... */}
                         {selectedMatch.livestreamUrl && (
                             <div className="w-full aspect-video bg-black relative">
                                 {getEmbedUrl(selectedMatch.livestreamUrl) ? <iframe src={getEmbedUrl(selectedMatch.livestreamUrl)!} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe> : <div className="flex flex-col items-center justify-center h-full text-white"><p>ไม่สามารถโหลดวิดีโอได้</p><a href={selectedMatch.livestreamUrl} target="_blank" className="text-blue-400 underline mt-2 text-sm">เปิดในแอปภายนอก</a></div>}
@@ -790,16 +630,29 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                             {detailTab === 'overview' && (
                                 <div className="p-4 md:p-6 space-y-6 animate-in fade-in duration-300">
                                     
-                                    {/* AI Summary Section with Share Button */}
+                                    {/* AI Summary Section with Share Button & Model Selector */}
                                     {selectedMatch.winner && (
                                         <div className={`bg-white p-4 rounded-xl shadow-sm border ${aiSummary && aiSummary.startsWith('⚠️') ? 'border-orange-200 bg-orange-50' : 'border-slate-200'} relative overflow-hidden`}>
                                             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 opacity-10 rounded-bl-full"></div>
-                                            <div className="flex justify-between items-center mb-3">
+                                            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
                                                 <h4 className={`font-bold text-sm flex items-center gap-2 ${aiSummary && aiSummary.startsWith('⚠️') ? 'text-orange-700' : 'text-indigo-800'}`}>
                                                     <Sparkles className={`w-4 h-4 ${aiSummary && aiSummary.startsWith('⚠️') ? 'text-orange-500' : 'text-purple-500'}`} /> 
                                                     {aiSummary && aiSummary.startsWith('⚠️') ? 'แจ้งเตือนระบบ AI' : 'AI Match Reporter (นักข่าวกีฬา AI)'}
                                                 </h4>
-                                                {aiSummary && !aiSummary.startsWith('⚠️') && (
+                                                
+                                                {/* Model Selector Dropdown */}
+                                                {!aiSummary || aiSummary.startsWith('⚠️') ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Cpu className="w-3 h-3 text-slate-400"/>
+                                                        <select 
+                                                            value={selectedAiModel} 
+                                                            onChange={(e) => setSelectedAiModel(e.target.value)}
+                                                            className="text-xs p-1 border rounded bg-slate-50 text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                                                        >
+                                                            {AI_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                ) : (
                                                     <button 
                                                         onClick={handleShareSummary} 
                                                         className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
@@ -810,8 +663,21 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                             </div>
                                             
                                             {aiSummary ? (
-                                                <div className={`text-sm leading-relaxed p-3 rounded-lg border whitespace-pre-line ${aiSummary.startsWith('⚠️') ? 'text-orange-800 bg-white border-orange-200' : 'text-slate-600 bg-slate-50 border-slate-100'}`}>
-                                                    {aiSummary}
+                                                <div className="space-y-3">
+                                                    <div className={`text-sm leading-relaxed p-3 rounded-lg border whitespace-pre-line ${aiSummary.startsWith('⚠️') ? 'text-orange-800 bg-white border-orange-200' : 'text-slate-600 bg-slate-50 border-slate-100'}`}>
+                                                        {aiSummary}
+                                                    </div>
+                                                    {/* Retry Button if Error */}
+                                                    {aiSummary.startsWith('⚠️') && (
+                                                        <div className="flex justify-end">
+                                                            <button 
+                                                                onClick={handleGenerateSummary}
+                                                                className="text-xs text-orange-600 bg-orange-100 px-3 py-1 rounded hover:bg-orange-200 flex items-center gap-1 font-bold"
+                                                            >
+                                                                <RotateCcw className="w-3 h-3"/> ลองใหม่ (เปลี่ยน Model แล้วกดปุ่มนี้)
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
@@ -882,7 +748,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                 </div>
                             )}
 
-                            {/* ... (Other Tabs Remain Identical) ... */}
+                            {/* ... Other tabs ... */}
                             {detailTab === 'stats' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="bg-white p-4 border-b border-slate-100">
@@ -948,19 +814,15 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
 
-        {/* ... (Modal Components) ... */}
+        {/* ... (Other Modals) ... */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setIsAddModalOpen(false)}>
-                {/* ... existing modal logic ... */}
                 <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`} onClick={e => e.stopPropagation()}>
-                    {/* ... content same as original ... */}
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                         <h3 className="text-lg font-bold text-slate-800">{matchForm.id ? 'แก้ไขตาราง' : 'เพิ่มตารางการแข่งขัน'}</h3>
                         <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
                     </div>
-                    {/* ... (Existing Form Logic Omitted for brevity, assumed identical) ... */}
                     <div className="space-y-4">
-                        {/* ... form content ... */}
                          {!matchForm.id && (
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2">
                             <label className="text-xs font-bold text-slate-500 mb-2 block">ประเภทการแข่งขัน</label>
@@ -1011,7 +873,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
         
-        {/* ... (Other Modals: EditResult, Delete, etc. - No changes needed) ... */}
          {isEditResultOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsEditResultOpen(false)}>
                  <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
