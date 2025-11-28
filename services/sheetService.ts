@@ -76,9 +76,12 @@ export const generateGeminiContent = async (prompt: string): Promise<string> => 
 
         const text = await response.text();
         
-        // Check for HTML response (Script error)
+        // Check for HTML response (Script error or Auth error)
         if (text.trim().startsWith('<')) {
              console.error("AI Proxy returned HTML:", text);
+             if (text.includes("Google Drive") || text.includes("script.google.com")) {
+                 return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth() เพื่ออนุญาตสิทธิ์";
+             }
              throw new Error("Server Misconfiguration: Script returned HTML instead of JSON.");
         }
 
@@ -88,9 +91,21 @@ export const generateGeminiContent = async (prompt: string): Promise<string> => 
         } else {
             throw new Error(result.message || "AI Generation Failed from Server");
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("AI Proxy Error:", error);
-        return "ระบบ AI ขัดข้องชั่วคราว (กรุณาตรวจสอบการตั้งค่า API Key ที่ Code.gs)";
+        const errMsg = (error.message || error.toString()).toLowerCase();
+        
+        if (errMsg.includes("quota") || errMsg.includes("429")) {
+             return "⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - กรุณาเปลี่ยน Model ใน Code.gs เป็น 'gemini-1.5-flash-latest' หรือรอสักครู่";
+        }
+        if (errMsg.includes("not found") || errMsg.includes("not supported")) {
+             return "⚠️ AI Error: ไม่พบโมเดล (Model Not Found) - กรุณาแก้ Code.gs เป็น 'gemini-1.5-flash-latest'";
+        }
+        if (errMsg.includes("permission") || errMsg.includes("auth")) {
+             return "⚠️ AI Error: ปัญหาเรื่องสิทธิ์ - กรุณาตรวจสอบ Authorize ใน Apps Script";
+        }
+        
+        return `⚠️ ระบบ AI ขัดข้อง: ${errMsg}`;
     }
 };
 

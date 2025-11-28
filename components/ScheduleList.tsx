@@ -792,13 +792,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                     
                                     {/* AI Summary Section with Share Button */}
                                     {selectedMatch.winner && (
-                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
+                                        <div className={`bg-white p-4 rounded-xl shadow-sm border ${aiSummary && aiSummary.startsWith('⚠️') ? 'border-orange-200 bg-orange-50' : 'border-slate-200'} relative overflow-hidden`}>
                                             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 opacity-10 rounded-bl-full"></div>
                                             <div className="flex justify-between items-center mb-3">
-                                                <h4 className="font-bold text-indigo-800 text-sm flex items-center gap-2">
-                                                    <Sparkles className="w-4 h-4 text-purple-500" /> AI Match Reporter (นักข่าวกีฬา AI)
+                                                <h4 className={`font-bold text-sm flex items-center gap-2 ${aiSummary && aiSummary.startsWith('⚠️') ? 'text-orange-700' : 'text-indigo-800'}`}>
+                                                    <Sparkles className={`w-4 h-4 ${aiSummary && aiSummary.startsWith('⚠️') ? 'text-orange-500' : 'text-purple-500'}`} /> 
+                                                    {aiSummary && aiSummary.startsWith('⚠️') ? 'แจ้งเตือนระบบ AI' : 'AI Match Reporter (นักข่าวกีฬา AI)'}
                                                 </h4>
-                                                {aiSummary && (
+                                                {aiSummary && !aiSummary.startsWith('⚠️') && (
                                                     <button 
                                                         onClick={handleShareSummary} 
                                                         className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
@@ -809,7 +810,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                             </div>
                                             
                                             {aiSummary ? (
-                                                <div className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line">
+                                                <div className={`text-sm leading-relaxed p-3 rounded-lg border whitespace-pre-line ${aiSummary.startsWith('⚠️') ? 'text-orange-800 bg-white border-orange-200' : 'text-slate-600 bg-slate-50 border-slate-100'}`}>
                                                     {aiSummary}
                                                 </div>
                                             ) : (
