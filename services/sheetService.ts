@@ -27,7 +27,7 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
 
     if (text.trim().startsWith('<')) {
         console.error("Received HTML instead of JSON. Script might be crashed or permission denied.", text);
-        throw new Error('Deployment Error: Please check "Who has access" is set to "Anyone"');
+        throw new Error('Deployment Error: Please check "Who has access" is set to "Anyone" in Google Apps Script');
     }
     
     const data = JSON.parse(text);
@@ -58,6 +58,8 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
 
 export const generateGeminiContent = async (prompt: string): Promise<string> => {
     try {
+        // Use no-cors mode carefully, but for getting data back we usually need CORS or a proxy.
+        // Google Apps Script Web App "text/plain" hack usually allows simple POSTs.
         const response = await fetch(API_URL, {
             method: 'POST',
             redirect: 'follow',
@@ -68,18 +70,27 @@ export const generateGeminiContent = async (prompt: string): Promise<string> => 
             })
         });
 
-        if (response.ok) {
-            const result = await response.json();
-            if (result.status === 'success') {
-                return result.text;
-            } else {
-                throw new Error(result.message || "AI Generation Failed");
-            }
+        if (!response.ok) {
+             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        throw new Error("Network response was not ok");
+
+        const text = await response.text();
+        
+        // Check for HTML response (Script error)
+        if (text.trim().startsWith('<')) {
+             console.error("AI Proxy returned HTML:", text);
+             throw new Error("Server Misconfiguration: Script returned HTML instead of JSON.");
+        }
+
+        const result = JSON.parse(text);
+        if (result.status === 'success') {
+            return result.text;
+        } else {
+            throw new Error(result.message || "AI Generation Failed from Server");
+        }
     } catch (error) {
         console.error("AI Proxy Error:", error);
-        return "ไม่สามารถเชื่อมต่อกับ AI ได้ (กรุณาตรวจสอบ Code.gs ว่ามีฟังก์ชัน aiGenerate หรือไม่)";
+        return "ระบบ AI ขัดข้องชั่วคราว (กรุณาตรวจสอบการตั้งค่า API Key ที่ Code.gs)";
     }
 };
 
