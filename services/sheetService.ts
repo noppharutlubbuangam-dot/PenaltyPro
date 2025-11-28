@@ -56,7 +56,7 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
-export const generateGeminiContent = async (prompt: string, model: string = 'gemini-1.5-flash'): Promise<string> => {
+export const generateGeminiContent = async (prompt: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
     try {
         // Use no-cors mode carefully, but for getting data back we usually need CORS or a proxy.
         // Google Apps Script Web App "text/plain" hack usually allows simple POSTs.
