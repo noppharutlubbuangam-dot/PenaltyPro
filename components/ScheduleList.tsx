@@ -21,7 +21,8 @@ interface ScheduleListProps {
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
 const AI_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (แนะนำ)' }
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (มาตรฐาน)' },
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite (เร็ว/ประหยัด)' }
 ];
 
 interface TeamSelectorProps {
@@ -148,6 +149,13 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
         setSelectedMatch(null);
     }
   }, [initialMatchId, matches]);
+
+  // Validate AI Model Selection
+  useEffect(() => {
+    if (!AI_MODELS.find(m => m.id === selectedAiModel)) {
+        setSelectedAiModel('gemini-2.5-flash');
+    }
+  }, [selectedAiModel]);
 
   useEffect(() => {
     if (selectedMatch) {
@@ -431,7 +439,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
      shareMatchSummary(selectedMatch, aiSummary, tA, tB);
   };
   
-  // ... (No changes to rest of logic) ...
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
@@ -451,19 +458,15 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 pb-24">
-      {/* ... (TeamSelectorModal, Header, etc. - No changes needed until Detail View) ... */}
       <TeamSelectorModal isOpen={selectorConfig.isOpen} onClose={() => setSelectorConfig(prev => ({ ...prev, isOpen: false }))} onSelect={handleTeamSelect} teams={getFilteredTeams(selectorConfig.mode === 'singleA' ? matchForm.teamB : selectorConfig.mode === 'singleB' ? matchForm.teamA : selectorConfig.mode === 'bulkA' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamB : selectorConfig.mode === 'bulkB' && typeof selectorConfig.rowIndex === 'number' ? bulkMatches[selectorConfig.rowIndex].teamA : undefined)} title={selectorConfig.mode.includes('A') ? "เลือกทีมเหย้า" : "เลือกทีมเยือน"} />
 
       <div className="max-w-4xl mx-auto">
-        {/* ... (Existing code for list and filters) ... */}
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4"><button onClick={onBack} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition text-slate-600"><ArrowLeft className="w-5 h-5" /></button><h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Calendar className="w-6 h-6 text-blue-600" /> ตารางการแข่งขัน</h1></div>
             {isAdmin && <button onClick={handleOpenAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow hover:bg-indigo-700 transition font-bold text-sm"><Plus className="w-4 h-4" /> เพิ่มคู่แข่ง</button>}
         </div>
 
-        {/* Schedule List with Filters */}
         <div className="mb-8">
-            {/* ... Filters UI ... */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 sticky top-0 z-20">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="relative flex-1">
@@ -476,7 +479,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                     </div>
                 </div>
             </div>
-            {/* ... Match List ... */}
              {isLoading ? (
                 <div className="space-y-3">
                    {Array(3).fill(0).map((_, i) => <div key={i} className="bg-white rounded-xl shadow-sm p-4 h-24 animate-pulse"></div>)}
@@ -540,14 +542,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             )}
         </div>
 
-        {/* Finished Matches List */}
         <div>
             <h2 className="text-lg font-bold text-slate-700 mb-4 px-2 border-l-4 border-green-500">ผลการแข่งขัน</h2>
             <div className="space-y-3">
                  {isLoading ? Array(3).fill(0).map((_, i) => <div key={i} className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-16 animate-pulse"></div>) : finishedMatches.length === 0 ? <div className="bg-white p-6 rounded-xl shadow-sm text-center text-slate-400 border border-slate-200">ยังไม่มีผลการแข่งขัน</div> : finishedMatches.map(match => { const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); 
                 return (
                     <div key={match.id} onClick={() => setSelectedMatch(match)} className="bg-slate-50 rounded-xl border border-slate-200 p-3 md:p-4 flex flex-col items-center gap-3 opacity-80 hover:opacity-100 transition cursor-pointer">
-                        {/* ... Match Content ... */}
                         <div className="flex flex-col md:flex-row items-center w-full gap-2 md:gap-4">
                             <div className="flex justify-between w-full md:w-auto md:flex-col md:items-start min-w-[120px] text-slate-400 text-[10px] md:text-xs border-b md:border-b-0 pb-2 md:pb-0 mb-1 md:mb-0"><span>{formatDate(match.date)}</span><span>{match.roundLabel?.split(':')[0]}</span></div>
                             <div className="flex-1 w-full grid grid-cols-[1fr_auto_1fr] md:flex md:items-center md:justify-center gap-2 md:gap-4 items-center">
@@ -567,7 +567,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         </div>
 
-        {/* Match Detail Modal - UPDATED AI SUMMARY SECTION */}
         {selectedMatch && (
             <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedMatch(null)}>
                 <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8 relative flex flex-col h-[90vh] md:h-auto md:max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -575,7 +574,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                     <button onClick={() => setSelectedMatch(null)} className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full z-[60] transition"><X className="w-5 h-5" /></button>
 
                     <div className="overflow-y-auto flex-1 custom-scrollbar">
-                         {/* ... Header ... */}
                         {selectedMatch.livestreamUrl && (
                             <div className="w-full aspect-video bg-black relative">
                                 {getEmbedUrl(selectedMatch.livestreamUrl) ? <iframe src={getEmbedUrl(selectedMatch.livestreamUrl)!} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe> : <div className="flex flex-col items-center justify-center h-full text-white"><p>ไม่สามารถโหลดวิดีโอได้</p><a href={selectedMatch.livestreamUrl} target="_blank" className="text-blue-400 underline mt-2 text-sm">เปิดในแอปภายนอก</a></div>}
@@ -811,7 +809,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
             </div>
         )}
 
-        {/* ... (Other Modals) ... */}
         {isAddModalOpen && (
             <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setIsAddModalOpen(false)}>
                 <div className={`bg-white rounded-2xl shadow-2xl p-6 w-full ${activeMatchType === 'group' && !matchForm.id ? 'max-w-4xl' : 'max-w-md'} animate-in zoom-in duration-200 my-8 transition-all relative`} onClick={e => e.stopPropagation()}>

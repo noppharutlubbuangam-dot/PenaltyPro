@@ -57,17 +57,16 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
 };
 
 export const generateGeminiContent = async (prompt: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
-    try {
-        // Use no-cors mode carefully, but for getting data back we usually need CORS or a proxy.
-        // Google Apps Script Web App "text/plain" hack usually allows simple POSTs.
-        const response = await fetch(API_URL, {
+    
+    const callApi = async (m: string) => {
+         const response = await fetch(API_URL, {
             method: 'POST',
             redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ 
                 action: 'aiGenerate', 
                 prompt: prompt,
-                model: model || 'gemini-2.5-flash' // Ensure model is never empty
+                model: m
             })
         });
 
@@ -79,28 +78,73 @@ export const generateGeminiContent = async (prompt: string, model: string = 'gem
         
         // Check for HTML response (Script error or Auth error)
         if (text.trim().startsWith('<')) {
-             console.error("AI Proxy returned HTML:", text);
              if (text.includes("Google Drive") || text.includes("script.google.com")) {
-                 return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth() เพื่ออนุญาตสิทธิ์";
+                 throw new Error("AUTH_REQUIRED");
              }
-             throw new Error("Server Misconfiguration: Script returned HTML instead of JSON.");
+             throw new Error("HTML response");
+        }
+        
+        return JSON.parse(text);
+    };
+
+    try {
+        let result;
+        try {
+            result = await callApi(model);
+        } catch (e: any) {
+            if (e.message === "AUTH_REQUIRED") {
+                return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth()";
+            }
+            throw e;
         }
 
-        const result = JSON.parse(text);
+        if (result.status === 'error') {
+            const msg = (result.message || "").toLowerCase();
+            const isQuotaError = msg.includes('quota') || msg.includes('limit') || msg.includes('429');
+            const isNotFoundError = msg.includes('not found') || msg.includes('not supported') || msg.includes('model: gemini-');
+
+            if (isQuotaError || isNotFoundError) {
+                console.warn(`Model ${model} failed (${msg}). Attempting fallbacks...`);
+                
+                // Priority Fallbacks: 2.5 Flash -> Flash Lite -> 2.0 Flash
+                const fallbacks = ['gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
+                const candidates = fallbacks.filter(m => m !== model);
+
+                for (const fbModel of candidates) {
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // Delay to respect rate limits
+                    try {
+                        console.log(`Retrying with ${fbModel}...`);
+                        const fbResult = await callApi(fbModel);
+                        if (fbResult.status === 'success') {
+                            return fbResult.text;
+                        }
+                    } catch (e) {
+                        console.warn(`Fallback ${fbModel} failed.`);
+                    }
+                }
+                
+                if (isQuotaError) {
+                    return "⚠️ AI Error: โควต้าเต็มทุกโมเดล (Quota Exceeded) กรุณารอสักครู่ (1-2 นาที)";
+                }
+            }
+            
+            throw new Error(result.message);
+        }
+        
         if (result.status === 'success') {
             return result.text;
-        } else {
-            throw new Error(result.message || "AI Generation Failed from Server");
         }
+        throw new Error(result.message || "AI Generation Failed");
+
     } catch (error: any) {
         console.error("AI Proxy Error:", error);
         const errMsg = (error.message || error.toString()).toLowerCase();
         
         if (errMsg.includes("quota") || errMsg.includes("429")) {
-             return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - Model: ${model}`;
+             return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded). กรุณาลองใหม่ภายหลัง`;
         }
         if (errMsg.includes("not found") || errMsg.includes("not supported")) {
-             return `⚠️ AI Error: ไม่พบโมเดล '${model}' - กรุณาลองเลือก Model อื่นในรายการ`;
+             return `⚠️ AI Error: ไม่พบโมเดล '${model}'`;
         }
         if (errMsg.includes("permission") || errMsg.includes("auth")) {
              return "⚠️ AI Error: ปัญหาเรื่องสิทธิ์ - กรุณาตรวจสอบ Authorize ใน Apps Script";
