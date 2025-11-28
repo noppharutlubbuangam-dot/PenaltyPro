@@ -82,20 +82,25 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
              if (text.includes("Google Drive") || text.includes("script.google.com")) {
                  throw new Error("AUTH_REQUIRED");
              }
-             throw new Error("HTML response (Script Error)");
+             // Log the HTML content for debugging (check console)
+             console.warn("GAS Returned HTML Error:", text);
+             throw new Error("HTML response (Script Error - Check Code.gs logs)");
         }
         
         return JSON.parse(text);
     };
 
-    // Extended fallback list including experimentals which often have separate quotas
-    // Priority: Requested -> 2.5 Flash -> 2.5 Flash Lite -> 2.0 Flash Lite -> 2.0 Flash -> 2.0 Flash Exp
+    // Robust Fallback List
+    // 1. Try Requested Model
+    // 2. Try 2.5 Flash Lite (Fast)
+    // 3. Try 1.5 Flash (Most Stable, High RPM)
+    // 4. Try 2.0 Flash Lite (Backup)
     const fallbackList = [
         'gemini-2.5-flash',
         'gemini-2.5-flash-lite',
+        'gemini-1.5-flash', // Added: Highly stable model
         'gemini-2.0-flash-lite',
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-exp'
+        'gemini-2.0-flash'
     ];
     
     // Create unique list starting with initialModel
@@ -106,11 +111,12 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     for (let i = 0; i < modelsToTry.length; i++) {
         const model = modelsToTry[i];
         try {
-            // Exponential backoff for retries: 2s, 4s, 6s...
+            // Exponential backoff for retries: 2.5s, 5s, 7.5s...
             if (i > 0) {
-                 await new Promise(resolve => setTimeout(resolve, 2000 + (i * 1000)));
+                 await new Promise(resolve => setTimeout(resolve, 2500 + (i * 1000)));
             }
 
+            console.log(`AI Attempt ${i+1}/${modelsToTry.length}: Using model ${model}...`);
             const result = await callApi(model);
 
             if (result.status === 'success') {
@@ -143,10 +149,10 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     // All failed
     const errMsg = (lastError?.message || "").toLowerCase();
     if (errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("limit") || errMsg.includes("resource exhausted")) {
-         return `⚠️ AI Error: โควต้าเต็มทุกโมเดล (Quota Exceeded) กรุณารอสักครู่แล้วลองใหม่`;
+         return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) หรือ Request ถี่เกินไป กรุณารอ 1-2 นาที`;
     }
     
-    return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed"}`;
+    return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed (Check Code.gs)"}`;
 };
 
 export const authenticateUser = async (data: any): Promise<UserProfile | null> => {

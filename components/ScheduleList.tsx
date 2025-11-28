@@ -24,6 +24,7 @@ const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "�
 const AI_MODELS = [
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (มาตรฐาน)' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (เร็ว)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (เสถียรสุด)' }, // Added 1.5
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (ประหยัด)' },
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (สำรอง)' },
     { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp (ทดลอง)' }
