@@ -12,7 +12,8 @@ export const generateCommentary = async (
   try {
     // Keep prompt very short for quick response
     const prompt = `พากย์บอลสั้นๆ 1 ประโยค: ${player} (${team}) ${result === 'GOAL' ? 'ยิงเข้า' : 'พลาด'}`;
-    const text = await generateGeminiContent(prompt);
+    // Explicitly pass the model to avoid default fallback issues on backend
+    const text = await generateGeminiContent(prompt, 'gemini-2.5-flash');
     return text || "";
   } catch (error) {
     console.error("Error generating commentary:", error);

@@ -21,8 +21,7 @@ interface ScheduleListProps {
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
 const AI_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (แนะนำ)' },
-    { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro (ฉลาดที่สุด)' }
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (แนะนำ)' }
 ];
 
 interface TeamSelectorProps {

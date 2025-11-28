@@ -67,7 +67,7 @@ export const generateGeminiContent = async (prompt: string, model: string = 'gem
             body: JSON.stringify({ 
                 action: 'aiGenerate', 
                 prompt: prompt,
-                model: model 
+                model: model || 'gemini-2.5-flash' // Ensure model is never empty
             })
         });
 
@@ -97,7 +97,7 @@ export const generateGeminiContent = async (prompt: string, model: string = 'gem
         const errMsg = (error.message || error.toString()).toLowerCase();
         
         if (errMsg.includes("quota") || errMsg.includes("429")) {
-             return "⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - กรุณาลองเปลี่ยน Model หรือรอสักครู่";
+             return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) - Model: ${model}`;
         }
         if (errMsg.includes("not found") || errMsg.includes("not supported")) {
              return `⚠️ AI Error: ไม่พบโมเดล '${model}' - กรุณาลองเลือก Model อื่นในรายการ`;
