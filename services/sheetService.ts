@@ -57,8 +57,10 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
-export const generateGeminiContent = async (prompt: string, initialModel: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generateGeminiContent = async (prompt: string, initialModel: string = 'gemini-1.5-flash'): Promise<string> => {
     
+    if (!prompt || prompt.trim() === "") return "Error: Empty prompt";
+
     const callApi = async (m: string) => {
          const response = await fetch(API_URL, {
             method: 'POST',
@@ -91,19 +93,18 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     };
 
     // Robust Fallback List
-    // 1. Try Requested Model
-    // 2. Try 2.5 Flash Lite (Fast)
-    // 3. Try 1.5 Flash (Most Stable, High RPM)
-    // 4. Try 2.0 Flash Lite (Backup)
+    // gemini-1.5-flash is currently the most stable for free tier (15 RPM)
+    // gemini-2.5-flash has low RPM (2 RPM)
     const fallbackList = [
-        'gemini-2.5-flash',
+        'gemini-1.5-flash',
         'gemini-2.5-flash-lite',
-        'gemini-1.5-flash', // Added: Highly stable model
+        'gemini-2.5-flash',
         'gemini-2.0-flash-lite',
         'gemini-2.0-flash'
     ];
     
     // Create unique list starting with initialModel
+    // If initialModel is 'gemini-2.5-flash', we try it first, but fallback to 1.5 quickly
     const modelsToTry = Array.from(new Set([initialModel, ...fallbackList]));
 
     let lastError: any = null;
@@ -111,9 +112,11 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     for (let i = 0; i < modelsToTry.length; i++) {
         const model = modelsToTry[i];
         try {
-            // Exponential backoff for retries: 2.5s, 5s, 7.5s...
+            // Exponential backoff for retries to avoid hitting rate limits immediately again
             if (i > 0) {
-                 await new Promise(resolve => setTimeout(resolve, 2500 + (i * 1000)));
+                 const delay = 1000 * Math.pow(2, i); // 2s, 4s, 8s...
+                 console.log(`Waiting ${delay}ms before retry with ${model}...`);
+                 await new Promise(resolve => setTimeout(resolve, delay));
             }
 
             console.log(`AI Attempt ${i+1}/${modelsToTry.length}: Using model ${model}...`);
@@ -149,7 +152,7 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     // All failed
     const errMsg = (lastError?.message || "").toLowerCase();
     if (errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("limit") || errMsg.includes("resource exhausted")) {
-         return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded) หรือ Request ถี่เกินไป กรุณารอ 1-2 นาที`;
+         return `⚠️ AI Error: โควต้าเต็มทุกโมเดล (Rate Limit Exceeded) กรุณารอ 1-2 นาที แล้วลองใหม่`;
     }
     
     return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed (Check Code.gs)"}`;

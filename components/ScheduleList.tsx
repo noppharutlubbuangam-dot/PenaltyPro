@@ -22,12 +22,11 @@ interface ScheduleListProps {
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
 const AI_MODELS = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (มาตรฐาน)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (แนะนำ - เสถียร)' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (เร็ว)' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (เสถียรสุด)' }, // Added 1.5
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (ฉลาด - แต่ช้า)' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (ประหยัด)' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (สำรอง)' },
-    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp (ทดลอง)' }
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (สำรอง)' }
 ];
 
 interface TeamSelectorProps {
@@ -141,7 +140,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   // AI Summary State
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.5-flash');
+  const [selectedAiModel, setSelectedAiModel] = useState('gemini-1.5-flash');
 
   useEffect(() => {
     if (initialMatchId) {
@@ -158,7 +157,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   // Validate AI Model Selection
   useEffect(() => {
     if (!AI_MODELS.find(m => m.id === selectedAiModel)) {
-        setSelectedAiModel('gemini-2.5-flash');
+        setSelectedAiModel('gemini-1.5-flash');
     }
   }, [selectedAiModel]);
 
