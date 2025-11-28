@@ -27,7 +27,7 @@ export const generateMatchSummary = async (
   scoreB: number,
   winner: string | null,
   kicks: Kick[],
-  model: string = 'gemini-1.5-flash' // Added Model parameter
+  model: string = 'gemini-2.0-flash-lite' // Updated Default Model
 ): Promise<string> => {
   try {
     // 1. Extract Scorers & Heroes (Clean Names)
