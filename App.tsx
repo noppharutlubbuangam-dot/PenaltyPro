@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile } from './types';
+import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament } from './types';
 import MatchSetup from './components/MatchSetup';
 import ScoreVisualizer from './components/ScoreVisualizer';
 import PenaltyInterface from './components/PenaltyInterface';
@@ -38,22 +37,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   objectiveImageUrl: ""
 };
 
-// Haversine formula to calculate distance
+// ... (Helper functions remain same) ...
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371; // Radius of the earth in km
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d.toFixed(1);
-};
-
-const deg2rad = (deg: number) => {
-  return deg * (Math.PI / 180);
+  return (R * c).toFixed(1);
 };
 
 function App() {
@@ -77,6 +68,10 @@ function App() {
   const [appConfig, setAppConfig] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   
+  // New: Tournament State
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [currentTournamentId, setCurrentTournamentId] = useState<string>('default');
+
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
@@ -89,17 +84,14 @@ function App() {
 
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLoginOpen, setIsLoginOpen] = useState(false); // For PIN admin fallback
+  const [isLoginOpen, setIsLoginOpen] = useState(false); 
   const [isPinOpen, setIsPinOpen] = useState(false); 
   const [isAdmin, setIsAdmin] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; isDangerous?: boolean; } | null>(null);
   
-  // User Location
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [distanceToVenue, setDistanceToVenue] = useState<string | null>(null);
-
-  // Announcement State
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const announcements = appConfig.announcement ? appConfig.announcement.split('|').filter(s => s.trim() !== '') : [];
 
@@ -107,7 +99,6 @@ function App() {
     const init = async () => {
         await initializeLiff();
         const liffUser = await checkSession(); 
-        
         if (liffUser) {
             try {
                 if (liffUser.type === 'line') {
@@ -137,16 +128,9 @@ function App() {
     };
     loadData();
     init();
-
-    // Get User Location
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setUserLocation({
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                });
-            },
+            (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
             (error) => console.log("Geolocation error:", error)
         );
     }
@@ -161,14 +145,11 @@ function App() {
 
   useEffect(() => {
       if (announcements.length > 1) {
-          const interval = setInterval(() => {
-              setAnnouncementIndex(prev => (prev + 1) % announcements.length);
-          }, 5000);
+          const interval = setInterval(() => setAnnouncementIndex(prev => (prev + 1) % announcements.length), 5000);
           return () => clearInterval(interval);
       }
   }, [announcements.length]);
 
-  // Deep Linking logic...
   useEffect(() => {
       if (!isLoadingData && availableTeams.length > 0) {
           const params = new URLSearchParams(window.location.search);
@@ -218,6 +199,7 @@ function App() {
         setAppConfig({ ...DEFAULT_SETTINGS, ...data.config }); 
         setSchools(data.schools || []);
         setNewsItems(data.news || []);
+        setTournaments(data.tournaments || []);
       }
     } catch (e: any) {
       console.warn("Database Error", e);
@@ -228,63 +210,26 @@ function App() {
     }
   };
 
-  const handleRegisterClick = () => {
-      if (currentUser) {
-          setCurrentView('register');
-      } else {
-          setIsUserLoginOpen(true);
-      }
-  };
-
-  const handleUserLoginSuccess = (user: UserProfile) => {
-      setCurrentUser(user);
-      if (user.role === 'admin') setIsAdmin(true);
-      if (user.type === 'credentials') {
-          localStorage.setItem('penalty_pro_user', JSON.stringify(user));
-      }
-      showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success");
-  };
-
-  const handleLogout = () => {
-      authLogout();
-      setCurrentUser(null);
-      setIsAdmin(false);
-      showNotification("ออกจากระบบแล้ว");
-  };
-
+  // ... (Rest of the component functions: handleRegisterClick, handleLogout, startMatchSession, etc.) ...
+  // Same as original file but keeping imports/state declarations valid.
+  
+  const handleRegisterClick = () => { if (currentUser) setCurrentView('register'); else setIsUserLoginOpen(true); };
+  const handleUserLoginSuccess = (user: UserProfile) => { setCurrentUser(user); if (user.role === 'admin') setIsAdmin(true); if (user.type === 'credentials') localStorage.setItem('penalty_pro_user', JSON.stringify(user)); showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success"); };
+  const handleLogout = () => { authLogout(); setCurrentUser(null); setIsAdmin(false); showNotification("ออกจากระบบแล้ว"); };
+  
   const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => {
-    setMatchState({ 
-        matchId, 
-        teamA, 
-        teamB, 
-        currentRound: 1, 
-        currentTurn: 'A', 
-        scoreA: 0, 
-        scoreB: 0, 
-        kicks: [], 
-        isFinished: false, 
-        winner: null 
-    });
+    setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], isFinished: false, winner: null, tournamentId: currentTournamentId });
     setCurrentView('match');
     showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success");
   };
 
   const handleStartMatchRequest = (teamA: Team, teamB: Team, matchId?: string) => {
-    if (isAdmin || (currentUser && currentUser.role === 'staff')) {
-        startMatchSession(teamA, teamB, matchId);
-    } else {
-        setPendingMatchSetup({ teamA, teamB, matchId });
-        setIsPinOpen(true); 
-    }
+    if (isAdmin || (currentUser && currentUser.role === 'staff')) { startMatchSession(teamA, teamB, matchId); } 
+    else { setPendingMatchSetup({ teamA, teamB, matchId }); setIsPinOpen(true); }
   };
 
   const handlePinSuccess = () => {
-    if (pendingMatchSetup) {
-        const { teamA, teamB, matchId } = pendingMatchSetup;
-        startMatchSession(teamA, teamB, matchId);
-        setPendingMatchSetup(null);
-        setIsPinOpen(false);
-    }
+    if (pendingMatchSetup) { const { teamA, teamB, matchId } = pendingMatchSetup; startMatchSession(teamA, teamB, matchId); setPendingMatchSetup(null); setIsPinOpen(false); }
   };
 
   const checkWinCondition = (state: MatchState): MatchState => {
@@ -312,7 +257,7 @@ function App() {
   const handleRecordKick = async (player: string, result: KickResult) => {
     if (!matchState || matchState.isFinished) return;
     setIsProcessing(true);
-    const newKick: Kick = { id: Date.now().toString(), round: matchState.currentRound, teamId: matchState.currentTurn, player, result, timestamp: Date.now() };
+    const newKick: Kick = { id: Date.now().toString(), round: matchState.currentRound, teamId: matchState.currentTurn, player, result, timestamp: Date.now(), tournamentId: currentTournamentId };
     setMatchState(prev => {
       if (!prev) return null;
       const updatedKicks = [...prev.kicks, newKick];
@@ -323,7 +268,7 @@ function App() {
       if (nextState.isFinished) {
          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] });
          setIsSaving(true);
-         Promise.all([ saveMatchToSheet(nextState, "") ]).then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); });
+         Promise.all([ saveMatchToSheet(nextState, "", false, currentTournamentId) ]).then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); });
       }
       return nextState;
     });
@@ -337,44 +282,18 @@ function App() {
   const handleUndoLastKick = () => { setMatchState(prev => { if (!prev) return null; const newKicks = [...prev.kicks]; newKicks.pop(); const kicksA = newKicks.filter(k => k.teamId === 'A'); const kicksB = newKicks.filter(k => k.teamId === 'B'); const currentTurn: 'A' | 'B' = kicksA.length > kicksB.length ? 'B' : 'A'; const currentRound = Math.floor(newKicks.length / 2) + 1; const tempState = { ...prev, kicks: newKicks, currentTurn, currentRound }; return checkWinCondition(tempState); }); showNotification("ย้อนกลับรายการล่าสุดแล้ว", "", "info"); };
   const resetMatch = () => { setConfirmModal({ isOpen: true, title: "เริ่มแมตช์ใหม่?", message: "ข้อมูลการแข่งขันปัจจุบันจะหายไป ต้องการเริ่มใหม่หรือไม่?", isDangerous: true, onConfirm: () => { setCurrentView('home'); setMatchState(null); setConfirmModal(null); } }); };
 
-  const handleNavClick = (view: string) => {
-      if (view === 'schedule') setInitialMatchId(null);
-      if (currentView === view) setViewKey(prev => prev + 1);
-      else setCurrentView(view);
-  };
-
-  const BottomNav = () => (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 flex justify-around items-center z-[100] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] safe-area-bottom">
-        <NavButton view="home" icon={Home} label="หน้าหลัก" />
-        <NavButton view="schedule" icon={CalendarDays} label="ตาราง" />
-        <NavButton view="standings" icon={ListChecks} label="คะแนน" />
-        <NavButton view="tournament" icon={Trophy} label="ผังแข่ง" />
-        <NavButton view="admin" icon={isAdmin ? Settings : Lock} label="ระบบ" onClick={isAdmin ? undefined : () => setIsLoginOpen(true)} />
-    </div>
-  );
-  
-  const NavButton = ({ view, icon: Icon, label, onClick }: { view: string, icon: any, label: string, onClick?: () => void }) => {
-      const isActive = currentView === view;
-      const handleClick = onClick || (() => handleNavClick(view));
-      return ( <button onClick={handleClick} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><Icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-indigo-200' : ''}`} /><span className="text-[10px] font-bold">{label}</span></button> )
-  };
+  const handleNavClick = (view: string) => { if (view === 'schedule') setInitialMatchId(null); if (currentView === view) setViewKey(prev => prev + 1); else setCurrentView(view); };
+  const BottomNav = () => ( <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 flex justify-around items-center z-[100] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] safe-area-bottom"> <NavButton view="home" icon={Home} label="หน้าหลัก" /> <NavButton view="schedule" icon={CalendarDays} label="ตาราง" /> <NavButton view="standings" icon={ListChecks} label="คะแนน" /> <NavButton view="tournament" icon={Trophy} label="ผังแข่ง" /> <NavButton view="admin" icon={isAdmin ? Settings : Lock} label="ระบบ" onClick={isAdmin ? undefined : () => setIsLoginOpen(true)} /> </div> );
+  const NavButton = ({ view, icon: Icon, label, onClick }: { view: string, icon: any, label: string, onClick?: () => void }) => { const isActive = currentView === view; const handleClick = onClick || (() => handleNavClick(view)); return ( <button onClick={handleClick} className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 ${isActive ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}><Icon className={`w-6 h-6 mb-1 ${isActive ? 'fill-indigo-200' : ''}`} /><span className="text-[10px] font-bold">{label}</span></button> ) };
   const showBottomNav = currentView !== 'match';
-
-  const resolveTeam = (t: string | Team | null | undefined): Team => {
-    if (!t) return { id: 'unknown', name: 'Unknown Team', shortName: 'N/A', color: '#94a3b8', logoUrl: '' } as Team;
-    if (typeof t === 'object' && 'name' in t) return t as Team;
-    const teamName = typeof t === 'string' ? t : 'Unknown';
-    return availableTeams.find(team => team.name === teamName) || { id: 'temp', name: teamName, color: '#94a3b8', logoUrl: '', shortName: teamName.substring(0, 3).toUpperCase() } as Team;
-  };
-
-  // Fundraising Calculation
+  const resolveTeam = (t: string | Team | null | undefined): Team => { if (!t) return { id: 'unknown', name: 'Unknown Team', shortName: 'N/A', color: '#94a3b8', logoUrl: '' } as Team; if (typeof t === 'object' && 'name' in t) return t as Team; const teamName = typeof t === 'string' ? t : 'Unknown'; return availableTeams.find(team => team.name === teamName) || { id: 'temp', name: teamName, color: '#94a3b8', logoUrl: '', shortName: teamName.substring(0, 3).toUpperCase() } as Team; };
   const approvedTeamsCount = availableTeams.filter(t => t.status === 'Approved').length;
   const estimatedIncome = approvedTeamsCount * (appConfig.registrationFee || 0);
   const fundraisingProgress = appConfig.fundraisingGoal ? Math.min(100, (estimatedIncome / appConfig.fundraisingGoal) * 100) : 0;
-
   const liveMatches = matchesLog.filter(m => m.livestreamUrl && !m.winner);
   const recentFinishedMatches = matchesLog.filter(m => m.winner).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
 
+  // Return logic remains the same...
   return (
     <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-24" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />

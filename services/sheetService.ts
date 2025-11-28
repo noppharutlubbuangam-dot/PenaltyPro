@@ -1,5 +1,4 @@
-
-import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile } from '../types';
+import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
@@ -11,10 +10,9 @@ export const setStoredScriptUrl = (url: string) => {
   console.warn("URL is hardcoded in this version. Setting ignored.");
 };
 
-export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[], matches: any[], config: AppSettings, schools: School[], news: NewsItem[] } | null> => {
+export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[], matches: any[], config: AppSettings, schools: School[], news: NewsItem[], tournaments: Tournament[] } | null> => {
   
   try {
-    // Added cache busting timestamp to prevent browser caching
     const response = await fetch(`${API_URL}?action=getData&t=${Date.now()}`, {
         method: 'GET',
         redirect: 'follow'
@@ -27,8 +25,8 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
     const text = await response.text();
 
     if (text.trim().startsWith('<')) {
-        console.error("Received HTML instead of JSON. Script might be crashed or permission denied.", text);
-        throw new Error('Deployment Error: Please check "Who has access" is set to "Anyone" in Google Apps Script');
+        console.error("Received HTML instead of JSON.", text);
+        throw new Error('Deployment Error: Please check access permissions in Google Apps Script');
     }
     
     const data = JSON.parse(text);
@@ -37,7 +35,6 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
         throw new Error(data.message);
     }
     
-    // Safely handle data.config being undefined/null
     const configData = (data && data.config) ? data.config : {};
 
     return {
@@ -46,10 +43,11 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
         matches: (data && data.matches) || [],
         config: {
             ...configData,
-            adminPin: configData.adminPin || '1234' // Ensure fallback
+            adminPin: configData.adminPin || '1234'
         },
         schools: (data && data.schools) || [],
-        news: (data && data.news) || []
+        news: (data && data.news) || [],
+        tournaments: (data && data.tournaments) || [] // Phase 1
     };
   } catch (error) {
     console.error("Failed to fetch from Google Sheet:", error);
@@ -73,35 +71,17 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
             })
         });
 
-        if (!response.ok) {
-             throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const text = await response.text();
-        
-        // Check for HTML response (Script error or Auth error)
         if (text.trim().startsWith('<')) {
-             if (text.includes("Google Drive") || text.includes("script.google.com")) {
-                 throw new Error("AUTH_REQUIRED");
-             }
-             // Log the HTML content for debugging (check console)
-             console.warn("GAS Returned HTML Error:", text);
-             throw new Error("HTML response (Script Error - Check Code.gs logs)");
+             if (text.includes("Google Drive") || text.includes("script.google.com")) throw new Error("AUTH_REQUIRED");
+             throw new Error("HTML response (Script Error)");
         }
-        
         return JSON.parse(text);
     };
 
-    // Robust Fallback List with new models
-    const fallbackList = [
-        'gemini-1.5-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.0-flash'
-    ];
-    
-    // Create unique list starting with initialModel
+    const fallbackList = ['gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
     const modelsToTry = Array.from(new Set([initialModel, ...fallbackList]));
 
     let lastError: any = null;
@@ -109,55 +89,25 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     for (let i = 0; i < modelsToTry.length; i++) {
         const model = modelsToTry[i];
         try {
-            // Exponential backoff
-            if (i > 0) {
-                 const delay = 1000 * Math.pow(2, i); 
-                 console.log(`Waiting ${delay}ms before retry with ${model}...`);
-                 await new Promise(resolve => setTimeout(resolve, delay));
-            }
-
-            console.log(`AI Attempt ${i+1}/${modelsToTry.length}: Using model ${model}...`);
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+            
             const result = await callApi(model);
-
-            if (result.status === 'success') {
-                return result.text;
-            } else {
-                const msg = (result.message || "Unknown Error").toLowerCase();
-                // Check undefined message
-                if (!result.message && result.error) {
-                     console.warn(`Model ${model} detailed error:`, result.error);
-                }
-                
-                if (msg.includes("auth") || msg.includes("permission") || msg.includes("script")) {
-                    throw new Error("AUTH_REQUIRED");
-                }
-                console.warn(`Model ${model} failed: ${result.message}`);
-                lastError = new Error(result.message || `Model ${model} failed (No error message)`);
-            }
+            if (result.status === 'success') return result.text;
+            else throw new Error(result.message || `Model ${model} failed`);
 
         } catch (e: any) {
-            console.warn(`Model ${model} exception: ${e.message}`);
-            if (e.message === "AUTH_REQUIRED") {
-                return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth()";
-            }
+            if (e.message === "AUTH_REQUIRED") return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize)";
             lastError = e;
         }
     }
 
     const errMsg = (lastError?.message || "").toLowerCase();
-    if (errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("limit") || errMsg.includes("resource exhausted")) {
-         return `⚠️ AI Error: โควต้าเต็มทุกโมเดล (Rate Limit Exceeded) กรุณารอ 1-2 นาที แล้วลองใหม่`;
-    }
-    
+    if (errMsg.includes("quota") || errMsg.includes("429")) return `⚠️ AI Error: โควต้าเต็ม (Rate Limit Exceeded)`;
     return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed"}`;
 };
 
 export const authenticateUser = async (data: any): Promise<UserProfile | null> => {
-    // data structure: { authType: 'login'|'register'|'line', username?, password?, displayName?, phone?, lineUserId?, pictureUrl? }
-    const payload = {
-        action: 'auth',
-        ...data
-    };
+    const payload = { action: 'auth', ...data };
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
@@ -168,9 +118,7 @@ export const authenticateUser = async (data: any): Promise<UserProfile | null> =
 
         if (response.ok) {
             const result = await response.json();
-            if (result.status === 'error') {
-                throw new Error(result.message);
-            }
+            if (result.status === 'error') throw new Error(result.message);
             return {
                 userId: result.userId,
                 username: result.username,
@@ -182,10 +130,7 @@ export const authenticateUser = async (data: any): Promise<UserProfile | null> =
             };
         }
         throw new Error("Network response was not ok");
-    } catch (error: any) {
-        console.error("Auth Error", error);
-        throw error; // Re-throw to handle in UI
-    }
+    } catch (error: any) { throw error; }
 };
 
 export const manageNews = async (actionType: 'add' | 'delete' | 'edit', newsItem: Partial<NewsItem>) => {
@@ -240,7 +185,7 @@ export const saveSettings = async (settings: AppSettings) => {
   } catch (error) { return false; }
 };
 
-export const scheduleMatch = async (matchId: string, teamA: string, teamB: string, roundLabel: string, venue?: string, scheduledTime?: string, livestreamUrl?: string, livestreamCover?: string) => {
+export const scheduleMatch = async (matchId: string, teamA: string, teamB: string, roundLabel: string, venue?: string, scheduledTime?: string, livestreamUrl?: string, livestreamCover?: string, tournamentId: string = 'default') => {
   try {
     await fetch(API_URL, {
       method: 'POST',
@@ -249,14 +194,10 @@ export const scheduleMatch = async (matchId: string, teamA: string, teamB: strin
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ 
           action: 'scheduleMatch', 
-          matchId, 
-          teamA, 
-          teamB, 
-          roundLabel, 
-          venue: venue || '', 
-          scheduledTime: scheduledTime || '',
-          livestreamUrl,
-          livestreamCover
+          matchId, teamA, teamB, roundLabel, 
+          venue: venue || '', scheduledTime: scheduledTime || '',
+          livestreamUrl, livestreamCover,
+          tournamentId // Phase 1
       })
     });
     return true;
@@ -276,12 +217,10 @@ export const deleteMatch = async (matchId: string) => {
   } catch (error) { return false; }
 };
 
-export const saveMatchToSheet = async (matchState: MatchState | any, summary: string, skipKicks: boolean = false) => {
-  // Support both MatchState and generic object for Admin Edits
+export const saveMatchToSheet = async (matchState: MatchState | any, summary: string, skipKicks: boolean = false, tournamentId: string = 'default') => {
   const teamAName = typeof matchState.teamA === 'object' ? matchState.teamA.name : matchState.teamA;
   const teamBName = typeof matchState.teamB === 'object' ? matchState.teamB.name : matchState.teamB;
   
-  // Resolve Winner Name Correctly
   let resolvedWinner = matchState.winner;
   if (matchState.winner === 'A') resolvedWinner = teamAName;
   else if (matchState.winner === 'B') resolvedWinner = teamBName;
@@ -294,11 +233,11 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
     scoreA: matchState.scoreA,
     scoreB: matchState.scoreB,
     winner: resolvedWinner, 
-    summary: summary || matchState.summary, // Ensure summary is passed
-    // If skipKicks is true, send empty array to avoid duplicating kicks rows
+    summary: summary || matchState.summary,
     kicks: (skipKicks || !matchState.kicks) ? [] : matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : (k.teamId === 'B' ? teamBName : k.teamId) })),
     livestreamUrl: matchState.livestreamUrl,
-    livestreamCover: matchState.livestreamCover
+    livestreamCover: matchState.livestreamCover,
+    tournamentId // Phase 1
   };
   
   try {
@@ -313,21 +252,16 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
   } catch (error) { return false; }
 };
 
-export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName: string, teamBName: string) => {
-    // Format Kicks for separate sheet: matchId, round, team, player, result, timestamp
+export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName: string, teamBName: string, tournamentId: string = 'default') => {
     const formattedKicks = kicks.map(k => ({
         matchId: matchId || `M${Date.now()}`,
         round: k.round,
         team: k.teamId === 'A' ? teamAName : teamBName,
         player: k.player,
         result: k.result,
-        timestamp: k.timestamp || Date.now()
+        timestamp: k.timestamp || Date.now(),
+        tournamentId // Phase 1
     }));
-
-    const payload = {
-        action: 'saveKicks',
-        data: formattedKicks
-    };
 
     try {
         await fetch(API_URL, {
@@ -335,13 +269,13 @@ export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName
             mode: 'no-cors',
             redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ action: 'saveKicks', data: formattedKicks })
         });
         return true;
     } catch (error) { return false; }
 }
 
-export const registerTeam = async (data: RegistrationData): Promise<string | null> => {
+export const registerTeam = async (data: RegistrationData, tournamentId: string = 'default'): Promise<string | null> => {
   const payload = {
     action: 'register',
     schoolName: data.schoolName, 
@@ -359,6 +293,7 @@ export const registerTeam = async (data: RegistrationData): Promise<string | nul
     coachName: data.coachName,
     coachPhone: data.coachPhone,
     registrationTime: data.registrationTime, 
+    tournamentId, // Phase 1
     players: data.players.map(p => ({
         name: p.name,
         number: p.sequence,

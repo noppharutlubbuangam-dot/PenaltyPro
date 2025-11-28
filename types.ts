@@ -1,4 +1,3 @@
-
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -47,6 +46,14 @@ export interface School {
   province: string;
 }
 
+export interface Tournament {
+  id: string;
+  name: string;
+  type: 'Penalty' | '7v7' | '11v11';
+  status: 'Active' | 'Archived' | 'Upcoming';
+  config?: string; // JSON string for specific rules
+}
+
 export interface Team {
   id: string;
   name: string; 
@@ -67,6 +74,8 @@ export interface Team {
   managerPhone?: string;
   coachName?: string;
   coachPhone?: string;
+
+  tournamentId?: string; // Phase 1: Support multiple tournaments
 }
 
 export interface Player {
@@ -77,6 +86,7 @@ export interface Player {
   position: string;
   photoUrl: string;
   birthDate?: string; 
+  tournamentId?: string; // Phase 1
 }
 
 export interface Kick {
@@ -87,6 +97,7 @@ export interface Kick {
   result: KickResult;
   timestamp: number;
   commentary?: string;
+  tournamentId?: string; // Phase 1
 }
 
 export interface Match {
@@ -103,8 +114,9 @@ export interface Match {
   status?: 'Scheduled' | 'Finished' | 'Walkover';
   venue?: string; 
   scheduledTime?: string; 
-  livestreamUrl?: string; // New: YouTube/FB Link
-  livestreamCover?: string; // New: Cover Image for Live
+  livestreamUrl?: string; 
+  livestreamCover?: string;
+  tournamentId?: string; // Phase 1
 }
 
 export interface MatchState {
@@ -119,6 +131,7 @@ export interface MatchState {
   isFinished: boolean;
   winner: 'A' | 'B' | null;
   roundLabel?: string;
+  tournamentId?: string; // Phase 1
 }
 
 export interface RegistrationData {
@@ -143,6 +156,7 @@ export interface RegistrationData {
     birthDate: string; 
     photoFile: string | null; 
   }[];
+  tournamentId?: string; // Phase 1
 }
 
 export interface Standing {
