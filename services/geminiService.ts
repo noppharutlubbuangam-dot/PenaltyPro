@@ -13,7 +13,7 @@ export const generateCommentary = async (
     // Keep prompt very short for quick response
     const prompt = `พากย์บอลสั้นๆ 1 ประโยค: ${player} (${team}) ${result === 'GOAL' ? 'ยิงเข้า' : 'พลาด'}`;
     // Explicitly pass the model to avoid default fallback issues on backend
-    const text = await generateGeminiContent(prompt, 'gemini-2.5-flash');
+    const text = await generateGeminiContent(prompt, 'gemini-1.5-flash');
     return text || "";
   } catch (error) {
     console.error("Error generating commentary:", error);
@@ -28,11 +28,16 @@ export const generateMatchSummary = async (
   scoreB: number,
   winner: string | null,
   kicks: Kick[],
-  model: string = 'gemini-2.5-flash' // Added Model parameter
+  model: string = 'gemini-1.5-flash' // Changed default to 1.5-flash for speed/stability
 ): Promise<string> => {
   try {
     // 1. Extract Scorers & Heroes (Clean Names)
-    const cleanName = (name: string) => name.replace(/[0-9#]/g, '').split('(')[0].trim();
+    const cleanName = (name: any) => {
+        if (!name) return '';
+        // Ensure it's a string before calling replace
+        const strName = String(name);
+        return strName.replace(/[0-9#]/g, '').split('(')[0].trim();
+    };
 
     const scorersA = kicks.filter(k => k.teamId === 'A' && k.result === KickResult.GOAL).map(k => cleanName(k.player));
     const scorersB = kicks.filter(k => k.teamId === 'B' && k.result === KickResult.GOAL).map(k => cleanName(k.player));
@@ -46,8 +51,8 @@ export const generateMatchSummary = async (
       งาน: สรุปผลแข่งสั้นๆ
       คู่: ${teamA} vs ${teamB}
       ผล: ${scoreA}-${scoreB} (${winnerName} ชนะ)
-      คนยิงเข้า: ${[...scorersA, ...scorersB].join(', ') || '-'}
-      คนเซฟ: ${savedKicks.join(', ') || '-'}
+      คนยิงเข้า: ${[...scorersA, ...scorersB].filter(n => n).join(', ') || '-'}
+      คนเซฟ: ${savedKicks.filter(n => n).join(', ') || '-'}
 
       คำสั่ง:
       ขอสรุปข่าว 3 บรรทัดจบ:

@@ -43,7 +43,6 @@ function doPost(e) {
       return handleAuth(data);
     } else if (action === 'aiGenerate') {
       // --- AI HANDLER PROXY ---
-      // IMPORTANT: Pass the model correctly
       return handleAiGenerate(data.prompt, data.model); 
     }
     
@@ -64,7 +63,8 @@ function handleAiGenerate(promptText, modelName) {
   var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
   if (!apiKey) return errorResponse("Server Error: GEMINI_API_KEY missing");
 
-  // Use the model passed from frontend, or default to 1.5 flash (Higher Free Tier RPM)
+  // Use model from frontend or default to stable 1.5-flash
+  // Note: Models like gemini-1.5-flash might require "-latest" or "-001" suffix depending on API version
   var model = modelName || "gemini-1.5-flash"; 
   
   var url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
@@ -83,12 +83,23 @@ function handleAiGenerate(promptText, modelName) {
   try {
     var response = UrlFetchApp.fetch(url, options);
     var responseCode = response.getResponseCode();
-    var json = JSON.parse(response.getContentText());
+    var responseText = response.getContentText();
+    var json;
+    
+    try {
+        json = JSON.parse(responseText);
+    } catch(parseErr) {
+        return errorResponse("Invalid JSON from Gemini: " + responseText);
+    }
     
     if (responseCode === 200 && json.candidates && json.candidates.length > 0) {
       return successResponse({ text: json.candidates[0].content.parts[0].text });
     } else {
-      var errMsg = json.error ? json.error.message : "Unknown AI Error";
+      // Detailed error logging
+      var errMsg = "Unknown AI Error";
+      if (json.error) {
+          errMsg = json.error.message || JSON.stringify(json.error);
+      }
       return errorResponse("AI Error (" + model + "): " + errMsg);
     }
   } catch (e) {
@@ -96,7 +107,7 @@ function handleAiGenerate(promptText, modelName) {
   }
 }
 
-// --- CORE FUNCTIONS (Original Logic) ---
+// --- CORE FUNCTIONS ---
 
 function getData() {
   const ss = getSpreadsheet();
@@ -193,7 +204,7 @@ function getData() {
         scoreB: r[4],
         winner: r[5],
         date: r[6],
-        summary: r[7],
+        summary: r[7], // Column H = Index 7 (Summary)
         roundLabel: r[8] || '',
         status: r[9] || 'Finished',
         venue: r[10] || '',
@@ -639,7 +650,7 @@ function saveMatch(data) {
         if (data.teamA) sheet.getRange(rowIndex, 2).setValue(data.teamA);
         if (data.teamB) sheet.getRange(rowIndex, 3).setValue(data.teamB);
         
-        // Update summary if provided (for AI feature)
+        // Update summary if provided (Column 8 / Index 8)
         if (data.summary) sheet.getRange(rowIndex, 8).setValue(data.summary);
 
         if (data.livestreamUrl !== undefined) sheet.getRange(rowIndex, 13).setValue(data.livestreamUrl);
@@ -649,9 +660,10 @@ function saveMatch(data) {
              sheet.getRange(rowIndex, 14).setValue(cover);
         }
       } else {
-        sheet.appendRow([data.matchId, data.teamA, data.teamB, data.scoreA, data.scoreB, data.winner, new Date().toISOString(), data.summary, data.roundLabel || '', 'Finished', '', '', '', '']);
+        sheet.appendRow([data.matchId, data.teamA, data.teamB, data.scoreA, data.scoreB, data.winner, new Date().toISOString(), data.summary || '', data.roundLabel || '', 'Finished', '', '', '', '']);
       }
       
+      // Save Kicks if provided (skip if empty to prevent duplication on summary update)
       if (data.kicks && data.kicks.length > 0) {
          saveKicks(data.kicks.map(k => ({
              matchId: data.matchId, round: k.round, team: k.teamId, player: k.player, result: k.result, timestamp: k.timestamp || Date.now()

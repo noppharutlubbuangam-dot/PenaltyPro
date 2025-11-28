@@ -92,19 +92,16 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
         return JSON.parse(text);
     };
 
-    // Robust Fallback List
-    // gemini-1.5-flash is currently the most stable for free tier (15 RPM)
-    // gemini-2.5-flash has low RPM (2 RPM)
+    // Robust Fallback List with new models
     const fallbackList = [
         'gemini-1.5-flash',
+        'gemini-2.0-flash-lite',
         'gemini-2.5-flash-lite',
         'gemini-2.5-flash',
-        'gemini-2.0-flash-lite',
         'gemini-2.0-flash'
     ];
     
     // Create unique list starting with initialModel
-    // If initialModel is 'gemini-2.5-flash', we try it first, but fallback to 1.5 quickly
     const modelsToTry = Array.from(new Set([initialModel, ...fallbackList]));
 
     let lastError: any = null;
@@ -112,9 +109,9 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
     for (let i = 0; i < modelsToTry.length; i++) {
         const model = modelsToTry[i];
         try {
-            // Exponential backoff for retries to avoid hitting rate limits immediately again
+            // Exponential backoff
             if (i > 0) {
-                 const delay = 1000 * Math.pow(2, i); // 2s, 4s, 8s...
+                 const delay = 1000 * Math.pow(2, i); 
                  console.log(`Waiting ${delay}ms before retry with ${model}...`);
                  await new Promise(resolve => setTimeout(resolve, delay));
             }
@@ -125,18 +122,17 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
             if (result.status === 'success') {
                 return result.text;
             } else {
-                // API returned error status
                 const msg = (result.message || "Unknown Error").toLowerCase();
+                // Check undefined message
+                if (!result.message && result.error) {
+                     console.warn(`Model ${model} detailed error:`, result.error);
+                }
                 
-                // If Auth error, stop immediately
                 if (msg.includes("auth") || msg.includes("permission") || msg.includes("script")) {
                     throw new Error("AUTH_REQUIRED");
                 }
-
                 console.warn(`Model ${model} failed: ${result.message}`);
-                lastError = new Error(result.message || `Model ${model} failed`);
-                
-                // Continue to next model in loop
+                lastError = new Error(result.message || `Model ${model} failed (No error message)`);
             }
 
         } catch (e: any) {
@@ -145,17 +141,15 @@ export const generateGeminiContent = async (prompt: string, initialModel: string
                 return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth()";
             }
             lastError = e;
-            // Continue to next model in loop
         }
     }
 
-    // All failed
     const errMsg = (lastError?.message || "").toLowerCase();
     if (errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("limit") || errMsg.includes("resource exhausted")) {
          return `⚠️ AI Error: โควต้าเต็มทุกโมเดล (Rate Limit Exceeded) กรุณารอ 1-2 นาที แล้วลองใหม่`;
     }
     
-    return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed (Check Code.gs)"}`;
+    return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed"}`;
 };
 
 export const authenticateUser = async (data: any): Promise<UserProfile | null> => {
@@ -284,7 +278,6 @@ export const deleteMatch = async (matchId: string) => {
 
 export const saveMatchToSheet = async (matchState: MatchState | any, summary: string, skipKicks: boolean = false) => {
   // Support both MatchState and generic object for Admin Edits
-  // Ensure we get string names even if objects are passed
   const teamAName = typeof matchState.teamA === 'object' ? matchState.teamA.name : matchState.teamA;
   const teamBName = typeof matchState.teamB === 'object' ? matchState.teamB.name : matchState.teamB;
   
@@ -292,19 +285,17 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
   let resolvedWinner = matchState.winner;
   if (matchState.winner === 'A') resolvedWinner = teamAName;
   else if (matchState.winner === 'B') resolvedWinner = teamBName;
-  // If matchState.winner is already the name (e.g. from existing DB record), keep it.
 
   const payload = {
     action: 'saveMatch',
-    // Check matchState.id (from Schedule List) OR matchState.matchId (from Game) to prevent duplicates
     matchId: matchState.matchId || matchState.id || `M${Date.now()}`,
     teamA: teamAName,
     teamB: teamBName,
     scoreA: matchState.scoreA,
     scoreB: matchState.scoreB,
     winner: resolvedWinner, 
-    summary: summary,
-    // IMPORTANT: If skipKicks is true, we send an empty array so the backend doesn't append duplicates
+    summary: summary || matchState.summary, // Ensure summary is passed
+    // If skipKicks is true, send empty array to avoid duplicating kicks rows
     kicks: (skipKicks || !matchState.kicks) ? [] : matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : (k.teamId === 'B' ? teamBName : k.teamId) })),
     livestreamUrl: matchState.livestreamUrl,
     livestreamCover: matchState.livestreamCover
@@ -379,7 +370,7 @@ export const registerTeam = async (data: RegistrationData): Promise<string | nul
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
-      redirect: 'follow', // Changed from no-cors to follow to get response
+      redirect: 'follow', 
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
