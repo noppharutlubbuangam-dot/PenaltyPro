@@ -4,7 +4,7 @@ import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare, Cpu, FileText, PenTool, LayoutTemplate } from 'lucide-react';
 import { scheduleMatch, deleteMatch, saveMatchToSheet, fileToBase64 } from '../services/sheetService';
 import { generateMatchSummary, generateLocalSummary } from '../services/geminiService';
-import { shareMatch, shareMatchSummary } from '../services/liffService';
+import { shareMatch } from '../services/liffService';
 
 interface ScheduleListProps {
   matches: Match[];
@@ -472,13 +472,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       }
   };
   
-  const handleShareSummary = () => {
-     if(!selectedMatch || !aiSummary) return;
-     const tA = typeof selectedMatch.teamA === 'string' ? selectedMatch.teamA : selectedMatch.teamA.name;
-     const tB = typeof selectedMatch.teamB === 'string' ? selectedMatch.teamB : selectedMatch.teamB.name;
-     shareMatchSummary(selectedMatch, aiSummary, tA, tB, config.competitionName);
-  };
-  
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
@@ -715,27 +708,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                                                 <Edit2 className="w-3 h-3" /> {isEditingSummary ? 'ยกเลิก' : 'แก้ไข'}
                                                             </button>
                                                         )}
-                                                        
-                                                        {aiSummary && !isEditingSummary && (
-                                                            <button 
-                                                                onClick={handleShareSummary} 
-                                                                className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
-                                                            >
-                                                                <Share2 className="w-3 h-3" /> แชร์ข่าว
-                                                            </button>
-                                                        )}
                                                     </div>
-                                                ) : (
-                                                    // User view: Share button only
-                                                    aiSummary && !aiSummary.startsWith('⚠️') && (
-                                                        <button 
-                                                            onClick={handleShareSummary} 
-                                                            className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
-                                                        >
-                                                            <Share2 className="w-3 h-3" /> แชร์ข่าว
-                                                        </button>
-                                                    )
-                                                )}
+                                                ) : null}
                                             </div>
                                             
                                             {/* Summary Content / Editor */}
