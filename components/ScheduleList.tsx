@@ -424,7 +424,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
           const tB = resolveTeam(selectedMatch.teamB);
           
           if (forceLocal) {
-              // Local Template Mode
+              // Local Template Mode with full team objects
               const localSummary = generateLocalSummary(
                   tA, tB, selectedMatch.scoreA, selectedMatch.scoreB,
                   selectedMatch.winner || '', selectedMatch.kicks || []
@@ -721,7 +721,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                                                                 onClick={handleShareSummary} 
                                                                 className="text-xs bg-[#00B900] text-white px-2 py-1 rounded font-bold flex items-center gap-1 hover:bg-[#009900]"
                                                             >
-                                                                <Share2 className="w-3 h-3" /> แชร์
+                                                                <Share2 className="w-3 h-3" /> แชร์ข่าว
                                                             </button>
                                                         )}
                                                     </div>
