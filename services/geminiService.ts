@@ -4,7 +4,7 @@ import { KickResult, Kick } from '../types';
 // Initialize Gemini Client
 const getAiClient = () => {
   // หากต้องการ Hardcode API Key เพื่อทดสอบ สามารถใส่ตรงนี้ได้ (ไม่แนะนำสำหรับ Production)
-  const apiKey = "AIzaSyDYRYxiK7_a0EDBZljx_rvDQh8kw0eBtVg"; 
+  const apiKey = "AIzaSyCt4Io2MsnIZ3WptZDr7Ouf8DhNizBZY94"; 
   //const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
