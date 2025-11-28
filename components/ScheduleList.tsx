@@ -94,7 +94,6 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
 };
 
 const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }) => {
-  // ... (existing state) ...
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -133,8 +132,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   // AI Summary State
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-
-  // ... (useEffect and resolveTeam hooks remain same) ...
 
   useEffect(() => {
     if (initialMatchId) {
@@ -178,8 +175,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
     } as Team;
   };
   
-  // ... (Existing helper functions: formatDate, formatTime, getRoundName, filteredScheduled, groupedScheduled, sortedDates) ...
-
   const formatDate = (dateStr: string) => { try { return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }); } catch(e) { return dateStr; } };
   const formatTime = (dateStr: string) => { try { return new Date(dateStr).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); } catch(e) { return ''; } };
 
@@ -213,8 +208,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   }, {} as Record<string, Match[]>);
 
   const sortedDates = Object.keys(groupedScheduled).sort();
-
-  // ... (Existing handlers: handleOpenAdd, handleEditMatch, handleOpenEditResult, handleSaveEditedResult, handleDeleteMatch, handleResetMatch, handleSaveMatch, handleCoverChange, handleQuickSaveResult, handleWalkover) ...
 
   const handleOpenAdd = () => { 
       const today = new Date().toISOString().split('T')[0];
@@ -438,8 +431,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   
   const handleShare = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); shareMatch(match, tA.name, tB.name, tA.logoUrl, tB.logoUrl); };
   const handleStart = (e: React.MouseEvent, match: Match) => { e.stopPropagation(); const tA = resolveTeam(match.teamA); const tB = resolveTeam(match.teamB); onStartMatch(tA, tB, match.id); };
-  
-  // ... (Other helpers: setGroupRound, calculateAge, getEmbedUrl, renderRoster, getFilteredTeams, openTeamSelector, handleTeamSelect, addBulkRow, removeBulkRow, updateBulkRow, TeamSelectionButton, renderScorers, calculateTeamStats, renderStatsComparison) ...
   
   const setGroupRound = (group: string) => { const newLabel = `Group ${group}`; setMatchForm(prev => ({ ...prev, roundLabel: newLabel })); setBulkMatches(prev => prev.map(m => ({ ...m, teamA: '', teamB: '' }))); };
   
