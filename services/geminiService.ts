@@ -1,29 +1,14 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateGeminiContent } from './sheetService';
 import { KickResult, Kick } from '../types';
 
-// Initialize Gemini Client
-const getAiClient = () => {
-  // หมายเหตุ: การใส่ API Key ใน Client-side code (React) อาจไม่ปลอดภัย 100%
-  // หากต้องการความปลอดภัยสูงสุด ควรย้าย Logic นี้ไปไว้ใน Google Apps Script (Code.gs)
-  // และสร้าง Function `generateGeminiSummary` ใน GAS เพื่อเรียกใช้แทน
-  
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
-    console.warn("API_KEY is missing. Please check your .env file.");
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
-};
+// NOTE: We now proxy the request through Google Apps Script (Code.gs)
+// to hide the API Key from the client side.
 
 export const generateCommentary = async (
   player: string,
   team: string,
   result: KickResult
 ): Promise<string> => {
-  const ai = getAiClient();
-  if (!ai) return "Commentary unavailable (API Key missing).";
-
   try {
     const prompt = `
       สวมบทบาทนักพากย์ฟุตบอลไทย (เสียงตื่นเต้น):
@@ -34,12 +19,9 @@ export const generateCommentary = async (
       คำแนะนำ: ใช้คำศัพท์บอลไทย เช่น "เรียบร้อยครับ", "ซูเปอร์เซฟ", "ชนเสา"
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text || "";
+    // Call Proxy instead of direct SDK
+    const text = await generateGeminiContent(prompt);
+    return text || "";
   } catch (error) {
     console.error("Error generating commentary:", error);
     return "";
@@ -54,9 +36,6 @@ export const generateMatchSummary = async (
   winner: string | null,
   kicks: Kick[]
 ): Promise<string> => {
-  const ai = getAiClient();
-  if (!ai) return "Analysis unavailable (Please configure API_KEY).";
-
   try {
     // 1. Extract Scorers & Heroes (Clean Names)
     const cleanName = (name: string) => name.replace(/[0-9#]/g, '').split('(')[0].trim();
@@ -69,30 +48,29 @@ export const generateMatchSummary = async (
     const winnerName = winner === 'A' ? teamA : winner === 'B' ? teamB : winner || 'เสมอ';
 
     const prompt = `
-      บทบาท: นักข่าวกีฬาฟุตบอลไทย เขียนสรุปผลการดวลจุดโทษสั้นๆ กระชับ สำหรับส่ง LINE Flex Message
+      บทบาท: นักข่าวกีฬาฟุตบอลไทยอาชีพ (น้ำเสียงตื่นเต้น เร้าใจ)
+      งาน: เขียนพาดหัวข่าวและสรุปผลการแข่งขันสั้นๆ สำหรับส่ง LINE Notification
       
       ข้อมูลแมตช์:
       - คู่แข่งขัน: ${teamA} vs ${teamB}
       - สกอร์รวม: ${scoreA} - ${scoreB}
       - ผู้ชนะ: ${winnerName}
-      - คนยิงเข้า: ${[...scorersA, ...scorersB].join(', ') || 'ไม่มีข้อมูล'}
-      - คนยิงพลาด/โดนเซฟ: ${savedKicks.join(', ') || 'ไม่มี'}
+      - ผู้ทำประตู (Hero): ${[...scorersA, ...scorersB].join(', ') || '-'}
+      - ช็อตเซฟสำคัญ (Save): ${savedKicks.join(', ') || '-'}
 
-      คำสั่ง:
-      1. เขียนสรุปข่าวสั้นๆ (ไม่เกิน 2-3 บรรทัด) ให้ได้ใจความ
-      2. **ต้องระบุชื่อนักเตะ** ที่มีบทบาทสำคัญ (เช่น คนยิงเข้าสวยๆ หรือ ผู้รักษาประตูที่เซฟได้) อย่างน้อย 1 ชื่อในเนื้อข่าว
-      3. ใช้ภาษาพากย์บอลที่ตื่นเต้น สนุกสนาน (เช่น "ซัดตุงตาข่าย", "เซฟช่วยทีม", "เฉือนชนะสุดมันส์")
-      4. **สำคัญ:** ห้ามยาวเกิน 200 ตัวอักษร เพื่อประหยัดพื้นที่แสดงผล
+      คำสั่ง (Strict Output):
+      1. เขียนแบบกระชับ (Compact) ไม่เกิน 4 บรรทัด
+      2. บรรทัดแรก ต้องเป็นพาดหัวข่าวที่ดึงดูด
+      3. เนื้อหา **ต้องระบุชื่อนักเตะ** ที่ยิงเข้าหรือเซฟได้ (ถ้ามี)
+      4. ห้ามใช้ Markdown (เช่น **ตัวหนา**) ให้ใช้ Text ธรรมดาที่อ่านง่ายใน LINE
+      5. จบด้วยประโยคปิดท้ายสไตล์นักพากย์
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text || "ไม่สามารถสร้างบทสรุปได้";
+    // Call Proxy
+    const text = await generateGeminiContent(prompt);
+    return text || "ไม่สามารถสร้างบทสรุปได้ (โปรดตรวจสอบ API Key ที่ Server)";
   } catch (error) {
     console.error("Error generating summary:", error);
-    return "เกิดข้อผิดพลาดในการสร้างบทสรุป (API Error)";
+    return "เกิดข้อผิดพลาดในการสร้างบทสรุป";
   }
 };

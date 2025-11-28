@@ -56,6 +56,33 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
+export const generateGeminiContent = async (prompt: string): Promise<string> => {
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ 
+                action: 'aiGenerate', 
+                prompt: prompt 
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success') {
+                return result.text;
+            } else {
+                throw new Error(result.message || "AI Generation Failed");
+            }
+        }
+        throw new Error("Network response was not ok");
+    } catch (error) {
+        console.error("AI Proxy Error:", error);
+        return "ไม่สามารถเชื่อมต่อกับ AI ได้ (กรุณาตรวจสอบ Code.gs ว่ามีฟังก์ชัน aiGenerate หรือไม่)";
+    }
+};
+
 export const authenticateUser = async (data: any): Promise<UserProfile | null> => {
     // data structure: { authType: 'login'|'register'|'line', username?, password?, displayName?, phone?, lineUserId?, pictureUrl? }
     const payload = {
