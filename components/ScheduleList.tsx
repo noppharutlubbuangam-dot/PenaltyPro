@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare, Cpu } from 'lucide-react';
@@ -22,7 +23,10 @@ interface ScheduleListProps {
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
 const AI_MODELS = [
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (มาตรฐาน)' },
-    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite (เร็ว/ประหยัด)' }
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (เร็ว)' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (ประหยัด)' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (สำรอง)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp (ทดลอง)' }
 ];
 
 interface TeamSelectorProps {

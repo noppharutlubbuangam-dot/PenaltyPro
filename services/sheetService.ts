@@ -1,3 +1,4 @@
+
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
@@ -56,7 +57,7 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
   }
 };
 
-export const generateGeminiContent = async (prompt: string, model: string = 'gemini-2.5-flash'): Promise<string> => {
+export const generateGeminiContent = async (prompt: string, initialModel: string = 'gemini-2.5-flash'): Promise<string> => {
     
     const callApi = async (m: string) => {
          const response = await fetch(API_URL, {
@@ -81,77 +82,71 @@ export const generateGeminiContent = async (prompt: string, model: string = 'gem
              if (text.includes("Google Drive") || text.includes("script.google.com")) {
                  throw new Error("AUTH_REQUIRED");
              }
-             throw new Error("HTML response");
+             throw new Error("HTML response (Script Error)");
         }
         
         return JSON.parse(text);
     };
 
-    try {
-        let result;
+    // Extended fallback list including experimentals which often have separate quotas
+    // Priority: Requested -> 2.5 Flash -> 2.5 Flash Lite -> 2.0 Flash Lite -> 2.0 Flash -> 2.0 Flash Exp
+    const fallbackList = [
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-exp'
+    ];
+    
+    // Create unique list starting with initialModel
+    const modelsToTry = Array.from(new Set([initialModel, ...fallbackList]));
+
+    let lastError: any = null;
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i];
         try {
-            result = await callApi(model);
+            // Exponential backoff for retries: 2s, 4s, 6s...
+            if (i > 0) {
+                 await new Promise(resolve => setTimeout(resolve, 2000 + (i * 1000)));
+            }
+
+            const result = await callApi(model);
+
+            if (result.status === 'success') {
+                return result.text;
+            } else {
+                // API returned error status
+                const msg = (result.message || "Unknown Error").toLowerCase();
+                
+                // If Auth error, stop immediately
+                if (msg.includes("auth") || msg.includes("permission") || msg.includes("script")) {
+                    throw new Error("AUTH_REQUIRED");
+                }
+
+                console.warn(`Model ${model} failed: ${result.message}`);
+                lastError = new Error(result.message || `Model ${model} failed`);
+                
+                // Continue to next model in loop
+            }
+
         } catch (e: any) {
+            console.warn(`Model ${model} exception: ${e.message}`);
             if (e.message === "AUTH_REQUIRED") {
                 return "⚠️ AI Error: Script ต้องการสิทธิ์ (Authorize) - กรุณาเปิด Code.gs แล้วกด Run ฟังก์ชัน testAuth()";
             }
-            throw e;
+            lastError = e;
+            // Continue to next model in loop
         }
-
-        if (result.status === 'error') {
-            const msg = (result.message || "").toLowerCase();
-            const isQuotaError = msg.includes('quota') || msg.includes('limit') || msg.includes('429');
-            const isNotFoundError = msg.includes('not found') || msg.includes('not supported') || msg.includes('model: gemini-');
-
-            if (isQuotaError || isNotFoundError) {
-                console.warn(`Model ${model} failed (${msg}). Attempting fallbacks...`);
-                
-                // Priority Fallbacks: 2.5 Flash -> Flash Lite -> 2.0 Flash
-                const fallbacks = ['gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'];
-                const candidates = fallbacks.filter(m => m !== model);
-
-                for (const fbModel of candidates) {
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // Delay to respect rate limits
-                    try {
-                        console.log(`Retrying with ${fbModel}...`);
-                        const fbResult = await callApi(fbModel);
-                        if (fbResult.status === 'success') {
-                            return fbResult.text;
-                        }
-                    } catch (e) {
-                        console.warn(`Fallback ${fbModel} failed.`);
-                    }
-                }
-                
-                if (isQuotaError) {
-                    return "⚠️ AI Error: โควต้าเต็มทุกโมเดล (Quota Exceeded) กรุณารอสักครู่ (1-2 นาที)";
-                }
-            }
-            
-            throw new Error(result.message);
-        }
-        
-        if (result.status === 'success') {
-            return result.text;
-        }
-        throw new Error(result.message || "AI Generation Failed");
-
-    } catch (error: any) {
-        console.error("AI Proxy Error:", error);
-        const errMsg = (error.message || error.toString()).toLowerCase();
-        
-        if (errMsg.includes("quota") || errMsg.includes("429")) {
-             return `⚠️ AI Error: โควต้าเต็ม (Quota Exceeded). กรุณาลองใหม่ภายหลัง`;
-        }
-        if (errMsg.includes("not found") || errMsg.includes("not supported")) {
-             return `⚠️ AI Error: ไม่พบโมเดล '${model}'`;
-        }
-        if (errMsg.includes("permission") || errMsg.includes("auth")) {
-             return "⚠️ AI Error: ปัญหาเรื่องสิทธิ์ - กรุณาตรวจสอบ Authorize ใน Apps Script";
-        }
-        
-        return `⚠️ ระบบ AI ขัดข้อง: ${errMsg}`;
     }
+
+    // All failed
+    const errMsg = (lastError?.message || "").toLowerCase();
+    if (errMsg.includes("quota") || errMsg.includes("429") || errMsg.includes("limit") || errMsg.includes("resource exhausted")) {
+         return `⚠️ AI Error: โควต้าเต็มทุกโมเดล (Quota Exceeded) กรุณารอสักครู่แล้วลองใหม่`;
+    }
+    
+    return `⚠️ ระบบ AI ขัดข้อง: ${lastError?.message || "Generation Failed"}`;
 };
 
 export const authenticateUser = async (data: any): Promise<UserProfile | null> => {
