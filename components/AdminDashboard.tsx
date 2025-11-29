@@ -50,6 +50,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const [poolTeams, setPoolTeams] = useState<Team[]>([]);
   const [drawnCount, setDrawnCount] = useState(0);
   const [removeConfirmModal, setRemoveConfirmModal] = useState<{ isOpen: boolean, team: Team | null, group: string | null }>({ isOpen: false, team: null, group: null });
+  const [resetConfirmModal, setResetConfirmModal] = useState(false);
 
   // View States
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -270,12 +271,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   };
 
   const resetDraw = () => {
-      if (!confirm("ต้องการรีเซ็ตการจับฉลากทั้งหมดหรือไม่? ข้อมูลในกลุ่มจะถูกล้างและเริ่มใหม่")) return;
+      setResetConfirmModal(true);
+  };
+
+  const confirmResetDraw = () => {
       const allTeams: Team[] = [];
       Object.values(liveGroups).forEach(groupTeams => {
           allTeams.push(...groupTeams);
       });
-      setPoolTeams(prev => [...prev, ...allTeams]);
+      
+      setPoolTeams(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const uniqueReturning = allTeams.filter(t => !existingIds.has(t.id));
+          return [...prev, ...uniqueReturning];
+      });
       
       const groups: Record<string, Team[]> = {};
       Object.keys(liveGroups).forEach(g => groups[g] = []);
@@ -284,6 +293,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       setLiveDrawStep('idle');
       setCurrentSpinName("...");
       setCurrentSpinGroup("");
+      
+      setResetConfirmModal(false);
       notify("Reset", "รีเซ็ตข้อมูลเรียบร้อย", "info");
   };
 
@@ -332,7 +343,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       }
 
       setCurrentSpinName(pickedTeam.name);
-      confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 } }); // Celebration!
+      // High Z-Index ensures visibility over modal
+      confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 }, zIndex: 9999 }); 
       
       // 5. Update State
       setLiveGroups(prev => ({
@@ -353,7 +365,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
              setLiveDrawStep('finished');
              setCurrentSpinName("เสร็จสิ้น!");
              setCurrentSpinGroup("-");
-             confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
+             confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, zIndex: 9999 });
           }
       } else {
           setLiveDrawStep('idle');
@@ -425,7 +437,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setLiveDrawStep('finished');
           setCurrentSpinName("เสร็จสิ้น!");
           setCurrentSpinGroup("-");
-          confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#f43f5e', '#8b5cf6', '#10b981'] });
+          confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#f43f5e', '#8b5cf6', '#10b981'], zIndex: 9999 });
       }
   };
 
@@ -626,7 +638,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                           <div className="flex justify-between items-center">
                               <span>ทีมในโถ ({poolTeams.length})</span>
                               {drawnCount > 0 && liveDrawStep !== 'spinning' && (
-                                  <button onClick={resetDraw} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-900/30 px-2 py-1 rounded">
+                                  <button onClick={resetDraw} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-900/30 px-2 py-1 rounded border border-red-900/50">
                                       <RotateCcw className="w-3 h-3"/> รีเซ็ต
                                   </button>
                               )}
@@ -793,6 +805,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                               className="py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition"
                           >
                               ลบออก
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* CONFIRM RESET DRAW MODAL */}
+      {resetConfirmModal && (
+          <div className="fixed inset-0 z-[2200] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200 border-2 border-red-100">
+                  <div className="flex flex-col items-center text-center gap-4">
+                      <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-2 animate-pulse">
+                          <RotateCcw className="w-10 h-10 text-red-600" />
+                      </div>
+                      <div>
+                          <h3 className="text-xl font-black text-slate-800">รีเซ็ตการจับฉลากทั้งหมด?</h3>
+                          <p className="text-sm text-slate-500 mt-2">
+                              การดำเนินการนี้จะ <span className="text-red-600 font-bold">ล้างข้อมูลกลุ่มทั้งหมด</span><br/>
+                              และนำทุกทีมกลับเข้าสู่โถจับฉลากใหม่
+                          </p>
+                      </div>
+                      <div className="flex gap-3 w-full mt-4">
+                          <button 
+                              onClick={() => setResetConfirmModal(false)}
+                              className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
+                          >
+                              ยกเลิก
+                          </button>
+                          <button 
+                              onClick={confirmResetDraw}
+                              className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200 transition flex items-center justify-center gap-2"
+                          >
+                              <RotateCcw className="w-4 h-4"/> รีเซ็ตเดี๋ยวนี้
                           </button>
                       </div>
                   </div>
