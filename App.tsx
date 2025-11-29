@@ -184,7 +184,41 @@ function App() {
 
   useEffect(() => { if (userLocation && effectiveSettings.locationLat && effectiveSettings.locationLng) { const dist = calculateDistance(userLocation.lat, userLocation.lng, effectiveSettings.locationLat, effectiveSettings.locationLng); setDistanceToVenue(dist); } }, [userLocation, effectiveSettings.locationLat, effectiveSettings.locationLng]);
   useEffect(() => { if (announcements.length > 1) { const interval = setInterval(() => setAnnouncementIndex(prev => (prev + 1) % announcements.length), 5000); return () => clearInterval(interval); } }, [announcements.length]);
-  useEffect(() => { if (!isLoadingData && availableTeams.length > 0) { const params = new URLSearchParams(window.location.search); const view = params.get('view'); const id = params.get('id'); const teamId = params.get('teamId'); if (view === 'match_detail' && id) { setInitialMatchId(id); setCurrentView('schedule'); } else if (view === 'news' && id) { setInitialNewsId(id); setCurrentView('home'); } else if (view === 'schedule') { setCurrentView('schedule'); } else if (view === 'standings') { setCurrentView('standings'); } else if (view === 'tournament') { setCurrentView('tournament'); } else if (view === 'admin' && teamId) { setInitialTeamId(teamId); if (!isAdmin) { setIsLoginOpen(true); setCurrentView('admin'); } else { setCurrentView('admin'); } } } }, [isLoadingData, availableTeams.length, isAdmin]);
+  useEffect(() => { 
+      if (!isLoadingData && availableTeams.length > 0) { 
+          const params = new URLSearchParams(window.location.search); 
+          const view = params.get('view'); 
+          const id = params.get('id'); 
+          const teamId = params.get('teamId'); 
+          const tournamentIdParam = params.get('tournamentId');
+
+          // Handle Deep Link for Tournament
+          if (tournamentIdParam) {
+              setCurrentTournamentId(tournamentIdParam);
+              // Clean up URL if possible, or just let it be
+          } else if (view === 'match_detail' && id) { 
+              setInitialMatchId(id); 
+              setCurrentView('schedule'); 
+          } else if (view === 'news' && id) { 
+              setInitialNewsId(id); 
+              setCurrentView('home'); 
+          } else if (view === 'schedule') { 
+              setCurrentView('schedule'); 
+          } else if (view === 'standings') { 
+              setCurrentView('standings'); 
+          } else if (view === 'tournament') { 
+              setCurrentView('tournament'); 
+          } else if (view === 'admin' && teamId) { 
+              setInitialTeamId(teamId); 
+              if (!isAdmin) { 
+                  setIsLoginOpen(true); 
+                  setCurrentView('admin'); 
+              } else { 
+                  setCurrentView('admin'); 
+              } 
+          } 
+      } 
+  }, [isLoadingData, availableTeams.length, isAdmin]);
 
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => { const id = Date.now().toString(); setToasts(prev => [...prev, { id, title, message, type }]); };
   const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
@@ -203,7 +237,20 @@ function App() {
         setNewsItems(data.news || []);
         setTournaments(data.tournaments || []);
         setDonations(data.donations || []);
-        if (!currentTournamentId) { const savedTId = localStorage.getItem('current_tournament_id'); if (savedTId && data.tournaments.find(t => t.id === savedTId)) { setCurrentTournamentId(savedTId); } else if (data.tournaments.length === 1) { setCurrentTournamentId(data.tournaments[0].id); } }
+        if (!currentTournamentId) { 
+            const savedTId = localStorage.getItem('current_tournament_id'); 
+            // Also check URL param for tournamentId here in case of race condition
+            const params = new URLSearchParams(window.location.search);
+            const urlTId = params.get('tournamentId');
+
+            if (urlTId && data.tournaments.find(t => t.id === urlTId)) {
+                setCurrentTournamentId(urlTId);
+            } else if (savedTId && data.tournaments.find(t => t.id === savedTId)) { 
+                setCurrentTournamentId(savedTId); 
+            } else if (data.tournaments.length === 1) { 
+                setCurrentTournamentId(data.tournaments[0].id); 
+            } 
+        }
       }
     } catch (e: any) { console.warn("Database Error", e); setConnectionError(e.message); showNotification("เชื่อมต่อไม่ได้", e.message, 'error'); } finally { setIsLoadingData(false); }
   };
