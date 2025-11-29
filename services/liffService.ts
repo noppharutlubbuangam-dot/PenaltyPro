@@ -22,8 +22,6 @@ const truncate = (str: string, length: number) => {
   return str.substring(0, length - 3) + "...";
 };
 
-// ... existing share functions ...
-
 export const shareMatchSummary = async (match: Match, summary: string, teamAName: string, teamBName: string, competitionName: string = "Penalty Pro Recorder") => {
     if (!window.liff?.isLoggedIn()) { window.liff?.login(); return; }
     const safeSummary = truncate(summary || "สรุปผลการแข่งขัน", 1000);
@@ -75,77 +73,83 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
 
 export const shareTournament = async (tournament: Tournament, teamCount: number = 0, maxTeams: number = 0) => {
     if (!window.liff) { alert("LIFF SDK not loaded"); return; }
-    if (!window.liff.isLoggedIn()) { window.liff.login(); return; }
+    if (!window.liff.isLoggedIn()) {
+        window.liff.login();
+        return;
+    }
     
-    const name = truncate(tournament.name || "รายการแข่งขัน", 50);
+    const name = truncate(tournament.name || "รายการแข่งขัน", 40);
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
     const liffUrl = `https://liff.line.me/${LIFF_ID}`; 
     
-    // Capacity Text Logic
     let capacityText = "";
     if (maxTeams > 0) {
-        capacityText = `สมัครแล้ว: ${teamCount} / ${maxTeams} ทีม`;
-        if (teamCount >= maxTeams) capacityText += " (เต็ม)";
+        capacityText = `${teamCount}/${maxTeams} ทีม`;
     } else {
-        capacityText = `สมัครแล้ว: ${teamCount} ทีม (รับไม่จำกัด)`;
+        capacityText = `${teamCount} ทีม (ไม่จำกัด)`;
     }
 
-    // Safe Alt Text
-    const altText = `${name} (${type}) - ${capacityText}`;
+    const altText = `เปิดรับสมัคร: ${name}`;
 
     const flexMessage = {
         type: "flex",
-        altText: truncate(altText, 350),
+        altText: altText,
         contents: {
             "type": "bubble",
-            "size": "mega",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    { "type": "text", "text": "TOURNAMENT", "weight": "bold", "color": "#A5B4FC", "size": "xxs", "align": "center", "letterSpacing": "2px" },
-                    { "type": "text", "text": name, "weight": "bold", "size": "lg", "margin": "sm", "color": "#FFFFFF", "wrap": true, "align": "center" }
-                ],
-                "backgroundColor": "#4f46e5",
-                "paddingAll": "lg"
-            },
-            "hero": {
-                "type": "image",
-                "url": "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=500&auto=format&fit=crop&q=60", 
-                "size": "full",
-                "aspectRatio": "20:13",
-                "aspectMode": "cover"
-            },
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
-                        "type": "box",
-                        "layout": "baseline",
-                        "contents": [
-                            { "type": "text", "text": "ประเภท", "color": "#94a3b8", "size": "xs", "flex": 1 },
-                            { "type": "text", "text": type, "color": "#334155", "size": "sm", "flex": 3, "weight": "bold" }
-                        ],
-                        "margin": "sm"
+                        "type": "text",
+                        "text": "🏆 เปิดรับสมัครแข่งขัน",
+                        "weight": "bold",
+                        "color": "#1e40af",
+                        "size": "sm"
+                    },
+                    {
+                        "type": "text",
+                        "text": name,
+                        "weight": "bold",
+                        "size": "xl",
+                        "margin": "md",
+                        "wrap": true
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "md"
                     },
                     {
                         "type": "box",
-                        "layout": "baseline",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "spacing": "sm",
                         "contents": [
-                            { "type": "text", "text": "จำนวนทีม", "color": "#94a3b8", "size": "xs", "flex": 1 },
-                            { "type": "text", "text": capacityText, "color": "#334155", "size": "sm", "flex": 3, "wrap": true, "weight": "bold" }
-                        ],
-                        "margin": "sm"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "baseline",
-                        "contents": [
-                            { "type": "text", "text": "สถานะ", "color": "#94a3b8", "size": "xs", "flex": 1 },
-                            { "type": "text", "text": tournament.status, "color": tournament.status === 'Active' ? "#16a34a" : "#2563eb", "size": "sm", "flex": 3, "weight": "bold" }
-                        ],
-                        "margin": "sm"
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    { "type": "text", "text": "ประเภท", "color": "#888888", "size": "sm", "flex": 2 },
+                                    { "type": "text", "text": type, "color": "#111111", "size": "sm", "flex": 4 }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    { "type": "text", "text": "สมัครแล้ว", "color": "#888888", "size": "sm", "flex": 2 },
+                                    { "type": "text", "text": capacityText, "color": "#111111", "size": "sm", "flex": 4 }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "contents": [
+                                    { "type": "text", "text": "สถานะ", "color": "#888888", "size": "sm", "flex": 2 },
+                                    { "type": "text", "text": tournament.status, "color": tournament.status === 'Active' ? "#16a34a" : "#2563eb", "size": "sm", "flex": 4, "weight": "bold" }
+                                ]
+                            }
+                        ]
                     }
                 ],
                 "paddingAll": "lg"
@@ -156,9 +160,9 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
                 "contents": [
                     {
                         "type": "button",
-                        "action": { "type": "uri", "label": "ดูรายละเอียด / สมัครแข่ง", "uri": liffUrl },
+                        "action": { "type": "uri", "label": "สมัครแข่งขัน", "uri": liffUrl },
                         "style": "primary",
-                        "color": "#4f46e5",
+                        "color": "#1e40af",
                         "height": "sm"
                     }
                 ],
@@ -169,12 +173,17 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
 
     try {
         if (window.liff.isApiAvailable('shareTargetPicker')) {
-            await window.liff.shareTargetPicker([flexMessage]);
+            const res = await window.liff.shareTargetPicker([flexMessage]);
+            if (res) {
+                console.log("Share success");
+            } else {
+                console.log("Share canceled");
+            }
         } else {
-            alert("อุปกรณ์ไม่รองรับการแชร์ (Share Target Picker)");
+            alert("อุปกรณ์ของคุณไม่รองรับฟีเจอร์การแชร์ (ShareTargetPicker)");
         }
     } catch (error: any) { 
         console.error("Share Error", error);
-        alert(`แชร์ไม่สำเร็จ: ${error.message}`); 
+        alert(`แชร์ไม่สำเร็จ: ${error.code} - ${error.message}`); 
     }
 };
