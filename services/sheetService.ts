@@ -1,3 +1,4 @@
+
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament, MatchEvent } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
@@ -74,6 +75,26 @@ export const createTournament = async (name: string, type: string): Promise<stri
     } catch (error) {
         console.error("Create Tournament Error", error);
         return null;
+    }
+};
+
+export const updateTournament = async (tournament: Tournament): Promise<boolean> => {
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'updateTournament', tournament })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            return result.status === 'success';
+        }
+        return false;
+    } catch (error) {
+        console.error("Update Tournament Error", error);
+        return false;
     }
 };
 

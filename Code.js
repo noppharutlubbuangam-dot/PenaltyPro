@@ -1,3 +1,4 @@
+
 // ==========================================
 // COPY THIS CODE TO YOUR GOOGLE APPS SCRIPT (Code.gs)
 // ==========================================
@@ -46,6 +47,8 @@ function doPost(e) {
       return handleAiGenerate(data.prompt, data.model); 
     } else if (action === 'createTournament') {
       return createTournament(data.name, data.type);
+    } else if (action === 'updateTournament') { // Phase 4
+      return updateTournament(data.tournament);
     }
     
     return errorResponse("Unknown action: " + action);
@@ -270,6 +273,22 @@ function createTournament(name, type) {
   const id = "T" + Date.now();
   sheet.appendRow([id, name, type, "Active", "{}"]);
   return successResponse({ tournamentId: id });
+}
+
+function updateTournament(data) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Tournaments");
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(data.id)) {
+      sheet.getRange(i + 1, 2).setValue(data.name);
+      sheet.getRange(i + 1, 3).setValue(data.type);
+      sheet.getRange(i + 1, 4).setValue(data.status);
+      sheet.getRange(i + 1, 5).setValue(data.config);
+      return successResponse("Updated");
+    }
+  }
+  return errorResponse("Tournament not found");
 }
 
 function registerTeam(data) {

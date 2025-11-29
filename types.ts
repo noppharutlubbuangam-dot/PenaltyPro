@@ -1,3 +1,4 @@
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -46,12 +47,19 @@ export interface School {
   province: string;
 }
 
+export interface TournamentConfig {
+  halfTimeDuration?: number; // Minutes
+  playersPerTeam?: number; // 7 or 11
+  maxSubs?: number; // 0 = Unlimited
+  extraTime?: boolean;
+}
+
 export interface Tournament {
   id: string;
   name: string;
   type: 'Penalty' | '7v7' | '11v11';
   status: 'Active' | 'Archived' | 'Upcoming';
-  config?: string; // JSON string for specific rules
+  config?: string; // JSON string of TournamentConfig
 }
 
 export interface Team {
