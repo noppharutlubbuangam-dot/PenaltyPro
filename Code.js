@@ -107,7 +107,7 @@ function getData() {
   }
   if(!ss.getSheetByName("Donations")) {
      const s = ss.insertSheet("Donations");
-     s.appendRow(["ID", "Timestamp", "DonorName", "Amount", "Phone", "IsEDonation", "TaxID", "Address", "SlipURL", "TournamentID", "LineUserID", "Status"]);
+     s.appendRow(["ID", "Timestamp", "DonorName", "Amount", "Phone", "IsEDonation", "TaxID", "Address", "SlipURL", "TournamentID", "LineUserID", "Status", "IsAnonymous"]);
   }
   if(!ss.getSheetByName("News")) {
      const s = ss.insertSheet("News");
@@ -197,7 +197,21 @@ function getData() {
   const donationData = read("Donations");
   const donations = [];
   for(let i=1; i<donationData.length; i++) {
-      if(donationData[i][0]) donations.push({ id: String(donationData[i][0]), timestamp: donationData[i][1], donorName: donationData[i][2], amount: Number(donationData[i][3]), phone: String(donationData[i][4]), isEdonation: donationData[i][5], taxId: String(donationData[i][6]), address: String(donationData[i][7]), slipUrl: toLh3Link(donationData[i][8]), tournamentId: donationData[i][9], lineUserId: donationData[i][10], status: donationData[i][11] || 'Pending' });
+      if(donationData[i][0]) donations.push({ 
+          id: String(donationData[i][0]), 
+          timestamp: donationData[i][1], 
+          donorName: donationData[i][2], 
+          amount: Number(donationData[i][3]), 
+          phone: String(donationData[i][4]), 
+          isEdonation: donationData[i][5], 
+          taxId: String(donationData[i][6]), 
+          address: String(donationData[i][7]), 
+          slipUrl: toLh3Link(donationData[i][8]), 
+          tournamentId: donationData[i][9], 
+          lineUserId: donationData[i][10], 
+          status: donationData[i][11] || 'Pending',
+          isAnonymous: donationData[i][12] || false
+      });
   }
 
   const newsData = read("News");
@@ -275,10 +289,6 @@ function registerTeam(data) {
   }
   return successResponse({ status: 'success', teamId: teamId });
 }
-
-// ... (Rest of existing functions in Code.js like updateTeamStatus, etc. remain unchanged) ...
-// Ensure you copy all helper functions and other handlers from previous Code.js content
-// The crucial part above is registerTeam and getData updates.
 
 function updateTeamStatus(teamId, status, group, reason) {
   const ss = getSpreadsheet();
@@ -382,7 +392,6 @@ function updateTeamData(team, players) {
   return successResponse({ status: 'success' });
 }
 
-// ... Include other save/update functions (saveMatch, saveKicks, etc.) ...
 function saveMatch(data) {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName("Matches");
@@ -554,11 +563,11 @@ function verifyDonation(donationId, status) {
 function submitDonation(data) {
     const ss = getSpreadsheet();
     let sheet = ss.getSheetByName("Donations");
-    if (!sheet) { sheet = ss.insertSheet("Donations"); sheet.appendRow(["ID", "Timestamp", "DonorName", "Amount", "Phone", "IsEDonation", "TaxID", "Address", "SlipURL", "TournamentID", "LineUserID", "Status"]); }
+    if (!sheet) { sheet = ss.insertSheet("Donations"); sheet.appendRow(["ID", "Timestamp", "DonorName", "Amount", "Phone", "IsEDonation", "TaxID", "Address", "SlipURL", "TournamentID", "LineUserID", "Status", "IsAnonymous"]); }
     let slipUrl = "";
     if (data.slipFile && data.slipFile.startsWith('data:')) slipUrl = saveFileToDrive(data.slipFile, `donation_slip_${Date.now()}`);
     const id = "DON_" + Date.now();
-    sheet.appendRow([ id, new Date(), data.donorName, data.amount, data.donorPhone, data.isEdonation, data.taxId, data.address, slipUrl, data.tournamentId, data.lineUserId || '', 'Pending' ]);
+    sheet.appendRow([ id, new Date(), data.donorName, data.amount, data.donorPhone, data.isEdonation, data.taxId, data.address, slipUrl, data.tournamentId, data.lineUserId || '', 'Pending', data.isAnonymous || false ]);
     return successResponse({ status: 'success' });
 }
 
@@ -610,7 +619,22 @@ function updateTournament(tournament) {
     let sheet = ss.getSheetByName("Tournaments");
     const data = sheet.getDataRange().getValues();
     let config = {};
-    try { config = JSON.parse(tournament.config); if (config.objective && config.objective.images) { config.objective.images = config.objective.images.map(img => { if (img.url && img.url.startsWith('data:')) return { ...img, url: saveFileToDrive(img.url, `proj_img_${tournament.id}_${Date.now()}`) }; return img; }); } tournament.config = JSON.stringify(config); } catch(e) {}
+    try { 
+        config = JSON.parse(tournament.config); 
+        // Handle Image Uploads
+        if (config.objective && config.objective.images) { 
+            config.objective.images = config.objective.images.map(img => { 
+                if (img.url && img.url.startsWith('data:')) return { ...img, url: saveFileToDrive(img.url, `proj_img_${tournament.id}_${Date.now()}`) }; 
+                return img; 
+            }); 
+        }
+        // Handle Doc Upload (New)
+        if (config.objective && config.objective.docUrl && config.objective.docUrl.startsWith('data:')) {
+            config.objective.docUrl = saveFileToDrive(config.objective.docUrl, `proj_doc_${tournament.id}_${Date.now()}`);
+        }
+        tournament.config = JSON.stringify(config); 
+    } catch(e) {}
+    
     for(let i=1; i<data.length; i++) {
         if(String(data[i][0]) === String(tournament.id)) {
             sheet.getRange(i+1, 2).setValue(tournament.name);
