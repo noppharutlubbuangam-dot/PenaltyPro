@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { NewsItem } from '../types';
-import { Calendar, Bell, X, FileText, Download, Share2 } from 'lucide-react';
+import { Calendar, Bell, X, FileText, Download, Share2, Globe } from 'lucide-react';
 import { shareNews } from '../services/liffService';
 
 interface NewsFeedProps {
   news: NewsItem[];
   isLoading?: boolean;
   initialNewsId?: string | null;
+  currentTournamentId?: string | null;
 }
 
-const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId }) => {
+const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId, currentTournamentId }) => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   // Auto-open specific news if deep linked
@@ -49,9 +50,20 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId }) =
     );
   }
 
-  if (!news || news.length === 0) return null;
+  // Filter News: Show Global (no tournamentId or 'global') OR Current Tournament
+  const filteredNews = news.filter(item => {
+      if (!item.tournamentId || item.tournamentId === 'global') return true;
+      if (currentTournamentId && item.tournamentId === currentTournamentId) return true;
+      return false;
+  });
 
-  const sortedNews = [...news].sort((a, b) => b.timestamp - a.timestamp);
+  if (filteredNews.length === 0) return (
+      <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+          ยังไม่มีข่าวสารในขณะนี้
+      </div>
+  );
+
+  const sortedNews = [...filteredNews].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
     <>
@@ -63,6 +75,11 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId }) =
                   className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition group cursor-pointer relative"
                   onClick={() => setSelectedNews(item)}
                >
+                   {(!item.tournamentId || item.tournamentId === 'global') && (
+                       <div className="absolute top-2 right-2 z-10 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
+                           <Globe className="w-3 h-3" /> Global
+                       </div>
+                   )}
                    {item.imageUrl && (
                        <div className="h-48 overflow-hidden bg-slate-100 relative">
                            <img 

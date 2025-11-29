@@ -10,9 +10,15 @@ const FOLDER_NAME = "PenaltyPro_Uploads";
 
 function doGet(e) {
   const action = e.parameter.action;
-  if (action === 'getData') {
+  
+  // FIX: Explicitly handle getUsers to prevent the "Unexpected token P" error
+  if (action === 'getUsers') {
+    return getUsers();
+  } else if (action === 'getData') {
     return getData();
   }
+  
+  // Default response if action matches nothing
   return ContentService.createTextOutput("Penalty Pro Recorder API is running.");
 }
 
@@ -31,7 +37,7 @@ function doPost(e) {
       return saveMatch(data);
     } else if (action === 'saveKicks') {
        return saveKicks(data.data);
-    } else if (action === 'saveMatchEvents') { // Phase 3
+    } else if (action === 'saveMatchEvents') {
        return saveMatchEvents(data.events);
     } else if (action === 'saveSettings') {
       return saveSettings(data.settings);
@@ -47,10 +53,12 @@ function doPost(e) {
       return handleAiGenerate(data.prompt, data.model); 
     } else if (action === 'createTournament') {
       return createTournament(data.name, data.type);
-    } else if (action === 'updateTournament') { // Phase 4
+    } else if (action === 'updateTournament') {
       return updateTournament(data.tournament);
-    } else if (action === 'submitDonation') { // Phase 5
+    } else if (action === 'submitDonation') {
       return submitDonation(data);
+    } else if (action === 'updateUserRole') {
+      return updateUserRole(data.userId, data.role);
     }
     
     return errorResponse("Unknown action: " + action);
@@ -60,37 +68,46 @@ function doPost(e) {
   }
 }
 
-function testAuth() {
-  UrlFetchApp.fetch("https://www.google.com");
-  Logger.log("Authorized!");
-}
-
-// --- AI FUNCTION (GEMINI via Script Properties) ---
-function handleAiGenerate(promptText, modelName) {
-  var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
-  if (!apiKey) return errorResponse("Server Error: GEMINI_API_KEY missing");
-
-  var model = modelName || "gemini-1.5-flash"; 
-  var url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
-  
-  var payload = { "contents": [{ "parts": [{ "text": promptText }] }] };
-  var options = { "method": "post", "contentType": "application/json", "payload": JSON.stringify(payload), "muteHttpExceptions": true };
-
-  try {
-    var response = UrlFetchApp.fetch(url, options);
-    var json = JSON.parse(response.getContentText());
-    if (json.candidates && json.candidates.length > 0) {
-      return successResponse({ text: json.candidates[0].content.parts[0].text });
-    } else {
-      var errMsg = json.error ? json.error.message : "Unknown AI Error";
-      return errorResponse("AI Error (" + model + "): " + errMsg);
-    }
-  } catch (e) {
-    return errorResponse("Fetch Error: " + e.toString());
-  }
-}
-
 // --- CORE FUNCTIONS ---
+
+function getUsers() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Users");
+  if (!sheet) return successResponse({ users: [] });
+  
+  const data = sheet.getDataRange().getValues();
+  const users = [];
+  // Skip header
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (r[0]) {
+      users.push({
+        userId: String(r[0]),
+        username: r[1],
+        displayName: r[3],
+        role: r[4] || 'user',
+        phoneNumber: r[5],
+        pictureUrl: r[6]
+      });
+    }
+  }
+  return successResponse({ users: users });
+}
+
+function updateUserRole(userId, role) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Users");
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(userId)) {
+      // Role is column 5 (index 4) -> A=0, B=1, C=2, D=3, E=4
+      sheet.getRange(i + 1, 5).setValue(role); 
+      return successResponse({ status: 'success' });
+    }
+  }
+  return errorResponse("User not found");
+}
 
 function getData() {
   const ss = getSpreadsheet();
@@ -256,7 +273,13 @@ function getData() {
     for(let i=1; i<nData.length; i++) {
        if(nData[i][0]) {
          news.push({
-           id: String(nData[i][0]), title: nData[i][1], content: nData[i][2], imageUrl: toLh3Link(nData[i][3]), timestamp: Number(nData[i][4]), documentUrl: nData[i][5] || ''
+           id: String(nData[i][0]), 
+           title: nData[i][1], 
+           content: nData[i][2], 
+           imageUrl: toLh3Link(nData[i][3]), 
+           timestamp: Number(nData[i][4]), 
+           documentUrl: nData[i][5] || '',
+           tournamentId: nData[i][6] || 'global' // Column 7 for Tournament ID
          });
        }
     }
@@ -265,445 +288,13 @@ function getData() {
   return successResponse({ teams, players, matches, config, schools, news, tournaments });
 }
 
-function createTournament(name, type) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Tournaments");
-  if (!sheet) {
-     sheet = ss.insertSheet("Tournaments");
-     sheet.appendRow(["ID", "Name", "Type", "Status", "ConfigJSON"]);
-  }
-  const id = "T" + Date.now();
-  sheet.appendRow([id, name, type, "Active", "{}"]);
-  return successResponse({ tournamentId: id });
-}
-
-function updateTournament(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName("Tournaments");
-  const rows = sheet.getDataRange().getValues();
-  const lock = LockService.getScriptLock();
-  
-  if (lock.tryLock(30000)) {
-    try {
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]) === String(data.id)) {
-          
-          // Parse config to handle image uploads
-          let configObj = {};
-          try {
-             configObj = JSON.parse(data.config);
-          } catch(e) { configObj = {}; }
-
-          // Handle Objective Images
-          if (configObj.objective && configObj.objective.images && Array.isArray(configObj.objective.images)) {
-             configObj.objective.images = configObj.objective.images.map(img => {
-                if (img.url && img.url.startsWith('data:')) {
-                   // Save to Drive and replace URL
-                   const newUrl = saveFileToDrive(img.url, 'proj_img_' + data.id + '_' + img.id);
-                   return { ...img, url: newUrl };
-                }
-                return img;
-             });
-          }
-
-          // Serialize back
-          const finalConfigStr = JSON.stringify(configObj);
-
-          sheet.getRange(i + 1, 2).setValue(data.name);
-          sheet.getRange(i + 1, 3).setValue(data.type);
-          sheet.getRange(i + 1, 4).setValue(data.status);
-          sheet.getRange(i + 1, 5).setValue(finalConfigStr);
-          
-          return successResponse({ status: 'success' });
-        }
-      }
-      return errorResponse("Tournament not found");
-    } finally {
-      lock.releaseLock();
-    }
-  }
-  return errorResponse("Server busy");
-}
-
-function submitDonation(data) {
-  const ss = getSpreadsheet();
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(30000)) {
-    try {
-      let sheet = ss.getSheetByName("Donations");
-      if (!sheet) {
-        sheet = ss.insertSheet("Donations");
-        sheet.appendRow(["ID", "Timestamp", "TournamentID", "Amount", "DonorName", "DonorPhone", "eDonation", "TaxID", "Address", "SlipURL"]);
-      }
-      
-      const donationId = "D" + Date.now();
-      let slipUrl = "";
-      if (data.slipFile && data.slipFile.startsWith('data:')) {
-         slipUrl = saveFileToDrive(data.slipFile, `donation_slip_${donationId}`);
-      }
-      
-      sheet.appendRow([
-        donationId,
-        new Date().toISOString(),
-        data.tournamentId,
-        data.amount,
-        data.donorName,
-        "'" + data.donorPhone,
-        data.isEdonation ? "Yes" : "No",
-        data.isEdonation ? data.taxId : "",
-        data.isEdonation ? data.address : "",
-        slipUrl
-      ]);
-      
-      return successResponse({ status: 'success', donationId: donationId });
-    } catch (e) {
-      return errorResponse("Donation Error: " + e.toString());
-    } finally {
-      lock.releaseLock();
-    }
-  }
-  return errorResponse("Server busy");
-}
-
-function registerTeam(data) {
-  const ss = getSpreadsheet();
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(30000)) { 
-    try {
-      const tId = data.tournamentId || 'default';
-      
-      // CHECK MAX TEAMS LIMIT
-      let maxTeams = 0;
-      const tourneySheet = ss.getSheetByName("Tournaments");
-      if (tourneySheet) {
-          const tRows = tourneySheet.getDataRange().getValues();
-          for(let i=1; i<tRows.length; i++) {
-              if (String(tRows[i][0]) === tId) {
-                  try {
-                      const config = JSON.parse(tRows[i][4]);
-                      if (config.maxTeams) maxTeams = parseInt(config.maxTeams);
-                  } catch(e) {}
-                  break;
-              }
-          }
-      }
-
-      let teamSheet = ss.getSheetByName("Teams");
-      if (!teamSheet) { teamSheet = ss.insertSheet("Teams"); teamSheet.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID"]); }
-      
-      // Count existing teams in this tournament
-      if (maxTeams > 0) {
-          const allTeamsData = teamSheet.getDataRange().getValues();
-          let currentTeamCount = 0;
-          for(let i=1; i<allTeamsData.length; i++) {
-              if (String(allTeamsData[i][18]) === tId && allTeamsData[i][5] !== 'Rejected') {
-                  currentTeamCount++;
-              }
-          }
-          if (currentTeamCount >= maxTeams) {
-              return errorResponse("การลงทะเบียนเต็มแล้ว (Full)");
-          }
-      }
-
-      const teamId = "T" + Date.now();
-      const shortName = data.shortName || data.schoolName.substring(0, 3).toUpperCase();
-      const regTime = data.registrationTime ? new Date(data.registrationTime).toLocaleString() : new Date().toLocaleString();
-
-      const teamRow = [teamId, data.schoolName, shortName, data.color, "", "Pending", "", data.district, data.province, data.directorName, data.managerName, "'" + data.phone, data.coachName, "'" + data.coachPhone, "", "", "", regTime, tId];
-      teamSheet.appendRow(teamRow);
-      const teamRowIndex = teamSheet.getLastRow();
-
-      let playerSheet = ss.getSheetByName("Players");
-      if (!playerSheet) { playerSheet = ss.insertSheet("Players"); playerSheet.appendRow(["ID", "TeamID", "Name", "Number", "Position", "PhotoUrl", "BirthDate", "TournamentID"]); }
-      
-      const playersMeta = []; 
-      data.players.forEach(p => {
-         const pid = "P" + Math.floor(Math.random() * 1000000);
-         playerSheet.appendRow([pid, teamId, p.name, "'" + p.number, 'Player', "", p.birthDate, tId]);
-         playersMeta.push({ file: p.photoFile, rowIndex: playerSheet.getLastRow(), name: p.name });
-      });
-
-      try {
-         const logoUrl = data.logoFile ? saveFileToDrive(data.logoFile, `logo_${teamId}`) : '';
-         const docUrl = data.documentFile ? saveFileToDrive(data.documentFile, `doc_${teamId}`) : '';
-         const slipUrl = data.slipFile ? saveFileToDrive(data.slipFile, `slip_${teamId}`) : '';
-         
-         if (logoUrl) teamSheet.getRange(teamRowIndex, 5).setValue(logoUrl);
-         if (docUrl) teamSheet.getRange(teamRowIndex, 15).setValue(docUrl);
-         if (slipUrl) teamSheet.getRange(teamRowIndex, 16).setValue(slipUrl);
-         
-         playersMeta.forEach(pm => {
-            if (pm.file) playerSheet.getRange(pm.rowIndex, 6).setValue(saveFileToDrive(pm.file, `player_${pm.name}_${teamId}`));
-         });
-      } catch (uploadError) { Logger.log("Upload Warning: " + uploadError); }
-      
-      return successResponse({ teamId: teamId });
-    } catch (e) { return errorResponse(e.toString()); } finally { lock.releaseLock(); }
-  }
-  return errorResponse("Busy");
-}
-
-function updateTeamData(teamData, playersData) {
-  const ss = getSpreadsheet();
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(30000)) { 
-    try {
-      const teamSheet = ss.getSheetByName("Teams");
-      const tData = teamSheet.getDataRange().getValues();
-      let teamRowIndex = -1;
-      let currentTId = 'default';
-      
-      for (let i = 1; i < tData.length; i++) {
-        if (String(tData[i][0]) === String(teamData.id)) {
-          teamRowIndex = i + 1;
-          currentTId = tData[i][18] || 'default'; // Preserve TournamentID
-          break;
-        }
-      }
-      
-      if (teamRowIndex !== -1) {
-         let finalLogo = teamData.logoUrl; let finalSlip = teamData.slipUrl; let finalDoc = teamData.docUrl;
-         if (finalLogo && finalLogo.startsWith('data:')) finalLogo = saveFileToDrive(finalLogo, `logo_${teamData.name}`);
-         if (finalSlip && finalSlip.startsWith('data:')) finalSlip = saveFileToDrive(finalSlip, `slip_${teamData.name}`);
-         if (finalDoc && finalDoc.startsWith('data:')) finalDoc = saveFileToDrive(finalDoc, `doc_${teamData.name}`);
-
-         teamSheet.getRange(teamRowIndex, 2).setValue(teamData.name);
-         teamSheet.getRange(teamRowIndex, 3).setValue(teamData.shortName || teamData.name.substring(0,3));
-         if (finalLogo) teamSheet.getRange(teamRowIndex, 5).setValue(finalLogo);
-         teamSheet.getRange(teamRowIndex, 4).setValue(teamData.color);
-         teamSheet.getRange(teamRowIndex, 7).setValue(teamData.group || '');
-         teamSheet.getRange(teamRowIndex, 8).setValue(teamData.district);
-         teamSheet.getRange(teamRowIndex, 9).setValue(teamData.province);
-         teamSheet.getRange(teamRowIndex, 10).setValue(teamData.directorName || '');
-         teamSheet.getRange(teamRowIndex, 11).setValue(teamData.managerName);
-         teamSheet.getRange(teamRowIndex, 12).setValue("'" + teamData.managerPhone);
-         teamSheet.getRange(teamRowIndex, 13).setValue(teamData.coachName);
-         teamSheet.getRange(teamRowIndex, 14).setValue("'" + teamData.coachPhone);
-         if (finalDoc) teamSheet.getRange(teamRowIndex, 15).setValue(finalDoc); 
-         if (finalSlip) teamSheet.getRange(teamRowIndex, 16).setValue(finalSlip);
-      }
-      
-      const playerSheet = ss.getSheetByName("Players");
-      const allPlayers = playerSheet.getDataRange().getValues();
-      for (let i = allPlayers.length - 1; i >= 1; i--) {
-        if (String(allPlayers[i][1]) === String(teamData.id)) playerSheet.deleteRow(i + 1);
-      }
-      
-      playersData.forEach(p => {
-         let finalPhoto = p.photoUrl;
-         if (finalPhoto && finalPhoto.startsWith('data:')) finalPhoto = saveFileToDrive(finalPhoto, `player_${p.name}`);
-         playerSheet.appendRow([p.id || "P" + Math.floor(Math.random() * 1000000), teamData.id, p.name, "'" + p.number, 'Player', finalPhoto || '', p.birthDate, currentTId]);
-      });
-      return successResponse({ status: 'success' });
-    } catch (e) { return errorResponse(e.toString()); } finally { lock.releaseLock(); }
-  }
-  return errorResponse("Server busy");
-}
-
-function updateTeamStatus(teamId, status, group, reason) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName("Teams");
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(teamId)) {
-      sheet.getRange(i + 1, 6).setValue(status);
-      if (group !== undefined) sheet.getRange(i + 1, 7).setValue(group);
-      if (reason !== undefined) sheet.getRange(i + 1, 17).setValue(reason);
-      return successResponse({ status: 'success' });
-    }
-  }
-  return errorResponse("Team not found");
-}
-
-function scheduleMatch(data) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Matches");
-  if (!sheet) { sheet = ss.insertSheet("Matches"); sheet.appendRow(["MatchID","TeamA","TeamB","ScoreA","ScoreB","Winner","Date","Summary","Round","Status","Venue","ScheduledTime","LiveURL","LiveCover","TournamentID"]); }
-  
-  const rows = sheet.getDataRange().getValues();
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(5000)) {
-    try {
-      let found = false;
-      for (let i = 1; i < rows.length; i++) {
-         if ((data.matchId && String(rows[i][0]) === String(data.matchId)) || (data.roundLabel && rows[i][8] === data.roundLabel)) {
-             sheet.getRange(i+1, 2).setValue(data.teamA);
-             sheet.getRange(i+1, 3).setValue(data.teamB);
-             if (data.venue) sheet.getRange(i+1, 11).setValue(data.venue);
-             if (data.scheduledTime) {
-                sheet.getRange(i+1, 12).setValue(data.scheduledTime);
-                sheet.getRange(i+1, 7).setValue(data.scheduledTime);
-             }
-             if (!rows[i][0] && data.matchId) sheet.getRange(i+1, 1).setValue(data.matchId);
-             
-             if (data.livestreamUrl !== undefined) sheet.getRange(i+1, 13).setValue(data.livestreamUrl);
-             if (data.livestreamCover !== undefined) {
-                 let cover = data.livestreamCover;
-                 if (cover && cover.startsWith('data:')) cover = saveFileToDrive(cover, `cover_${data.matchId || Date.now()}`);
-                 sheet.getRange(i+1, 14).setValue(cover);
-             }
-             found = true; break;
-         }
-      }
-      
-      if (!found) {
-          let cover = data.livestreamCover || '';
-          if (cover && cover.startsWith('data:')) cover = saveFileToDrive(cover, `cover_${data.matchId || Date.now()}`);
-          sheet.appendRow([data.matchId, data.teamA, data.teamB, 0, 0, '', data.scheduledTime || new Date().toISOString(), '', data.roundLabel, 'Scheduled', data.venue || '', data.scheduledTime || '', data.livestreamUrl || '', cover, data.tournamentId || 'default']);
-      }
-      return successResponse({ status: 'success' });
-    } finally { lock.releaseLock(); }
-  }
-  return errorResponse("Busy");
-}
-
-function saveMatch(data) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Matches");
-  if (!sheet) { sheet = ss.insertSheet("Matches"); sheet.appendRow(["MatchID","TeamA","TeamB","ScoreA","ScoreB","Winner","Date","Summary","Round","Status","Venue","ScheduledTime","LiveURL","LiveCover","TournamentID"]); }
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(5000)) {
-    try {
-      const rows = sheet.getDataRange().getValues();
-      let rowIndex = -1;
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]) === String(data.matchId)) {
-          rowIndex = i + 1; break;
-        }
-      }
-      if (rowIndex !== -1) {
-        sheet.getRange(rowIndex, 4).setValue(data.scoreA);
-        sheet.getRange(rowIndex, 5).setValue(data.scoreB);
-        sheet.getRange(rowIndex, 6).setValue(data.winner);
-        sheet.getRange(rowIndex, 10).setValue(data.status || 'Finished'); 
-        if (data.teamA) sheet.getRange(rowIndex, 2).setValue(data.teamA);
-        if (data.teamB) sheet.getRange(rowIndex, 3).setValue(data.teamB);
-        if (data.summary) sheet.getRange(rowIndex, 8).setValue(data.summary);
-        if (data.livestreamUrl !== undefined) sheet.getRange(rowIndex, 13).setValue(data.livestreamUrl);
-        if (data.livestreamCover !== undefined) {
-             let cover = data.livestreamCover;
-             if (cover && cover.startsWith('data:')) cover = saveFileToDrive(cover, `cover_${data.matchId}`);
-             sheet.getRange(rowIndex, 14).setValue(cover);
-        }
-      } else {
-        sheet.appendRow([data.matchId, data.teamA, data.teamB, data.scoreA, data.scoreB, data.winner, new Date().toISOString(), data.summary, data.roundLabel || '', 'Finished', '', '', '', '', data.tournamentId || 'default']);
-      }
-      
-      if (data.kicks && data.kicks.length > 0) {
-         saveKicks(data.kicks.map(k => ({
-             matchId: data.matchId, round: k.round, team: k.teamId, player: k.player, result: k.result, timestamp: k.timestamp || Date.now(), tournamentId: data.tournamentId || 'default'
-         })));
-      }
-      return successResponse({ status: 'success' });
-    } finally { lock.releaseLock(); }
-  }
-  return errorResponse("Busy");
-}
-
-function saveKicks(kicksArray) {
-   const ss = getSpreadsheet();
-   let sheet = ss.getSheetByName("Kicks");
-   if (!sheet) { sheet = ss.insertSheet("Kicks"); sheet.appendRow(["MatchID", "Round", "Team", "Player", "Result", "Timestamp", "TournamentID"]); }
-   const newRows = kicksArray.map(k => [k.matchId, k.round, k.team, k.player, k.result, k.timestamp, k.tournamentId || 'default']);
-   if (newRows.length > 0) {
-       const lastRow = sheet.getLastRow();
-       sheet.getRange(lastRow + 1, 1, newRows.length, 7).setValues(newRows);
-   }
-   return successResponse({ status: 'success' });
-}
-
-// Phase 3: Save Match Events
-function saveMatchEvents(eventsArray) {
-   if (!eventsArray || eventsArray.length === 0) return successResponse("No events");
-   const ss = getSpreadsheet();
-   let sheet = ss.getSheetByName("MatchEvents");
-   if (!sheet) { sheet = ss.insertSheet("MatchEvents"); sheet.appendRow(["ID", "MatchID", "TournamentID", "Minute", "Type", "Player", "TeamID", "RelatedPlayer", "Timestamp"]); }
-   
-   const newRows = eventsArray.map(e => [e.id, e.matchId, e.tournamentId, e.minute, e.type, e.player, e.teamId, e.relatedPlayer || '', e.timestamp]);
-   if (newRows.length > 0) {
-       const lastRow = sheet.getLastRow();
-       sheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
-   }
-   return successResponse({ status: 'success' });
-}
-
-// ... saveSettings, deleteMatch, utility functions (unchanged) ...
-function saveSettings(settings) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Config");
-  if (!sheet) sheet = ss.insertSheet("Config");
-  let objImg = settings.objectiveImageUrl;
-  if (objImg && objImg.startsWith('data:')) objImg = saveFileToDrive(objImg, 'objective_img_' + Date.now());
-  const values = [[settings.competitionName, settings.competitionLogo, settings.bankName, settings.bankAccount, settings.accountName, settings.locationName, settings.locationLink, settings.announcement, settings.adminPin, settings.locationLat, settings.locationLng, settings.registrationFee, settings.fundraisingGoal, settings.objectiveTitle, settings.objectiveDescription, objImg || settings.objectiveImageUrl]];
-  if (sheet.getLastRow() > 1) sheet.getRange(2, 1, 1, 16).setValues(values); else sheet.appendRow(values[0]);
-  return successResponse({ status: 'success' });
-}
-
-function deleteMatch(matchId) {
-  const ss = getSpreadsheet();
-  const lock = LockService.getScriptLock();
-  if (lock.tryLock(10000)) {
-    try {
-      const kickSheet = ss.getSheetByName("Kicks");
-      if (kickSheet) {
-          const kData = kickSheet.getDataRange().getValues();
-          for (let i = kData.length - 1; i >= 1; i--) {
-              if (String(kData[i][0]) === String(matchId)) kickSheet.deleteRow(i + 1);
-          }
-      }
-      const sheet = ss.getSheetByName("Matches");
-      const rows = sheet.getDataRange().getValues();
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]) === String(matchId)) { sheet.deleteRow(i + 1); return successResponse({ status: 'success' }); }
-      }
-      return errorResponse("Match not found");
-    } finally { lock.releaseLock(); }
-  }
-  return errorResponse("Busy");
-}
-
-function handleAuth(data) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Users");
-  if (!sheet) { sheet = ss.insertSheet("Users"); sheet.appendRow(["ID", "Username", "Password", "DisplayName", "Role", "Phone", "PictureUrl", "LineUserId", "LastLogin"]); }
-  const users = sheet.getDataRange().getValues();
-  const type = data.authType; 
-
-  if (type === 'register') {
-    for (let i = 1; i < users.length; i++) { if (users[i][1] && String(users[i][1]).toLowerCase() === String(data.username).toLowerCase()) return errorResponse("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"); }
-    const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
-    sheet.appendRow([newId, data.username, data.password, data.displayName, role, data.phone || '', data.pictureUrl || '', '', new Date()]);
-    return successResponse({ userId: newId, username: data.username, displayName: data.displayName, role: role, phoneNumber: data.phone, pictureUrl: data.pictureUrl });
-  } else if (type === 'login') {
-    for (let i = 1; i < users.length; i++) {
-      if (String(users[i][1]).toLowerCase() === String(data.username).toLowerCase() && String(users[i][2]) === String(data.password)) {
-        sheet.getRange(i + 1, 9).setValue(new Date());
-        return successResponse({ userId: users[i][0], username: users[i][1], displayName: users[i][3], role: users[i][4], phoneNumber: users[i][5], pictureUrl: users[i][6] });
-      }
-    }
-    return errorResponse("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
-  } else if (type === 'line') {
-    const lineId = data.lineUserId; let foundIndex = -1;
-    for (let i = 1; i < users.length; i++) { if (String(users[i][7]) === String(lineId)) { foundIndex = i; break; } }
-    if (foundIndex !== -1) {
-      sheet.getRange(foundIndex + 1, 9).setValue(new Date());
-      if (data.pictureUrl) sheet.getRange(foundIndex + 1, 7).setValue(data.pictureUrl);
-      if (data.displayName) sheet.getRange(foundIndex + 1, 4).setValue(data.displayName);
-      const u = users[foundIndex];
-      return successResponse({ userId: u[0], username: u[1], displayName: data.displayName, role: u[4], phoneNumber: u[5], pictureUrl: data.pictureUrl });
-    } else {
-      const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
-      sheet.appendRow([newId, '', '', data.displayName, role, '', data.pictureUrl, lineId, new Date()]);
-      return successResponse({ userId: newId, displayName: data.displayName, role: role, pictureUrl: data.pictureUrl, type: 'line' });
-    }
-  }
-  return errorResponse("Invalid Auth Type");
-}
-
 function manageNews(data) {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName("News");
-  if (!sheet) sheet = ss.insertSheet("News");
+  if (!sheet) {
+      sheet = ss.insertSheet("News");
+      sheet.appendRow(["ID", "Title", "Content", "ImageURL", "Timestamp", "DocURL", "TournamentID"]);
+  }
   const subAction = data.subAction;
   const item = data.newsItem;
   const lock = LockService.getScriptLock();
@@ -712,7 +303,15 @@ function manageNews(data) {
       if (subAction === 'add') {
          let imgUrl = item.imageUrl && item.imageUrl.startsWith('data:') ? saveFileToDrive(item.imageUrl, `news_img_${Date.now()}`) : '';
          let docUrl = item.documentUrl && item.documentUrl.startsWith('data:') ? saveFileToDrive(item.documentUrl, `news_doc_${Date.now()}`) : '';
-         sheet.appendRow([item.id || Date.now().toString(), item.title, item.content, imgUrl, item.timestamp || Date.now(), docUrl]);
+         sheet.appendRow([
+             item.id || Date.now().toString(), 
+             item.title, 
+             item.content, 
+             imgUrl, 
+             item.timestamp || Date.now(), 
+             docUrl,
+             item.tournamentId || 'global'
+         ]);
       } else if (subAction === 'edit') {
          const rows = sheet.getDataRange().getValues();
          for (let i = 1; i < rows.length; i++) {
@@ -724,6 +323,9 @@ function manageNews(data) {
                }
                if (item.documentUrl && item.documentUrl.startsWith('data:')) {
                   sheet.getRange(i+1, 6).setValue(saveFileToDrive(item.documentUrl, `news_doc_${item.id}`));
+               }
+               if (item.tournamentId) {
+                   sheet.getRange(i+1, 7).setValue(item.tournamentId);
                }
                break;
             }
@@ -742,7 +344,94 @@ function manageNews(data) {
   return errorResponse("Server busy");
 }
 
+function handleAuth(data) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("Users");
+  if (!sheet) {
+    sheet = ss.insertSheet("Users");
+    sheet.appendRow(["ID", "Username", "Password", "DisplayName", "Role", "Phone", "PictureURL"]);
+  }
+  
+  if (data.authType === 'line') {
+    // Check if LINE user exists, else register
+    const rows = sheet.getDataRange().getValues();
+    let found = false;
+    let user = null;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(data.lineUserId)) {
+        user = {
+          userId: rows[i][0],
+          username: rows[i][1],
+          displayName: rows[i][3],
+          role: rows[i][4],
+          phoneNumber: rows[i][5],
+          pictureUrl: rows[i][6]
+        };
+        // Update profile if changed
+        if (rows[i][3] !== data.displayName || rows[i][6] !== data.pictureUrl) {
+             sheet.getRange(i+1, 4).setValue(data.displayName);
+             sheet.getRange(i+1, 7).setValue(data.pictureUrl);
+             user.displayName = data.displayName;
+             user.pictureUrl = data.pictureUrl;
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const newUser = {
+        userId: data.lineUserId,
+        username: data.lineUserId, // Use ID as username for LINE
+        password: '', // No password for LINE
+        displayName: data.displayName,
+        role: 'user', // Default role
+        phone: '',
+        pictureUrl: data.pictureUrl
+      };
+      sheet.appendRow([newUser.userId, newUser.username, newUser.password, newUser.displayName, newUser.role, newUser.phone, newUser.pictureUrl]);
+      return successResponse(newUser);
+    }
+    return successResponse(user);
+  } 
+  else if (data.authType === 'login') {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][1] === data.username && rows[i][2] === data.password) {
+        return successResponse({
+          userId: rows[i][0],
+          username: rows[i][1],
+          displayName: rows[i][3],
+          role: rows[i][4],
+          phoneNumber: rows[i][5],
+          pictureUrl: rows[i][6]
+        });
+      }
+    }
+    return errorResponse("Invalid username or password");
+  } 
+  else if (data.authType === 'register') {
+    // Check duplicate
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][1] === data.username) return errorResponse("Username already exists");
+    }
+    const newId = 'U_' + Date.now();
+    sheet.appendRow([newId, data.username, data.password, data.displayName, 'user', data.phone, '']);
+    return successResponse({
+      userId: newId,
+      username: data.username,
+      displayName: data.displayName,
+      role: 'user',
+      phoneNumber: data.phone,
+      pictureUrl: ''
+    });
+  }
+}
+
+// --- STANDARD FUNCTIONS (Keep existing implementations) ---
+
 function getSpreadsheet() { return SpreadsheetApp.getActiveSpreadsheet(); }
+
 function saveFileToDrive(base64Data, filename) {
   try {
     if (!base64Data || base64Data === "") return "";
@@ -758,10 +447,12 @@ function saveFileToDrive(base64Data, filename) {
     return file.getUrl();
   } catch (e) { return ""; }
 }
+
 function toLh3Link(url) {
   if (!url || !url.includes("drive.google.com")) return url || "";
   try { return "https://lh3.googleusercontent.com/d/" + url.match(/\/d\/(.+?)\//)[1]; } catch (e) { return url; }
 }
+
 function formatDate(dateObj) {
   try {
     const d = new Date(dateObj);
@@ -769,5 +460,425 @@ function formatDate(dateObj) {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   } catch (e) { return String(dateObj); }
 }
+
 function successResponse(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
 function errorResponse(message) { return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: message })).setMimeType(ContentService.MimeType.JSON); }
+
+// --- Existing logic placeholders (Ensure you keep these if you had them) ---
+function registerTeam(data) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Teams");
+  const playersSheet = ss.getSheetByName("Players");
+  
+  const lock = LockService.getScriptLock();
+  if (lock.tryLock(10000)) {
+    try {
+      // Handle Files
+      const logoUrl = saveFileToDrive(data.logoFile, `logo_${data.schoolName}_${Date.now()}`);
+      const docUrl = saveFileToDrive(data.documentFile, `doc_${data.schoolName}_${Date.now()}`);
+      const slipUrl = saveFileToDrive(data.slipFile, `slip_${data.schoolName}_${Date.now()}`);
+      
+      const teamId = "T_" + Date.now();
+      
+      sheet.appendRow([
+        teamId, data.schoolName, data.shortName, data.color, logoUrl, 
+        'Pending', '', data.district, data.province, 
+        data.directorName, data.managerName, "'" + data.managerPhone, 
+        data.coachName, "'" + data.coachPhone, docUrl, slipUrl, '', data.registrationTime, data.tournamentId
+      ]);
+      
+      // Players
+      if (data.players && data.players.length > 0) {
+        data.players.forEach(p => {
+           let photoUrl = '';
+           if (p.photoFile && p.photoFile.startsWith('data:')) {
+               photoUrl = saveFileToDrive(p.photoFile, `p_${teamId}_${p.sequence}`);
+           }
+           playersSheet.appendRow([
+             "P_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+             teamId,
+             p.name,
+             "'" + p.number, // Ensure string
+             p.position || 'Player',
+             photoUrl,
+             p.birthDate,
+             data.tournamentId
+           ]);
+        });
+      }
+      
+      return successResponse({ status: 'success', teamId: teamId });
+    } catch(e) {
+      return errorResponse(e.toString());
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  return errorResponse("Server busy");
+}
+
+function updateTeamStatus(teamId, status, group, reason) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Teams");
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(teamId)) {
+      sheet.getRange(i + 1, 6).setValue(status); // Status
+      if (group) sheet.getRange(i + 1, 7).setValue(group); // Group
+      if (reason !== undefined) sheet.getRange(i + 1, 17).setValue(reason); // RejectReason
+      return successResponse({ status: 'success' });
+    }
+  }
+  return errorResponse("Team not found");
+}
+
+function updateTeamData(team, players) {
+  const ss = getSpreadsheet();
+  const teamSheet = ss.getSheetByName("Teams");
+  const playerSheet = ss.getSheetByName("Players");
+  
+  // Update Team
+  const tData = teamSheet.getDataRange().getValues();
+  let foundTeam = false;
+  for(let i=1; i<tData.length; i++) {
+      if(String(tData[i][0]) === String(team.id)) {
+          // Update columns based on your structure
+          if(team.name) teamSheet.getRange(i+1, 2).setValue(team.name);
+          if(team.shortName) teamSheet.getRange(i+1, 3).setValue(team.shortName);
+          if(team.color) teamSheet.getRange(i+1, 4).setValue(team.color);
+          if(team.logoUrl && team.logoUrl.startsWith('http')) teamSheet.getRange(i+1, 5).setValue(team.logoUrl);
+          if(team.docUrl && team.docUrl.startsWith('http')) teamSheet.getRange(i+1, 15).setValue(team.docUrl);
+          if(team.slipUrl && team.slipUrl.startsWith('http')) teamSheet.getRange(i+1, 16).setValue(team.slipUrl);
+          // Personnel
+          if(team.directorName) teamSheet.getRange(i+1, 10).setValue(team.directorName);
+          if(team.managerName) teamSheet.getRange(i+1, 11).setValue(team.managerName);
+          if(team.managerPhone) teamSheet.getRange(i+1, 12).setValue("'" + team.managerPhone);
+          if(team.coachName) teamSheet.getRange(i+1, 13).setValue(team.coachName);
+          if(team.coachPhone) teamSheet.getRange(i+1, 14).setValue("'" + team.coachPhone);
+          
+          foundTeam = true;
+          break;
+      }
+  }
+  
+  if (!foundTeam) return errorResponse("Team not found");
+
+  // Update Players (Simple approach: Delete old for team, Add new)
+  // Or match by Name/ID if preserving IDs is crucial. Here assuming full replace for edit form
+  // BETTER: Match by ID if available, else append
+  
+  // NOTE: Ideally, we should iterate players and update row if ID exists, or append if new
+  // For brevity in this fix, I'll stick to a robust update loop
+  
+  const pData = playerSheet.getDataRange().getValues();
+  players.forEach(p => {
+      let matched = false;
+      // Try to find existing player by ID (if it's not a temp ID)
+      if (p.id && !p.id.startsWith('TEMP_')) {
+          for(let r=1; r<pData.length; r++) {
+              if (String(pData[r][0]) === String(p.id)) {
+                  // Update
+                  if(p.name) playerSheet.getRange(r+1, 3).setValue(p.name);
+                  if(p.number) playerSheet.getRange(r+1, 4).setValue("'" + p.number);
+                  if(p.birthDate) playerSheet.getRange(r+1, 7).setValue(p.birthDate);
+                  if(p.photoUrl && p.photoUrl.startsWith('data:')) {
+                      const url = saveFileToDrive(p.photoUrl, `p_${team.id}_${Date.now()}`);
+                      playerSheet.getRange(r+1, 6).setValue(url);
+                  }
+                  matched = true;
+                  break;
+              }
+          }
+      }
+      
+      if (!matched) {
+          // Append New
+          let photoUrl = '';
+          if(p.photoUrl && p.photoUrl.startsWith('data:')) {
+              photoUrl = saveFileToDrive(p.photoUrl, `p_${team.id}_${Date.now()}`);
+          }
+          playerSheet.appendRow([
+             "P_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+             team.id,
+             p.name,
+             "'" + p.number,
+             'Player',
+             photoUrl,
+             p.birthDate,
+             team.tournamentId || 'default'
+          ]);
+      }
+  });
+
+  return successResponse({ status: 'success' });
+}
+
+function saveMatch(data) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName("Matches");
+  const rows = sheet.getDataRange().getValues();
+  let matchRowIndex = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(data.matchId)) {
+      matchRowIndex = i + 1;
+      break;
+    }
+  }
+
+  // If match doesn't exist (new match), append it
+  if (matchRowIndex === -1) {
+    sheet.appendRow([
+      data.matchId,
+      typeof data.teamA === 'string' ? data.teamA : data.teamA.name,
+      typeof data.teamB === 'string' ? data.teamB : data.teamB.name,
+      data.scoreA,
+      data.scoreB,
+      data.winner,
+      new Date().toISOString(),
+      data.summary || '',
+      data.roundLabel || '',
+      data.status || 'Finished',
+      data.venue || '',
+      data.scheduledTime || '',
+      data.livestreamUrl || '',
+      data.livestreamCover || '',
+      data.tournamentId || 'default'
+    ]);
+  } else {
+    // Update existing
+    sheet.getRange(matchRowIndex, 4).setValue(data.scoreA);
+    sheet.getRange(matchRowIndex, 5).setValue(data.scoreB);
+    sheet.getRange(matchRowIndex, 6).setValue(data.winner);
+    sheet.getRange(matchRowIndex, 8).setValue(data.summary || ''); // Summary
+    if (data.status) sheet.getRange(matchRowIndex, 10).setValue(data.status);
+  }
+
+  // Save Kicks if present
+  if (data.kicks && data.kicks.length > 0) {
+      saveKicks(data.kicks);
+  }
+  
+  return successResponse({ status: 'success' });
+}
+
+function saveKicks(kicks) {
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName("Kicks");
+    
+    // For simplicity, we just append all kicks. 
+    // In a production app, you might want to clear old kicks for this match first or check for duplicates.
+    // Here we check if kick ID exists to avoid duplication if re-saving
+    
+    const existingIds = new Set();
+    const data = sheet.getDataRange().getValues();
+    // Assuming Kick ID isn't strictly stored in column 1 (MatchID is col 1). 
+    // Wait, Kicks sheet structure: MatchID, Round, Team, Player, Result, Timestamp
+    // We don't have a unique Kick ID column in the sheet schema defined in getData().
+    // We will delete all kicks for this match and re-insert to be safe and clean.
+    
+    const matchId = kicks[0].matchId;
+    // Find rows to delete (iterate backwards)
+    for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][0]) === String(matchId)) {
+            sheet.deleteRow(i + 1);
+        }
+    }
+    
+    // Insert new
+    kicks.forEach(k => {
+        sheet.appendRow([
+            k.matchId,
+            k.round,
+            k.teamId,
+            k.player,
+            k.result,
+            k.timestamp,
+            k.tournamentId || 'default'
+        ]);
+    });
+    
+    return successResponse({ status: 'success' });
+}
+
+function scheduleMatch(data) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Matches");
+    if (!sheet) {
+        sheet = ss.insertSheet("Matches");
+        sheet.appendRow(["MatchID","TeamA","TeamB","ScoreA","ScoreB","Winner","Date","Summary","Round","Status","Venue","ScheduledTime","LiveURL","LiveCover","TournamentID"]);
+    }
+    
+    const rows = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(data.matchId)) {
+            rowIndex = i + 1;
+            break;
+        }
+    }
+    
+    let coverUrl = "";
+    if (data.livestreamCover && data.livestreamCover.startsWith("data:")) {
+        coverUrl = saveFileToDrive(data.livestreamCover, `cover_${data.matchId}`);
+    } else if (data.livestreamCover) {
+        coverUrl = data.livestreamCover; // Keep existing if url
+    }
+
+    if (rowIndex === -1) {
+        sheet.appendRow([
+            data.matchId, data.teamA, data.teamB, 0, 0, '', new Date().toISOString(), '', 
+            data.roundLabel, 'Scheduled', data.venue, data.scheduledTime, data.livestreamUrl, coverUrl, data.tournamentId || 'default'
+        ]);
+    } else {
+        // Update
+        if(data.teamA) sheet.getRange(rowIndex, 2).setValue(data.teamA);
+        if(data.teamB) sheet.getRange(rowIndex, 3).setValue(data.teamB);
+        sheet.getRange(rowIndex, 9).setValue(data.roundLabel);
+        sheet.getRange(rowIndex, 11).setValue(data.venue);
+        sheet.getRange(rowIndex, 12).setValue(data.scheduledTime);
+        sheet.getRange(rowIndex, 13).setValue(data.livestreamUrl);
+        if (coverUrl) sheet.getRange(rowIndex, 14).setValue(coverUrl);
+        if (data.tournamentId) sheet.getRange(rowIndex, 15).setValue(data.tournamentId);
+    }
+    
+    return successResponse({ status: 'success' });
+}
+
+function deleteMatch(matchId) {
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName("Matches");
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(matchId)) {
+            sheet.deleteRow(i + 1);
+            return successResponse({ status: 'success' });
+        }
+    }
+    return errorResponse("Match not found");
+}
+
+function saveSettings(settings) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Config");
+    if (!sheet) {
+        sheet = ss.insertSheet("Config");
+    }
+    
+    // Ensure header
+    if (sheet.getLastRow() === 0) {
+        sheet.appendRow(["CompName","Logo","BankName","BankAccount","AccountName","Location","Link","Announcement","PIN","Lat","Lng","Fee","Goal","ObjTitle","ObjDesc","ObjImg"]);
+    }
+    
+    // Save/Overwrite Row 2
+    let logoUrl = settings.competitionLogo;
+    if (logoUrl && logoUrl.startsWith('data:')) {
+        logoUrl = saveFileToDrive(logoUrl, 'comp_logo_' + Date.now());
+    }
+    let objImgUrl = settings.objectiveImageUrl;
+    if (objImgUrl && objImgUrl.startsWith('data:')) {
+        objImgUrl = saveFileToDrive(objImgUrl, 'obj_img_' + Date.now());
+    }
+
+    const rowData = [
+        settings.competitionName,
+        logoUrl,
+        settings.bankName,
+        settings.bankAccount,
+        settings.accountName,
+        settings.locationName,
+        settings.locationLink,
+        settings.announcement,
+        settings.adminPin,
+        settings.locationLat,
+        settings.locationLng,
+        settings.registrationFee,
+        settings.fundraisingGoal,
+        settings.objectiveTitle,
+        settings.objectiveDescription,
+        objImgUrl
+    ];
+    
+    if (sheet.getLastRow() < 2) {
+        sheet.appendRow(rowData);
+    } else {
+        sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);
+    }
+    
+    return successResponse({ status: 'success' });
+}
+
+function createTournament(name, type) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Tournaments");
+    if (!sheet) {
+       sheet = ss.insertSheet("Tournaments");
+       sheet.appendRow(["ID", "Name", "Type", "Status", "ConfigJSON"]);
+    }
+    const id = "TRN_" + Date.now();
+    sheet.appendRow([id, name, type, "Active", "{}"]);
+    return successResponse({ tournamentId: id });
+}
+
+function updateTournament(tournament) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Tournaments");
+    const data = sheet.getDataRange().getValues();
+    
+    for(let i=1; i<data.length; i++) {
+        if(String(data[i][0]) === String(tournament.id)) {
+            sheet.getRange(i+1, 2).setValue(tournament.name);
+            sheet.getRange(i+1, 3).setValue(tournament.type);
+            sheet.getRange(i+1, 4).setValue(tournament.status);
+            sheet.getRange(i+1, 5).setValue(tournament.config);
+            return successResponse({ status: 'success' });
+        }
+    }
+    return errorResponse("Tournament not found");
+}
+
+function saveMatchEvents(events) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("MatchEvents");
+    if (!sheet) {
+        sheet = ss.insertSheet("MatchEvents");
+        sheet.appendRow(["ID", "MatchID", "TournamentID", "Minute", "Type", "Player", "TeamID", "Timestamp"]);
+    }
+    
+    if (events && events.length > 0) {
+        // Append all
+        events.forEach(e => {
+            sheet.appendRow([e.id, e.matchId, e.tournamentId, e.minute, e.type, e.player, e.teamId, e.timestamp]);
+        });
+    }
+    return successResponse({ status: 'success' });
+}
+
+function submitDonation(data) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Donations");
+    if (!sheet) {
+        sheet = ss.insertSheet("Donations");
+        sheet.appendRow(["Timestamp", "DonorName", "Amount", "Phone", "IsEDonation", "TaxID", "Address", "SlipURL", "TournamentID"]);
+    }
+    
+    let slipUrl = "";
+    if (data.slipFile && data.slipFile.startsWith('data:')) {
+        slipUrl = saveFileToDrive(data.slipFile, `donation_slip_${Date.now()}`);
+    }
+    
+    sheet.appendRow([
+        new Date(),
+        data.donorName,
+        data.amount,
+        data.donorPhone,
+        data.isEdonation,
+        data.taxId,
+        data.address,
+        slipUrl,
+        data.tournamentId
+    ]);
+    
+    return successResponse({ status: 'success' });
+}

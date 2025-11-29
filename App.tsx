@@ -707,7 +707,12 @@ function App() {
               {/* News Feed */}
               <div>
                   <div className="flex items-center justify-between mb-3 px-1"><h3 className="font-bold text-slate-700 text-lg flex items-center gap-2"><div className="w-1 h-6 bg-indigo-600 rounded-full"></div> ข่าวสารล่าสุด</h3></div>
-                  <NewsFeed news={newsItems} isLoading={isLoadingData} initialNewsId={initialNewsId} />
+                  <NewsFeed 
+                    news={newsItems} 
+                    isLoading={isLoadingData} 
+                    initialNewsId={initialNewsId} 
+                    currentTournamentId={currentTournamentId} 
+                  />
               </div>
           </div>
         </div>

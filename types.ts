@@ -34,6 +34,7 @@ export interface NewsItem {
   imageUrl?: string;
   documentUrl?: string; 
   timestamp: number;
+  tournamentId?: string; // New field for separation
 }
 
 export interface School {
