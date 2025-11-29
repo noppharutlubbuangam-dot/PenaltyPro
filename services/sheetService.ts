@@ -47,12 +47,34 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
         },
         schools: (data && data.schools) || [],
         news: (data && data.news) || [],
-        tournaments: (data && data.tournaments) || [] // Phase 1
+        tournaments: (data && data.tournaments) || []
     };
   } catch (error) {
     console.error("Failed to fetch from Google Sheet:", error);
     throw error;
   }
+};
+
+export const createTournament = async (name: string, type: string): Promise<string | null> => {
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'createTournament', name, type })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success') {
+                return result.tournamentId;
+            }
+        }
+        return null;
+    } catch (error) {
+        console.error("Create Tournament Error", error);
+        return null;
+    }
 };
 
 export const generateGeminiContent = async (prompt: string, initialModel: string = 'gemini-1.5-flash'): Promise<string> => {
@@ -197,7 +219,7 @@ export const scheduleMatch = async (matchId: string, teamA: string, teamB: strin
           matchId, teamA, teamB, roundLabel, 
           venue: venue || '', scheduledTime: scheduledTime || '',
           livestreamUrl, livestreamCover,
-          tournamentId // Phase 1
+          tournamentId 
       })
     });
     return true;
@@ -237,7 +259,7 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
     kicks: (skipKicks || !matchState.kicks) ? [] : matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : (k.teamId === 'B' ? teamBName : k.teamId) })),
     livestreamUrl: matchState.livestreamUrl,
     livestreamCover: matchState.livestreamCover,
-    tournamentId // Phase 1
+    tournamentId
   };
   
   try {
@@ -260,7 +282,7 @@ export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName
         player: k.player,
         result: k.result,
         timestamp: k.timestamp || Date.now(),
-        tournamentId // Phase 1
+        tournamentId
     }));
 
     try {
@@ -293,7 +315,7 @@ export const registerTeam = async (data: RegistrationData, tournamentId: string 
     coachName: data.coachName,
     coachPhone: data.coachPhone,
     registrationTime: data.registrationTime, 
-    tournamentId, // Phase 1
+    tournamentId,
     players: data.players.map(p => ({
         name: p.name,
         number: p.sequence,

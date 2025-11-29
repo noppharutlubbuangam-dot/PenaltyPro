@@ -42,6 +42,8 @@ function doPost(e) {
       return handleAuth(data);
     } else if (action === 'aiGenerate') {
       return handleAiGenerate(data.prompt, data.model); 
+    } else if (action === 'createTournament') {
+      return createTournament(data.name, data.type);
     }
     
     return errorResponse("Unknown action: " + action);
@@ -254,6 +256,18 @@ function getData() {
   }
   
   return successResponse({ teams, players, matches, config, schools, news, tournaments });
+}
+
+function createTournament(name, type) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("Tournaments");
+  if (!sheet) {
+     sheet = ss.insertSheet("Tournaments");
+     sheet.appendRow(["ID", "Name", "Type", "Status", "ConfigJSON"]);
+  }
+  const id = "T" + Date.now();
+  sheet.appendRow([id, name, type, "Active", "{}"]);
+  return successResponse({ tournamentId: id });
 }
 
 // ... AUTH Functions (unchanged) ...
