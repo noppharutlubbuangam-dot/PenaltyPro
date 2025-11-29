@@ -145,20 +145,25 @@ function App() {
   const approvedTeamsCount = activeTeams.filter(t => t.status === 'Approved').length;
   const regFee = tConfig.registrationFee || appConfig.registrationFee || 0; 
   const incomeFromFees = approvedTeamsCount * regFee;
-  
   const verifiedDonations = activeDonations.filter(d => d.status === 'Verified').reduce((sum, d) => sum + d.amount, 0);
   
-  // Prize deduction for Target
+  // Total Prizes
   const totalPrizeAmount = prizes.reduce((sum, p) => {
       const num = parseInt(p.amount.replace(/,/g, ''));
       return isNaN(num) ? sum : sum + num;
   }, 0);
   
-  // Net Goal Calculation: Goal - Total Prizes
-  const netGoal = Math.max(0, (objectiveData.goal || 0) - totalPrizeAmount);
-  
-  // Progress based on Verified Donations vs Net Goal
-  const fundraisingProgress = netGoal > 0 ? Math.min(100, (verifiedDonations / netGoal) * 100) : 0;
+  // Total Income (Donations + Fees)
+  const totalIncome = verifiedDonations + incomeFromFees;
+
+  // Net Raised (Income - Prizes)
+  const netRaised = Math.max(0, totalIncome - totalPrizeAmount);
+
+  // Goal
+  const goal = objectiveData.goal || 0;
+
+  // Progress based on Net Raised vs Goal
+  const fundraisingProgress = goal > 0 ? Math.min(100, (netRaised / goal) * 100) : 0;
 
   useEffect(() => {
     const init = async () => {
@@ -338,6 +343,7 @@ function App() {
               <TournamentSelector 
                   tournaments={tournaments} 
                   teams={availableTeams} // Pass teams data here
+                  donations={donations} // Pass donations here
                   onSelect={(id) => { setCurrentTournamentId(id); localStorage.setItem('current_tournament_id', id); }} 
                   isAdmin={isAdmin} 
                   onRefresh={loadData}
@@ -580,19 +586,25 @@ function App() {
                                   <div className="space-y-2">
                                       <div className="flex justify-between text-sm mb-1">
                                           <span className="font-bold text-indigo-600">{fundraisingProgress.toFixed(1)}%</span>
-                                          <span className="text-slate-500">เป้าหมาย (สุทธิ): {netGoal.toLocaleString()} บาท</span>
+                                          <span className="text-slate-500">เป้าหมาย: {objectiveData.goal.toLocaleString()} บาท</span>
                                       </div>
                                       <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                                           <div className="h-full bg-gradient-to-r from-pink-500 to-indigo-500 transition-all duration-1000" style={{ width: `${fundraisingProgress}%` }}></div>
                                       </div>
-                                      <div className="flex justify-between items-center text-xs pt-1">
-                                          <div className="flex flex-col">
-                                              <span className="text-slate-400">ยอดบริจาค (Verified)</span>
-                                              <span className="font-bold text-green-600 text-sm">+{verifiedDonations.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center text-xs pt-2">
+                                          <div className="flex gap-4">
+                                              <div>
+                                                  <span className="text-slate-400 block text-[10px]">รายรับรวม</span>
+                                                  <span className="font-bold text-green-600">+{totalIncome.toLocaleString()}</span>
+                                              </div>
+                                              <div>
+                                                  <span className="text-slate-400 block text-[10px]">หักรางวัล</span>
+                                                  <span className="font-bold text-red-500">-{totalPrizeAmount.toLocaleString()}</span>
+                                              </div>
                                           </div>
-                                          <div className="flex flex-col text-right">
-                                              <span className="text-slate-400">จากค่าสมัคร</span>
-                                              <span className="font-bold text-blue-600 text-sm">+{incomeFromFees.toLocaleString()}</span>
+                                          <div className="text-right">
+                                              <span className="text-slate-500 block text-[10px]">ยอดสุทธิ</span>
+                                              <span className="font-bold text-slate-800 text-sm">{netRaised.toLocaleString()}</span>
                                           </div>
                                       </div>
                                   </div>

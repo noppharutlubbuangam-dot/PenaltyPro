@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Tournament, TournamentConfig, ProjectImage, TournamentPrize, Team } from '../types';
+import { Tournament, TournamentConfig, ProjectImage, TournamentPrize, Team, Donation } from '../types';
 import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2 } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 import { shareTournament } from '../services/liffService';
@@ -12,7 +12,8 @@ interface TournamentSelectorProps {
   onRefresh: () => void;
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   isLoading?: boolean;
-  teams?: Team[]; // Added prop
+  teams?: Team[]; 
+  donations?: Donation[]; // Added prop
 }
 
 // Helper for Drive Images
@@ -63,7 +64,7 @@ const compressImage = async (file: File): Promise<File> => {
     });
 };
 
-const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading, teams = [] }) => {
+const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading, teams = [], donations = [] }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -272,59 +273,115 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                             const maxTeams = config.maxTeams || 0;
                             // Count approved or pending teams for this tournament
                             const teamCount = teams.filter(team => team.tournamentId === t.id && team.status !== 'Rejected').length;
+                            const approvedTeamCount = teams.filter(team => team.tournamentId === t.id && team.status === 'Approved').length;
                             const percentage = maxTeams > 0 ? Math.min(100, (teamCount / maxTeams) * 100) : 0;
                             const deadline = config.registrationDeadline ? new Date(config.registrationDeadline) : null;
                             const isPastDeadline = deadline && new Date() > deadline;
 
+                            // Fundraising Calcs
+                            const objective = config.objective || {};
+                            const prizes = config.prizes || [];
+                            const regFee = config.registrationFee || 0;
+                            const incomeFromFees = approvedTeamCount * regFee;
+                            const tournamentDonations = donations.filter(d => d.tournamentId === t.id && d.status === 'Verified');
+                            const totalDonations = tournamentDonations.reduce((sum, d) => sum + d.amount, 0);
+                            const totalPrizes = prizes.reduce((sum: number, p: any) => {
+                                const amt = parseInt(String(p.amount).replace(/,/g, '')) || 0;
+                                return sum + amt;
+                            }, 0);
+                            
+                            const totalIncome = incomeFromFees + totalDonations;
+                            const netRaised = Math.max(0, totalIncome - totalPrizes);
+                            const goal = objective.goal || 0;
+                            const fundProgress = goal > 0 ? Math.min(100, (netRaised / goal) * 100) : 0;
+                            
+                            // Image Logic - prioritize 'before' image
+                            const beforeImage = objective.images?.find((img: any) => img.type === 'before')?.url;
+
                             return (
-                                <div key={t.id} className="relative group perspective-1000">
+                                <div key={t.id} className="relative group perspective-1000 h-full">
                                     <button 
                                         onClick={() => onSelect(t.id)}
-                                        className="w-full bg-white p-5 rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30 min-h-[260px]"
+                                        className="w-full bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30 min-h-[300px]"
                                     >
-                                        <div className="absolute -top-6 -right-6 w-32 h-32 bg-indigo-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
-                                        
-                                        <div className="relative z-10 w-full flex-1 flex flex-col">
-                                            {/* Status Badges */}
-                                            <div className="flex justify-between items-start mb-4">
-                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    <span className={`w-2 h-2 rounded-full ${t.status === 'Active' ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></span>
+                                        {/* Cover Image Area */}
+                                        <div className="relative h-40 w-full bg-slate-100 overflow-hidden shrink-0">
+                                            {beforeImage ? (
+                                                <>
+                                                    <img src={getDisplayUrl(beforeImage)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                                                </>
+                                            ) : (
+                                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-90 group-hover:opacity-100 transition-opacity">
+                                                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-xl"></div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Status Badge Overlay */}
+                                            <div className="absolute top-3 left-3 flex gap-2">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/20 backdrop-blur-sm ${t.status === 'Active' ? 'bg-green-500/80 text-white' : 'bg-blue-500/80 text-white'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full bg-white ${t.status === 'Active' ? 'animate-pulse' : ''}`}></span>
                                                     {t.status}
                                                 </span>
-                                                <span className="px-3 py-1 bg-white border border-slate-100 text-indigo-600 rounded-full text-[10px] font-bold shadow-sm">
+                                                <span className="px-2 py-1 bg-black/40 text-white backdrop-blur-md rounded-full text-[10px] font-bold shadow-sm border border-white/10">
                                                     {t.type}
                                                 </span>
                                             </div>
-
-                                            {/* Title & Info */}
-                                            <h3 className="font-bold text-lg text-slate-800 mb-2 line-clamp-2 leading-tight group-hover:text-indigo-700 transition-colors h-[3rem]">{t.name}</h3>
                                             
+                                            {/* Title Overlay */}
+                                            <div className="absolute bottom-3 left-3 right-3 text-white">
+                                                <h3 className="font-bold text-lg leading-tight line-clamp-2 drop-shadow-md">{t.name}</h3>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="relative z-10 w-full flex-1 flex flex-col p-4">
+                                            
+                                            {/* Objective Title (if any) */}
+                                            {objective.title && objective.isEnabled && (
+                                                <p className="text-xs text-slate-500 font-medium mb-3 line-clamp-1 flex items-center gap-1">
+                                                    <Target className="w-3 h-3 text-indigo-500"/> {objective.title}
+                                                </p>
+                                            )}
+
+                                            {/* Fundraising Progress */}
+                                            {objective.isEnabled && goal > 0 && (
+                                                <div className="mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                                                        <span>ระดมทุน (สุทธิ)</span>
+                                                        <span className="font-bold text-indigo-600">{fundProgress.toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden mb-1">
+                                                        <div 
+                                                            className="h-full rounded-full bg-gradient-to-r from-pink-500 to-indigo-500 transition-all duration-1000" 
+                                                            style={{ width: `${fundProgress}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-[10px] text-slate-400 font-mono">เป้า {goal.toLocaleString()}</span>
+                                                        <span className="text-xs font-bold text-slate-800">{netRaised.toLocaleString()} บ.</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Deadline */}
                                             {deadline && (
-                                                <div className={`text-xs flex items-center gap-1 mb-3 ${isPastDeadline ? 'text-red-500 font-bold' : 'text-slate-500'}`}>
+                                                <div className={`text-xs flex items-center gap-1 mb-2 ${isPastDeadline ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
                                                     <Calendar className="w-3 h-3" />
                                                     {isPastDeadline ? 'ปิดรับสมัครแล้ว' : `ปิดรับ: ${deadline.toLocaleDateString('th-TH')}`}
                                                 </div>
                                             )}
 
-                                            {/* Progress Bar (Registration) */}
-                                            <div className="mt-2 mb-4">
+                                            {/* Team Stats */}
+                                            <div className="mt-auto">
                                                 <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                                                    <span>ลงทะเบียนแล้ว</span>
-                                                    <span className="font-bold">{teamCount} {maxTeams > 0 ? `/ ${maxTeams}` : 'ทีม'}</span>
+                                                    <span>ทีมสมัครแล้ว</span>
+                                                    <span className="font-bold">{teamCount} {maxTeams > 0 ? `/ ${maxTeams}` : ''}</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                                     <div 
-                                                        className={`h-full rounded-full transition-all duration-1000 ${percentage >= 100 ? 'bg-red-500' : 'bg-indigo-500'}`} 
+                                                        className={`h-full rounded-full transition-all duration-1000 ${percentage >= 100 ? 'bg-red-500' : 'bg-green-500'}`} 
                                                         style={{ width: `${maxTeams > 0 ? percentage : (teamCount > 0 ? 100 : 0)}%` }}
                                                     ></div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
-                                                <div className="text-xs text-slate-400 font-mono">ID: {t.id.slice(-4)}</div>
-                                                <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 duration-300">
-                                                    จัดการข้อมูล <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                                                 </div>
                                             </div>
                                         </div>
@@ -333,7 +390,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                     {/* Share Button */}
                                     <button 
                                         onClick={(e) => handleShare(e, t, teamCount, maxTeams)}
-                                        className="absolute bottom-16 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
+                                        className="absolute bottom-[4.5rem] right-2 bg-white/90 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
                                         title="แชร์รายการนี้"
                                     >
                                         <Share2 className="w-4 h-4" />
@@ -343,7 +400,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                     {isAdmin && (
                                         <button 
                                             onClick={(e) => openEdit(e, t)}
-                                            className="absolute top-4 right-4 bg-white/90 backdrop-blur border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 p-1.5 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
+                                            className="absolute top-2 right-2 bg-white/20 backdrop-blur text-white hover:bg-white hover:text-indigo-600 p-1.5 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
                                             title="ตั้งค่ารายการ"
                                         >
                                             <Settings className="w-4 h-4" />
@@ -356,7 +413,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                         {isAdmin && (
                             <button 
                                 onClick={() => setIsCreating(true)}
-                                className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[260px] group cursor-pointer"
+                                className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[300px] group cursor-pointer h-full"
                             >
                                 <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                                     <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-600" />
