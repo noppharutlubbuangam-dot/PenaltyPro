@@ -67,16 +67,8 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
       setShowErrors(true);
 
       // Strict Validation
-      if (!amount) { 
-          alert("กรุณาระบุยอดเงินบริจาค"); 
-          return; 
-      }
-      if (!donorName) { 
-          alert("กรุณาระบุชื่อผู้บริจาค"); 
-          return; 
-      }
-      if (!slipFile) {
-          alert("กรุณาแนบหลักฐานการโอนเงิน (สลิป) เพื่อตรวจสอบ");
+      if (!amount || !donorName || !slipFile) {
+          // Visual cues are handled by showErrors state in render
           return;
       }
 
@@ -171,20 +163,20 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
                 </div>
                 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">ยอดเงินบริจาค (บาท) <span className="text-red-500">*</span></label>
+                    <label className={`block text-xs font-bold mb-1 ${showErrors && !amount ? 'text-red-500' : 'text-slate-500'}`}>ยอดเงินบริจาค (บาท) <span className="text-red-500">*</span></label>
                     <input 
                         type="number" 
                         required 
                         value={amount} 
                         onChange={e => setAmount(e.target.value)} 
-                        className={`w-full p-3 border rounded-xl text-lg font-bold text-indigo-700 bg-slate-50 focus:bg-white transition ${showErrors && !amount ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200'}`} 
+                        className={`w-full p-3 border rounded-xl text-lg font-bold text-indigo-700 bg-slate-50 focus:bg-white transition ${showErrors && !amount ? 'border-red-500 ring-2 ring-red-100 bg-red-50' : 'border-slate-200'}`} 
                         placeholder="0.00" 
                     />
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">หลักฐานการโอน (สลิป) <span className="text-red-500">*</span></label>
-                    <div className={`border-2 border-dashed rounded-xl p-4 text-center hover:bg-slate-50 transition relative ${showErrors && !slipFile ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}>
+                    <label className={`block text-xs font-bold mb-1 ${showErrors && !slipFile ? 'text-red-500' : 'text-slate-500'}`}>หลักฐานการโอน (สลิป) <span className="text-red-500">*</span></label>
+                    <div className={`border-2 border-dashed rounded-xl p-4 text-center hover:bg-slate-50 transition relative ${showErrors && !slipFile ? 'border-red-500 bg-red-50 animate-pulse' : 'border-slate-300'}`}>
                         {slipPreview ? (
                             <div className="relative">
                                 <img src={slipPreview} className="max-h-40 mx-auto rounded shadow-sm" />
@@ -192,7 +184,7 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
                             </div>
                         ) : (
                             <label className="cursor-pointer block w-full h-full py-4">
-                                <Upload className={`w-8 h-8 mx-auto mb-2 ${showErrors && !slipFile ? 'text-red-400' : 'text-slate-300'}`} />
+                                <Upload className={`w-8 h-8 mx-auto mb-2 ${showErrors && !slipFile ? 'text-red-500' : 'text-slate-300'}`} />
                                 <span className={`text-xs ${showErrors && !slipFile ? 'text-red-500 font-bold' : 'text-slate-500'}`}>
                                     {showErrors && !slipFile ? 'กรุณาแนบสลิปการโอน' : 'แตะเพื่ออัปโหลดรูปภาพ'}
                                 </span>
@@ -204,13 +196,13 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อผู้บริจาค <span className="text-red-500">*</span></label>
+                        <label className={`block text-xs font-bold mb-1 ${showErrors && !donorName ? 'text-red-500' : 'text-slate-500'}`}>ชื่อผู้บริจาค <span className="text-red-500">*</span></label>
                         <input 
                             type="text" 
                             required 
                             value={donorName} 
                             onChange={e => setDonorName(e.target.value)} 
-                            className={`w-full p-2 border rounded-lg text-sm ${showErrors && !donorName ? 'border-red-500' : ''}`}
+                            className={`w-full p-2 border rounded-lg text-sm ${showErrors && !donorName ? 'border-red-500 bg-red-50' : ''}`}
                             placeholder="ชื่อ-นามสกุล" 
                         />
                     </div>

@@ -325,7 +325,8 @@ function updateTeamData(team, players) {
           if (team.managerPhone) teamSheet.getRange(i+1, 12).setValue("'" + team.managerPhone);
           if (team.coachName) teamSheet.getRange(i+1, 13).setValue(team.coachName);
           if (team.coachPhone) teamSheet.getRange(i+1, 14).setValue("'" + team.coachPhone);
-          if (team.group) teamSheet.getRange(i+1, 7).setValue(team.group);
+          // Allow clearing the group if empty string passed
+          if (team.group !== undefined) teamSheet.getRange(i+1, 7).setValue(team.group);
 
           // Handle File Uploads (Base64 check)
           if (team.logoUrl && team.logoUrl.startsWith('data:')) {

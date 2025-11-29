@@ -1,9 +1,11 @@
 
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem, Tournament, UserProfile, Donation } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData, fetchUsers, updateUserRole, verifyDonation } from '../services/sheetService';
 
 interface AdminDashboardProps {
@@ -36,6 +38,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const [donationList, setDonationList] = useState<Donation[]>(donations);
   const [selectedDonation, setSelectedDonation] = useState<Donation | null>(null);
   const [isVerifyingDonation, setIsVerifyingDonation] = useState(false);
+
+  // Draw Logic State
+  const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
+  const [drawGroupCount, setDrawGroupCount] = useState(4);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  // View States
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -170,11 +181,74 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   };
 
   const performStatusUpdate = async (teamId: string, status: 'Approved' | 'Rejected', group?: string, reason?: string) => {
-      setIsSavingTeam(true); 
+      // Optimistic Update
       const updatedTeam = { ...localTeams.find(t => t.id === teamId)!, status, rejectReason: reason || '' }; 
       setLocalTeams(prev => prev.map(t => t.id === teamId ? updatedTeam : t)); 
       if (editForm) setEditForm({ ...editForm, team: updatedTeam }); 
-      try { await updateTeamStatus(teamId, status, group, reason); notify("สำเร็จ", status === 'Approved' ? "อนุมัติทีมเรียบร้อย" : "บันทึกการไม่อนุมัติเรียบร้อย", "success"); onRefresh(); } catch (e) { console.error(e); notify("ผิดพลาด", "บันทึกสถานะไม่สำเร็จ", "error"); setLocalTeams(initialTeams); } finally { setIsSavingTeam(false); }
+      
+      try { 
+          await updateTeamStatus(teamId, status, group, reason); 
+          notify("สำเร็จ", status === 'Approved' ? "อนุมัติทีมเรียบร้อย" : "บันทึกการไม่อนุมัติเรียบร้อย", "success"); 
+          // Background refresh
+          onRefresh(); 
+      } catch (e) { 
+          console.error(e); 
+          notify("ผิดพลาด", "บันทึกสถานะไม่สำเร็จ", "error"); 
+          // Revert if needed (simplified here)
+      }
+  };
+
+  // --- DRAW GROUPS LOGIC ---
+  const handleAutoDraw = async () => {
+      setIsDrawing(true);
+      const approvedTeams = localTeams.filter(t => t.status === 'Approved');
+      
+      if (approvedTeams.length === 0) {
+          notify("แจ้งเตือน", "ไม่มีทีมที่สถานะ Approved เพื่อจับฉลาก", "warning");
+          setIsDrawing(false);
+          return;
+      }
+
+      // Shuffle Algorithm (Fisher-Yates)
+      const shuffled = [...approvedTeams];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      // Assign Groups
+      const groups = Array.from({ length: drawGroupCount }, (_, i) => String.fromCharCode(65 + i)); // ['A', 'B', 'C'...]
+      const updates: { teamId: string, group: string }[] = [];
+
+      shuffled.forEach((team, index) => {
+          const groupIndex = index % drawGroupCount;
+          const assignedGroup = groups[groupIndex];
+          updates.push({ teamId: team.id, group: assignedGroup });
+      });
+
+      // Apply Updates
+      try {
+          // 1. Update Local State for immediate UI feedback
+          setLocalTeams(prev => prev.map(t => {
+              const update = updates.find(u => u.teamId === t.id);
+              return update ? { ...t, group: update.group } : t;
+          }));
+
+          // 2. Call API one by one (Limitation of current backend script)
+          // In production, we should have a bulk update endpoint.
+          let successCount = 0;
+          for (const update of updates) {
+              await updateTeamStatus(update.teamId, 'Approved', update.group, '');
+              successCount++;
+          }
+
+          notify("จับฉลากเสร็จสิ้น", `จัดกลุ่มให้ ${successCount} ทีมเรียบร้อยแล้ว`, "success");
+          setIsDrawModalOpen(false);
+      } catch (e) {
+          notify("ผิดพลาด", "เกิดข้อผิดพลาดในการบันทึกผลจับฉลาก", "error");
+      } finally {
+          setIsDrawing(false);
+      }
   };
 
   const handleSettingsLogoChange = async (file: File) => {
@@ -298,8 +372,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 pb-24">
-      {deleteNewsId && (<div className="fixed inset-0 z-[1300] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in duration-200"><div className="flex items-center gap-3 text-red-600 mb-4"><AlertTriangle className="w-8 h-8" /><h3 className="font-bold text-lg">ยืนยันการลบข่าว?</h3></div><p className="text-slate-600 mb-6">คุณต้องการลบข่าวนี้อย่างถาวรใช่หรือไม่?</p><div className="flex gap-3"><button onClick={() => setDeleteNewsId(null)} className="flex-1 py-2 border rounded-lg hover:bg-slate-50">ยกเลิก</button><button onClick={confirmDeleteNews} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">ลบข่าว</button></div></div></div>)}
+      {/* PREVIEW IMAGE MODAL */}
+      {previewImage && (
+          <div className="fixed inset-0 z-[1400] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
+              <div className="relative max-w-4xl max-h-[90vh]">
+                  <img src={previewImage} className="max-w-full max-h-[90vh] rounded shadow-lg" />
+                  <button className="absolute -top-4 -right-4 bg-white rounded-full p-2 text-slate-800" onClick={() => setPreviewImage(null)}><X className="w-6 h-6"/></button>
+              </div>
+          </div>
+      )}
 
+      {/* DRAW GROUPS MODAL */}
+      {isDrawModalOpen && (
+          <div className="fixed inset-0 z-[1300] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200">
+                  <div className="flex items-center gap-3 text-indigo-600 mb-4 border-b pb-2">
+                      <Shuffle className="w-6 h-6" />
+                      <h3 className="font-bold text-lg">จับฉลากแบ่งสายอัตโนมัติ</h3>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">ระบบจะทำการสุ่มทีมที่สถานะ "Approved" และจัดลงกลุ่ม A, B, C... โดยอัตโนมัติ</p>
+                  
+                  <div className="mb-6">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">จำนวนกลุ่ม (Groups)</label>
+                      <div className="flex items-center gap-4">
+                          <button onClick={() => setDrawGroupCount(Math.max(2, drawGroupCount - 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><X className="w-4 h-4 rotate-45" /></button>
+                          <span className="text-2xl font-black text-indigo-600 w-12 text-center">{drawGroupCount}</span>
+                          <button onClick={() => setDrawGroupCount(Math.min(16, drawGroupCount + 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Plus className="w-4 h-4" /></button>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2">กลุ่มจะเป็น A - {String.fromCharCode(65 + drawGroupCount - 1)}</p>
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button onClick={() => setIsDrawModalOpen(false)} disabled={isDrawing} className="flex-1 py-2 border rounded-lg hover:bg-slate-50 text-sm font-bold text-slate-600">ยกเลิก</button>
+                      <button onClick={handleAutoDraw} disabled={isDrawing} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold text-sm shadow-sm flex items-center justify-center gap-2">
+                          {isDrawing ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Shuffle className="w-4 h-4"/> เริ่มจับฉลาก</>}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* REJECT MODAL */}
       {rejectModal.isOpen && (
           <div className="fixed inset-0 z-[1300] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in zoom-in duration-200">
@@ -316,6 +429,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           </div>
       )}
 
+      {/* DONATION MODAL */}
       {selectedDonation && (
           <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedDonation(null)}>
               <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -391,7 +505,107 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
         {activeTab === 'teams' && (
             <div className="animate-in fade-in duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">ทีมทั้งหมด</p><p className="text-3xl font-bold text-indigo-600">{localTeams.length}</p></div><div className="p-3 bg-indigo-50 rounded-full"><Users className="w-6 h-6 text-indigo-600" /></div></div></div><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">รอการอนุมัติ</p><p className="text-3xl font-bold text-orange-500">{localTeams.filter(t => t.status !== 'Approved' && t.status !== 'Rejected').length}</p></div><div className="p-3 bg-orange-50 rounded-full"><ShieldAlert className="w-6 h-6 text-orange-500" /></div></div></div><div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><div className="flex items-center justify-between"><div><p className="text-slate-500 text-sm">อนุมัติแล้ว</p><p className="text-3xl font-bold text-green-600">{localTeams.filter(t => t.status === 'Approved').length}</p></div><div className="p-3 bg-green-50 rounded-full"><ShieldCheck className="w-6 h-6 text-green-600" /></div></div></div></div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4"><h2 className="font-bold text-lg text-slate-800">รายชื่อทีมลงทะเบียน</h2><div className="flex gap-2 w-full md:w-auto"><div className="relative flex-1 md:w-64"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input type="text" placeholder="ค้นหาทีม / จังหวัด..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" /></div><button onClick={downloadCSV} className="flex items-center gap-2 text-sm px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-indigo-700 font-medium"><Download className="w-4 h-4" /> Export CSV</button><button onClick={onRefresh} className="text-sm px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600">รีเฟรช</button></div></div><div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-sm"><tr><th className="p-4 font-medium cursor-pointer hover:bg-slate-100" onClick={() => handleSort('name')}>ชื่อทีม/โรงเรียน</th><th className="p-4 font-medium cursor-pointer hover:bg-slate-100" onClick={() => handleSort('group')}>กลุ่ม</th><th className="p-4 font-medium">ผู้ติดต่อ</th><th className="p-4 font-medium text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('status')}>สถานะ</th><th className="p-4 font-medium text-right">จัดการ</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredTeams.map(team => (<tr key={team.id} className="hover:bg-slate-50"><td className="p-4"><div className="flex items-center gap-3">{team.logoUrl ? <img src={team.logoUrl} className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-200" /> : <div className="w-10 h-10 rounded-lg bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-xs">{team.shortName}</div>}<div><p className="font-bold text-slate-800">{team.name}</p><p className="text-xs text-slate-500">{team.district}, {team.province}</p></div></div></td><td className="p-4">{team.group ? <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-bold">{team.group}</span> : <span className="text-slate-300 text-xs">-</span>}</td><td className="p-4 text-sm"><div className="flex items-center gap-2 group"><span>{team.managerPhone || team.coachPhone || team.directorName}</span><button onClick={() => copyToClipboard(team.managerPhone || team.coachPhone || '')} className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition"><Copy className="w-3 h-3" /></button></div><p className="text-xs text-slate-400">ผจก: {team.managerName}</p></td><td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${team.status === 'Approved' ? 'bg-green-100 text-green-800' : team.status === 'Rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{team.status || 'Pending'}</span></td><td className="p-4 text-right"><button onClick={() => setSelectedTeam(team)} className="bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 text-slate-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-2 ml-auto shadow-sm"><Eye className="w-4 h-4" /> รายละเอียด</button></td></tr>))} {filteredTeams.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>}</tbody></table></div></div></div>
+                
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    {/* Tool Bar */}
+                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 bg-white z-20">
+                        <div className="flex items-center gap-3">
+                            <h2 className="font-bold text-lg text-slate-800">รายชื่อทีมลงทะเบียน</h2>
+                            <button 
+                                onClick={() => setIsDrawModalOpen(true)}
+                                className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition font-bold"
+                            >
+                                <Shuffle className="w-4 h-4" /> จับฉลาก (Draw)
+                            </button>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto items-center">
+                            <div className="flex bg-slate-100 rounded-lg p-1">
+                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-white shadow text-indigo-600' : 'text-slate-400'}`}><LayoutGrid className="w-4 h-4"/></button>
+                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-slate-400'}`}><List className="w-4 h-4"/></button>
+                            </div>
+                            <div className="relative flex-1 md:w-64">
+                                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                                <input type="text" placeholder="ค้นหาทีม / จังหวัด..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm" />
+                            </div>
+                            <button onClick={downloadCSV} className="flex items-center gap-2 text-sm px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-indigo-700 font-medium"><Download className="w-4 h-4" /> CSV</button>
+                            <button onClick={onRefresh} className="text-sm px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600">รีเฟรช</button>
+                        </div>
+                    </div>
+
+                    {/* CONTENT AREA */}
+                    <div className="p-4 bg-slate-50 min-h-[400px]">
+                        {viewMode === 'list' ? (
+                            // LIST VIEW (TABLE)
+                            <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50 text-slate-500 text-sm"><tr><th className="p-4 font-medium cursor-pointer" onClick={() => handleSort('name')}>ชื่อทีม/โรงเรียน</th><th className="p-4 font-medium cursor-pointer" onClick={() => handleSort('group')}>กลุ่ม</th><th className="p-4 font-medium">ผู้ติดต่อ</th><th className="p-4 font-medium text-center cursor-pointer" onClick={() => handleSort('status')}>สถานะ</th><th className="p-4 font-medium text-right">จัดการ</th></tr></thead>
+                                    <tbody className="divide-y divide-slate-100">{filteredTeams.map(team => (<tr key={team.id} className="hover:bg-slate-50"><td className="p-4"><div className="flex items-center gap-3">{team.logoUrl ? <img src={team.logoUrl} className="w-8 h-8 rounded object-cover" /> : <div className="w-8 h-8 rounded bg-slate-200 flex items-center justify-center font-bold text-slate-500 text-xs">{team.shortName}</div>}<div><p className="font-bold text-slate-800 text-sm">{team.name}</p><p className="text-[10px] text-slate-500">{team.province}</p></div></div></td><td className="p-4">{team.group || '-'}</td><td className="p-4 text-xs">{team.managerPhone}</td><td className="p-4 text-center"><span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${team.status === 'Approved' ? 'bg-green-100 text-green-700' : team.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{team.status}</span></td><td className="p-4 text-right"><button onClick={() => setSelectedTeam(team)} className="text-indigo-600 hover:underline text-xs">ดูข้อมูล</button></td></tr>))}</tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            // GRID VIEW (CARDS)
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {filteredTeams.map(team => (
+                                    <div key={team.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition group">
+                                        <div className="p-4 flex items-start justify-between">
+                                            <div className="flex items-center gap-3">
+                                                {team.logoUrl ? <img src={team.logoUrl} className="w-12 h-12 rounded-lg object-contain bg-slate-50 border border-slate-100 p-0.5" /> : <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-400">{team.shortName}</div>}
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800 line-clamp-1">{team.name}</h3>
+                                                    <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/> {team.province}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${team.status === 'Approved' ? 'bg-green-100 text-green-700' : team.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                    {team.status}
+                                                </span>
+                                                {team.group && <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">Gr. {team.group}</span>}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Quick View Slip/Doc */}
+                                        <div className="px-4 py-2 bg-slate-50 border-y border-slate-100 flex gap-2">
+                                            {team.slipUrl ? (
+                                                <button onClick={() => setPreviewImage(team.slipUrl!)} className="flex-1 py-1.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-300 flex items-center justify-center gap-1 transition">
+                                                    <CreditCard className="w-3 h-3"/> ดูสลิป
+                                                </button>
+                                            ) : (
+                                                <div className="flex-1 py-1.5 text-center text-xs text-slate-400 italic">ไม่มีสลิป</div>
+                                            )}
+                                            {team.docUrl ? (
+                                                <a href={team.docUrl} target="_blank" className="flex-1 py-1.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-300 flex items-center justify-center gap-1 transition">
+                                                    <FileText className="w-3 h-3"/> ดูเอกสาร
+                                                </a>
+                                            ) : (
+                                                <div className="flex-1 py-1.5 text-center text-xs text-slate-400 italic">ไม่มีเอกสาร</div>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-auto p-3 flex gap-2">
+                                            {team.status === 'Pending' ? (
+                                                <>
+                                                    <button onClick={() => handleStatusUpdate(team.id, 'Approved')} className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1">
+                                                        <Check className="w-3 h-3"/> อนุมัติ
+                                                    </button>
+                                                    <button onClick={() => handleStatusUpdate(team.id, 'Rejected')} className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1">
+                                                        <X className="w-3 h-3"/> ปฏิเสธ
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div className="flex-1 text-center text-xs text-slate-400 py-2">จัดการแล้ว</div>
+                                            )}
+                                            <button onClick={() => setSelectedTeam(team)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition">
+                                                <Edit3 className="w-4 h-4"/>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {filteredTeams.length === 0 && <div className="text-center py-12 text-slate-400">ไม่พบข้อมูลทีม</div>}
+                    </div>
+                </div>
+            </div>
         )}
 
         {/* --- NEWS TAB --- */}
