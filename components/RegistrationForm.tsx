@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera } from 'lucide-react';
+import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera, Copy, Check } from 'lucide-react';
 import { registerTeam, fileToBase64, updateMyTeam } from '../services/sheetService';
 import { shareRegistration } from '../services/liffService';
 import { RegistrationData, AppSettings, School as SchoolType, UserProfile, Team, Player } from '../types';
@@ -62,6 +62,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const [registeredData, setRegisteredData] = useState<RegistrationData | null>(null);
   const [registeredTeamId, setRegisteredTeamId] = useState<string | null>(null);
   const [isDeadlinePassed, setIsDeadlinePassed] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState('');
@@ -155,12 +156,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       }
   }, [initialData, user]);
 
-  // PDF Generation Logic (Print Window)
-  const handleDownloadPDF = () => {
-    // ... (Same as original) ...
-    alert("Function same as original");
-  };
-
   const handleShare = () => {
       if (registeredData && registeredTeamId) {
           shareRegistration(registeredData, registeredTeamId);
@@ -197,10 +192,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     return true;
   };
 
+  const handleCopy = () => {
+    if (config.bankAccount) {
+        navigator.clipboard.writeText(config.bankAccount);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   // ... (updatePlayer, addPlayer, removePlayer, handleFileChanges ... same as original) ...
   const updatePlayer = (index: number, field: string, value: any) => { const newPlayers = [...players]; if (field === 'photoFile' && value) { const immediateUrl = URL.createObjectURL(value); newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: immediateUrl }; setPlayers(newPlayers); compressImage(value).then(compressed => { const compressedUrl = URL.createObjectURL(compressed); setPlayers(prev => { const updated = [...prev]; updated[index] = { ...updated[index], photoFile: compressed }; return updated; }); }).catch(err => { console.error("Compression failed, using original", err); }); } else { newPlayers[index] = { ...newPlayers[index], [field]: value }; setPlayers(newPlayers); } };
   const updatePlayerDate = (index: number, value: string) => { let cleaned = value.replace(/[^0-9]/g, ''); if (cleaned.length > 8) cleaned = cleaned.substring(0, 8); let formatted = cleaned; if (cleaned.length > 2) { formatted = cleaned.substring(0, 2) + '/' + cleaned.substring(2); } if (cleaned.length > 4) { formatted = formatted.substring(0, 5) + '/' + cleaned.substring(4); } updatePlayer(index, 'birthDate', formatted); };
-  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>, index: number) => { if (e.target.value) { const date = new Date(e.target.value); const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear() + 543; updatePlayer(index, 'birthDate', `${day}/${month}/${year}`); } };
   const addPlayer = () => { setPlayers([...players, { sequence: players.length + 1, name: '', number: '', birthDate: '', photoFile: null, photoPreview: null }]); };
   const removePlayer = (index: number) => { const newPlayers = players.filter((_, i) => i !== index).map((p, i) => ({ ...p, sequence: i + 1 })); setPlayers(newPlayers); };
   const handleLogoChange = async (file: File) => { try { const compressed = await compressImage(file); setTeamLogo(compressed); } catch (e) { setTeamLogo(file); } };
@@ -483,6 +485,29 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                         <FileText className="w-6 h-6 text-indigo-600" />
                         <h3>4. เอกสารหลักฐาน {initialData && '(แก้ไขได้)'}</h3>
                     </div>
+
+                    {/* PAYMENT INFO BOX */}
+                    {config.bankAccount && !initialData && (
+                        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-4 shadow-sm">
+                            <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2"><CreditCard className="w-5 h-5"/> รายละเอียดการชำระเงิน</h4>
+                            <div className="space-y-3 text-sm text-indigo-800">
+                                <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-indigo-100">
+                                    <span>ค่าสมัครทีมละ</span>
+                                    <span className="font-bold text-lg text-indigo-600">{config.registrationFee ? `${config.registrationFee.toLocaleString()} บาท` : 'ฟรี'}</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-indigo-500 mb-1">โอนเงินเข้าบัญชี:</p>
+                                    <p className="font-bold text-base">{config.bankName}</p>
+                                    <div className="flex items-center gap-2 my-1 cursor-pointer bg-white w-fit px-3 py-1 rounded border border-indigo-100 hover:bg-indigo-50 transition" onClick={handleCopy}>
+                                        <span className="font-mono text-xl font-black tracking-wider text-indigo-700">{config.bankAccount}</span>
+                                        {copied ? <Check className="w-4 h-4 text-green-600"/> : <Copy className="w-4 h-4 text-slate-400"/>}
+                                    </div>
+                                    <p className="text-sm">{config.accountName}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ... Existing Docs ... */}
                     <div className="grid grid-cols-1 gap-6">
                         <div className={`border-2 border-dashed rounded-xl p-8 text-center transition ${documentFile ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'}`}>
