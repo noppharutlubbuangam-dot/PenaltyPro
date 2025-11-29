@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, X, Copy, Check, CreditCard, Share2, Upload, FileText, Loader2, ArrowRight } from 'lucide-react';
 import { AppSettings, DonationRequest, UserProfile } from '../types';
@@ -29,6 +31,7 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
   const [address, setAddress] = useState('');
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   useEffect(() => {
       if (currentUser && isOpen) {
@@ -74,7 +77,8 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
               taxId,
               address,
               slipFile: slipBase64,
-              lineUserId: currentUser?.userId || '' // Send Line User ID
+              lineUserId: currentUser?.userId || '', // Send Line User ID
+              isAnonymous: isAnonymous
           };
 
           // Direct fetch to script (bypassing service wrapper for simplicity here or add to service)
@@ -175,6 +179,17 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
                         <label className="block text-xs font-bold text-slate-500 mb-1">เบอร์โทรศัพท์</label>
                         <input type="tel" required value={donorPhone} onChange={e => setDonorPhone(e.target.value)} className="w-full p-2 border rounded-lg text-sm" placeholder="08x-xxx-xxxx" />
                     </div>
+                </div>
+
+                {/* Anonymous Checkbox */}
+                <div className="pt-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${isAnonymous ? 'bg-slate-600 border-slate-600' : 'bg-white border-slate-300'}`}>
+                            {isAnonymous && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} className="hidden" />
+                        <span className="text-sm font-bold text-slate-700">ไม่ประสงค์ออกนาม (Anonymous)</span>
+                    </label>
                 </div>
 
                 <div className="pt-2 border-t">
