@@ -77,39 +77,38 @@ export const shareTournament = async (tournament: Tournament) => {
     if (!window.liff) { alert("LIFF SDK not loaded"); return; }
     if (!window.liff.isLoggedIn()) { window.liff.login(); return; }
     
-    // Fallbacks
-    const name = tournament.name || "การแข่งขันฟุตบอล";
+    // Safety check for basic fields
+    const name = tournament.name || "รายการแข่งขัน";
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
-    const status = tournament.status === 'Active' ? "กำลังแข่งขัน" : "เปิดรับสมัคร";
     const liffUrl = `https://liff.line.me/${LIFF_ID}`; 
 
-    // Parse config for extra details if available
-    let location = "ไม่ระบุ";
-    let prize = "";
+    // Extract Location from config
+    let location = "ไม่ระบุสถานที่";
     try {
         const conf = JSON.parse(tournament.config || '{}');
         if (conf.locationName) location = conf.locationName;
-        if (conf.prizes && conf.prizes.length > 0) prize = `รางวัลรวม ${conf.prizes.length} รายการ`;
     } catch(e) {}
 
-    // Strict Truncation for Alt Text (Max 400 chars)
-    const safeAltText = truncate(`ขอเชิญร่วมรายการ: ${name}`, 350);
+    // Strict Truncation for Alt Text (Critical for sharing success)
+    // Limits: Name ~30, Location ~20
+    const safeName = truncate(name, 40);
+    const safeLocation = truncate(location, 30);
+    const altText = `ขอเชิญร่วม: ${safeName} (${type}) ณ ${safeLocation}`;
 
     const flexMessage = {
         type: "flex",
-        altText: safeAltText,
+        altText: altText,
         contents: {
             "type": "bubble",
-            "hero": {
+            "header": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    { "type": "text", "text": "TOURNAMENT", "color": "#FFFFFF", "weight": "bold", "size": "xs", "align": "center", "letterSpacing": "2px" },
-                    { "type": "text", "text": truncate(name, 60), "color": "#FFFFFF", "weight": "bold", "size": "xl", "align": "center", "wrap": true, "margin": "md" },
-                    { "type": "text", "text": type, "color": "#e0e7ff", "size": "sm", "align": "center", "margin": "sm" }
+                    { "type": "text", "text": "INVITATION", "color": "#FFFFFF", "weight": "bold", "size": "xs", "align": "center", "letterSpacing": "2px" },
+                    { "type": "text", "text": truncate(name, 60), "color": "#FFFFFF", "weight": "bold", "size": "xl", "align": "center", "wrap": true, "margin": "md" }
                 ],
                 "backgroundColor": "#4f46e5",
-                "paddingAll": "xl"
+                "paddingAll": "lg"
             },
             "body": {
                 "type": "box",
@@ -119,11 +118,24 @@ export const shareTournament = async (tournament: Tournament) => {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "สถานะ", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": status, "color": "#166534", "size": "xs", "flex": 3, "weight": "bold" }] },
-                            { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "สถานที่", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": truncate(location, 30), "color": "#666666", "size": "xs", "flex": 3 }] },
-                            prize ? { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "รางวัล", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": prize, "color": "#ca8a04", "size": "xs", "flex": 3, "weight": "bold" }] } : null
-                        ].filter(Boolean) as any,
-                        "spacing": "sm"
+                            { 
+                                "type": "box", 
+                                "layout": "baseline", 
+                                "contents": [
+                                    { "type": "text", "text": "ประเภท", "color": "#aaaaaa", "size": "xs", "flex": 1 }, 
+                                    { "type": "text", "text": type, "color": "#333333", "size": "sm", "flex": 3, "weight": "bold" }
+                                ] 
+                            },
+                            { 
+                                "type": "box", 
+                                "layout": "baseline", 
+                                "contents": [
+                                    { "type": "text", "text": "สถานที่", "color": "#aaaaaa", "size": "xs", "flex": 1 }, 
+                                    { "type": "text", "text": truncate(location, 100), "color": "#333333", "size": "sm", "flex": 3, "wrap": true }
+                                ],
+                                "margin": "sm"
+                            }
+                        ]
                     }
                 ],
                 "paddingAll": "lg"
@@ -148,14 +160,13 @@ export const shareTournament = async (tournament: Tournament) => {
         if (window.liff.isApiAvailable('shareTargetPicker')) {
             const result = await window.liff.shareTargetPicker([flexMessage]);
             if (!result) {
-                // User cancelled, mostly harmless log
                 console.log("User cancelled share target picker");
             }
         } else {
-            alert("อุปกรณ์หรือแอปพลิเคชันนี้ไม่รองรับการแชร์แบบ Target Picker");
+            alert("อุปกรณ์หรือแอปพลิเคชันนี้ไม่รองรับการแชร์ (shareTargetPicker)");
         }
     } catch (error: any) { 
         console.error("Share Error", error);
-        alert(`เกิดข้อผิดพลาดในการแชร์: ${error.message || error.toString()}`); 
+        alert(`เกิดข้อผิดพลาดในการแชร์: ${error.message || error.toString()} (อาจเกิดจากข้อความยาวเกินไป)`); 
     }
 };

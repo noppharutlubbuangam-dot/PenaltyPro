@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage, TournamentPrize } from '../types';
 import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2 } from 'lucide-react';
@@ -72,6 +71,9 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const [editConfig, setEditConfig] = useState<TournamentConfig>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editStep, setEditStep] = useState<'general' | 'rules' | 'location' | 'objective' | 'prizes' | 'summary'>('general');
+
+  // FILTER LOGIC: Show only Active or Upcoming tournaments
+  const visibleTournaments = tournaments.filter(t => t.status === 'Active' || t.status === 'Upcoming');
 
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
       if (showNotification) showNotification(title, msg, type);
@@ -262,7 +264,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                     ))
                 ) : (
                     <>
-                        {tournaments.map(t => (
+                        {visibleTournaments.map(t => (
                             <div key={t.id} className="relative group perspective-1000">
                                 <button 
                                     onClick={() => onSelect(t.id)}
