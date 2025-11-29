@@ -254,6 +254,17 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                                 <h4 className="font-bold text-sm text-indigo-700 mb-2 border-b border-slate-200 pb-1">กติกาการแข่งขัน (Config)</h4>
                                 
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">วันปิดรับสมัคร</label>
+                                    <input 
+                                        type="date" 
+                                        value={editConfig.registrationDeadline || ''} 
+                                        onChange={e => setEditConfig({...editConfig, registrationDeadline: e.target.value})} 
+                                        className="w-full p-2 border rounded text-sm bg-white"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">หากเลยวันที่กำหนด จะปิดรับสมัครอัตโนมัติ</p>
+                                </div>
+
                                 {editingTournament.type !== 'Penalty' ? (
                                     <>
                                         <div className="grid grid-cols-2 gap-3">
@@ -286,9 +297,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                             />
                                         </div>
                                     </>
-                                ) : (
-                                    <p className="text-xs text-slate-400 italic text-center py-2">ไม่มีการตั้งค่าเพิ่มเติมสำหรับโหมดจุดโทษ</p>
-                                )}
+                                ) : null}
                                 
                                 {editingTournament.type !== 'Penalty' && (
                                     <div className="flex items-center gap-2 mt-2 bg-white p-2 rounded border border-slate-200">
@@ -327,28 +336,36 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                                 <h4 className="font-bold text-slate-700 text-sm mb-2 flex items-center gap-1"><Shield className="w-4 h-4"/> กติกาการแข่งขัน</h4>
-                                {editingTournament.type === 'Penalty' ? (
-                                    <p className="text-xs text-slate-400 italic">ใช้กติกามาตรฐาน FIFA Penalty Shootout</p>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="bg-white p-2 rounded border border-slate-100">
-                                            <div className="text-[10px] text-slate-400">เวลา (นาที/ครึ่ง)</div>
-                                            <div className="font-bold text-indigo-600 text-lg">{editConfig.halfTimeDuration || 20}</div>
+                                <div className="space-y-2 text-sm">
+                                    {editConfig.registrationDeadline && (
+                                        <div className="flex justify-between border-b border-slate-200 pb-1">
+                                            <span className="text-slate-500">ปิดรับสมัคร:</span>
+                                            <span className="font-bold text-red-600">{new Date(editConfig.registrationDeadline).toLocaleDateString('th-TH')}</span>
                                         </div>
-                                        <div className="bg-white p-2 rounded border border-slate-100">
-                                            <div className="text-[10px] text-slate-400">ผู้เล่นตัวจริง</div>
-                                            <div className="font-bold text-indigo-600 text-lg">{editConfig.playersPerTeam || 7}</div>
+                                    )}
+                                    {editingTournament.type === 'Penalty' ? (
+                                        <p className="text-xs text-slate-400 italic">ใช้กติกามาตรฐาน FIFA Penalty Shootout</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-white p-2 rounded border border-slate-100">
+                                                <div className="text-[10px] text-slate-400">เวลา (นาที/ครึ่ง)</div>
+                                                <div className="font-bold text-indigo-600 text-lg">{editConfig.halfTimeDuration || 20}</div>
+                                            </div>
+                                            <div className="bg-white p-2 rounded border border-slate-100">
+                                                <div className="text-[10px] text-slate-400">ผู้เล่นตัวจริง</div>
+                                                <div className="font-bold text-indigo-600 text-lg">{editConfig.playersPerTeam || 7}</div>
+                                            </div>
+                                            <div className="bg-white p-2 rounded border border-slate-100">
+                                                <div className="text-[10px] text-slate-400">เปลี่ยนตัว</div>
+                                                <div className="font-bold text-indigo-600">{editConfig.maxSubs === 0 ? "ไม่จำกัด" : `${editConfig.maxSubs} คน`}</div>
+                                            </div>
+                                            <div className="bg-white p-2 rounded border border-slate-100">
+                                                <div className="text-[10px] text-slate-400">ต่อเวลา</div>
+                                                <div className="font-bold text-indigo-600">{editConfig.extraTime ? "มี" : "ไม่มี"}</div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white p-2 rounded border border-slate-100">
-                                            <div className="text-[10px] text-slate-400">เปลี่ยนตัว</div>
-                                            <div className="font-bold text-indigo-600">{editConfig.maxSubs === 0 ? "ไม่จำกัด" : `${editConfig.maxSubs} คน`}</div>
-                                        </div>
-                                        <div className="bg-white p-2 rounded border border-slate-100">
-                                            <div className="text-[10px] text-slate-400">ต่อเวลา</div>
-                                            <div className="font-bold text-indigo-600">{editConfig.extraTime ? "มี" : "ไม่มี"}</div>
-                                        </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                             <p className="text-center text-xs text-slate-400 mt-4">กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนบันทึก</p>
                         </div>

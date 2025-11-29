@@ -1,4 +1,3 @@
-
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -18,17 +17,13 @@ export interface AppSettings {
   locationLink: string;
   announcement: string;
   adminPin?: string; 
-  
-  // New: Location Coordinates
   locationLat?: number;
   locationLng?: number;
-
-  // New: Fundraising & Objective
-  registrationFee?: number; // ค่าสมัครต่อทีม
-  fundraisingGoal?: number; // เป้าหมายยอดเงิน
-  objectiveTitle?: string; // ชื่อโครงการ (เช่น สร้างห้องสมุด)
-  objectiveDescription?: string; // รายละเอียด
-  objectiveImageUrl?: string; // รูปภาพสิ่งที่อยากสร้าง/พัฒนา
+  registrationFee?: number; 
+  fundraisingGoal?: number; 
+  objectiveTitle?: string; 
+  objectiveDescription?: string; 
+  objectiveImageUrl?: string; 
 }
 
 export interface NewsItem {
@@ -52,6 +47,7 @@ export interface TournamentConfig {
   playersPerTeam?: number; // 7 or 11
   maxSubs?: number; // 0 = Unlimited
   extraTime?: boolean;
+  registrationDeadline?: string; // ISO Date String
 }
 
 export interface Tournament {
@@ -83,7 +79,8 @@ export interface Team {
   coachName?: string;
   coachPhone?: string;
 
-  tournamentId?: string; // Phase 1: Support multiple tournaments
+  tournamentId?: string;
+  creatorId?: string; // Links to UserProfile.userId
 }
 
 export interface Player {
@@ -94,7 +91,7 @@ export interface Player {
   position: string;
   photoUrl: string;
   birthDate?: string; 
-  tournamentId?: string; // Phase 1
+  tournamentId?: string;
 }
 
 export interface Kick {
@@ -105,10 +102,9 @@ export interface Kick {
   result: KickResult;
   timestamp: number;
   commentary?: string;
-  tournamentId?: string; // Phase 1
+  tournamentId?: string; 
 }
 
-// Phase 3: Match Events for Regular Football
 export interface MatchEvent {
   id: string;
   matchId: string;
@@ -117,7 +113,7 @@ export interface MatchEvent {
   type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'SUB_IN' | 'SUB_OUT' | 'OWN_GOAL' | 'BLUE_CARD';
   player: string;
   teamId: 'A' | 'B';
-  relatedPlayer?: string; // Assist or Sub Out
+  relatedPlayer?: string;
   timestamp: number;
 }
 
@@ -131,14 +127,14 @@ export interface Match {
   date: string;
   summary?: string;
   kicks?: Kick[];
-  events?: MatchEvent[]; // Phase 3
+  events?: MatchEvent[];
   roundLabel?: string; 
   status?: 'Scheduled' | 'Finished' | 'Walkover' | 'Live';
   venue?: string; 
   scheduledTime?: string; 
   livestreamUrl?: string; 
   livestreamCover?: string;
-  tournamentId?: string; // Phase 1
+  tournamentId?: string;
 }
 
 export interface MatchState {
@@ -150,16 +146,17 @@ export interface MatchState {
   scoreA: number;
   scoreB: number;
   kicks: Kick[];
-  events?: MatchEvent[]; // Phase 3
-  timer?: number; // Phase 3 (seconds)
-  isPaused?: boolean; // Phase 3
+  events?: MatchEvent[];
+  timer?: number;
+  isPaused?: boolean;
   isFinished: boolean;
   winner: 'A' | 'B' | null;
   roundLabel?: string;
-  tournamentId?: string; // Phase 1
+  tournamentId?: string;
 }
 
 export interface RegistrationData {
+  id?: string; // For updates
   schoolName: string;
   shortName?: string;
   district: string;
@@ -176,12 +173,16 @@ export interface RegistrationData {
   slipFile: string | null; 
   registrationTime?: string;
   players: {
+    id?: string;
     sequence: number; 
     name: string;
+    number?: string;
     birthDate: string; 
     photoFile: string | null; 
+    photoUrl?: string; // Existing URL for editing
   }[];
-  tournamentId?: string; // Phase 1
+  tournamentId?: string;
+  creatorId?: string;
 }
 
 export interface Standing {
