@@ -1,4 +1,5 @@
-import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament, MatchEvent } from '../types';
+
+import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament, MatchEvent, Donation } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
@@ -10,7 +11,7 @@ export const setStoredScriptUrl = (url: string) => {
   console.warn("URL is hardcoded in this version. Setting ignored.");
 };
 
-export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[], matches: any[], config: AppSettings, schools: School[], news: NewsItem[], tournaments: Tournament[] } | null> => {
+export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[], matches: any[], config: AppSettings, schools: School[], news: NewsItem[], tournaments: Tournament[], donations: Donation[] } | null> => {
   try {
     const response = await fetch(`${API_URL}?action=getData&t=${Date.now()}`, {
         method: 'GET',
@@ -18,9 +19,13 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
     });
     if (!response.ok) throw new Error(`Network response was not ok`);
     const text = await response.text();
-    if (text.trim().startsWith('<')) throw new Error('Deployment Error');
+    // Validate JSON
+    try {
+        var data = JSON.parse(text);
+    } catch(e) {
+        throw new Error("Invalid JSON response from server: " + text.substring(0, 100));
+    }
     
-    const data = JSON.parse(text);
     if (data && data.status === 'error') throw new Error(data.message);
     
     const configData = (data && data.config) ? data.config : {};
@@ -32,7 +37,8 @@ export const fetchDatabase = async (): Promise<{ teams: Team[], players: Player[
         config: { ...configData, adminPin: configData.adminPin || '1234' },
         schools: (data && data.schools) || [],
         news: (data && data.news) || [],
-        tournaments: (data && data.tournaments) || []
+        tournaments: (data && data.tournaments) || [],
+        donations: (data && data.donations) || []
     };
   } catch (error) {
     console.error("Failed to fetch:", error);
@@ -61,6 +67,20 @@ export const updateUserRole = async (userId: string, role: string): Promise<bool
             redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'updateUserRole', userId, role })
+        });
+        return true;
+    } catch (e) { return false; }
+}
+
+// --- DONATIONS ---
+export const verifyDonation = async (donationId: string, status: 'Verified' | 'Rejected'): Promise<boolean> => {
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'verifyDonation', donationId, status })
         });
         return true;
     } catch (e) { return false; }
@@ -129,10 +149,7 @@ export const authenticateUser = async (data: any): Promise<UserProfile | null> =
 };
 
 export const generateGeminiContent = async (prompt: string, initialModel: string = 'gemini-1.5-flash'): Promise<string> => {
-    if (!prompt) return "Error";
-    // ... (Existing AI Logic) ...
-    // Placeholder to keep file short, assume logic exists
-    return "AI Response"; 
+    return "AI Response Placeholder"; 
 };
 
 // --- DATA MANAGEMENT ---
@@ -155,10 +172,10 @@ export const registerTeam = async (data: RegistrationData, tournamentId: string 
     coachPhone: data.coachPhone,
     registrationTime: data.registrationTime, 
     tournamentId,
-    creatorId, // New field
+    creatorId, 
     players: data.players.map(p => ({
         name: p.name,
-        number: p.sequence, // Map sequence to number column
+        number: p.sequence, 
         position: 'Player',
         birthDate: p.birthDate,
         photoFile: p.photoFile
@@ -181,8 +198,6 @@ export const registerTeam = async (data: RegistrationData, tournamentId: string 
 };
 
 export const updateMyTeam = async (team: Partial<Team>, players: Partial<Player>[], userId: string) => {
-    // Wrapper for updateTeamData but could add frontend checks
-    // Backend should verify userId matches creatorId
     try {
         await fetch(API_URL, {
             method: 'POST',
@@ -222,9 +237,34 @@ export const updateTeamStatus = async (teamId: string, status: string, group?: s
 };
 
 export const saveMatchToSheet = async (matchState: any, summary: string, skipKicks: boolean = false, tournamentId: string = 'default') => {
-    // ... (Existing logic) ...
-    // Placeholder to reduce diff size
-    return true; 
+  const payload = {
+    action: 'saveMatch',
+    matchId: matchState.matchId || matchState.id,
+    teamA: typeof matchState.teamA === 'string' ? matchState.teamA : matchState.teamA.name,
+    teamB: typeof matchState.teamB === 'string' ? matchState.teamB : matchState.teamB.name,
+    scoreA: matchState.scoreA,
+    scoreB: matchState.scoreB,
+    winner: matchState.winner,
+    status: matchState.isFinished ? 'Finished' : 'Live',
+    summary: summary,
+    kicks: skipKicks ? [] : matchState.kicks,
+    roundLabel: matchState.roundLabel,
+    tournamentId: tournamentId
+  };
+
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (error) {
+    console.error("Error saving match:", error);
+    return false;
+  }
 };
 
 export const saveMatchEventsToSheet = async (events: MatchEvent[]) => {
@@ -241,7 +281,6 @@ export const saveMatchEventsToSheet = async (events: MatchEvent[]) => {
     } catch (error) { return false; }
 }
 
-// ... other existing functions (manageNews, saveSettings, etc.) ...
 export const manageNews = async (actionType: 'add' | 'delete' | 'edit', newsItem: Partial<NewsItem>) => {
     try {
       await fetch(API_URL, {

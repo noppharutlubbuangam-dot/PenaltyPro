@@ -1,7 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Heart, X, Copy, Check, CreditCard, Share2, Upload, FileText, Loader2, ArrowRight } from 'lucide-react';
-import { AppSettings, DonationRequest } from '../types';
+import { AppSettings, DonationRequest, UserProfile } from '../types';
 import { fileToBase64 } from '../services/sheetService';
 
 interface DonationDialogProps {
@@ -9,9 +10,11 @@ interface DonationDialogProps {
   onClose: () => void;
   config: AppSettings;
   tournamentName: string;
+  tournamentId?: string; // New
+  currentUser?: UserProfile | null; // New
 }
 
-const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config, tournamentName }) => {
+const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config, tournamentName, tournamentId, currentUser }) => {
   const [copied, setCopied] = useState(false);
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +29,13 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
   const [address, setAddress] = useState('');
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+      if (currentUser && isOpen) {
+          if (!donorName && currentUser.displayName) setDonorName(currentUser.displayName);
+          if (!donorPhone && currentUser.phoneNumber) setDonorPhone(currentUser.phoneNumber);
+      }
+  }, [currentUser, isOpen]);
 
   if (!isOpen) return null;
 
@@ -56,23 +66,27 @@ const DonationDialog: React.FC<DonationDialogProps> = ({ isOpen, onClose, config
           
           const payload: any = { // Use loose typing for quick fetch call
               action: 'submitDonation',
-              tournamentId: 'current', // Ideally passed, but handled backend or global
+              tournamentId: tournamentId || 'default', 
               amount: parseFloat(amount),
               donorName,
               donorPhone,
               isEdonation,
               taxId,
               address,
-              slipFile: slipBase64
+              slipFile: slipBase64,
+              lineUserId: currentUser?.userId || '' // Send Line User ID
           };
 
           // Direct fetch to script (bypassing service wrapper for simplicity here or add to service)
           const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec"; 
           await fetch(API_URL, {
               method: 'POST',
+              mode: 'no-cors', // Important for Apps Script POST
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: JSON.stringify(payload)
           });
 
+          // Since no-cors returns opaque response, assume success if no network error
           setIsSuccess(true);
       } catch (error) {
           alert("เกิดข้อผิดพลาดในการส่งข้อมูล");

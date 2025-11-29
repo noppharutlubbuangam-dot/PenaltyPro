@@ -34,7 +34,7 @@ export interface NewsItem {
   imageUrl?: string;
   documentUrl?: string; 
   timestamp: number;
-  tournamentId?: string; // New field for separation
+  tournamentId?: string; // Updated: for separation
 }
 
 export interface School {
@@ -53,20 +53,19 @@ export interface ProjectImage {
 
 export interface TournamentPrize {
   id: string;
-  rankLabel: string; // "1st", "2nd", "Top Scorer"
-  amount: string; // Allow text like "Trophy + 5000"
+  rankLabel: string; 
+  amount: string; 
   description?: string;
 }
 
 export interface TournamentConfig {
-  halfTimeDuration?: number; // Minutes
-  playersPerTeam?: number; // 7 or 11
-  maxSubs?: number; // 0 = Unlimited
+  halfTimeDuration?: number; 
+  playersPerTeam?: number; 
+  maxSubs?: number; 
   extraTime?: boolean;
-  registrationDeadline?: string; // ISO Date String
-  maxTeams?: number; // 0 or undefined = Unlimited
+  registrationDeadline?: string; 
+  maxTeams?: number; 
   
-  // Overrides
   bankName?: string;
   bankAccount?: string;
   accountName?: string;
@@ -74,8 +73,8 @@ export interface TournamentConfig {
   locationLink?: string;
   locationLat?: number;
   locationLng?: number;
+  registrationFee?: number;
 
-  // Objective Specifics
   objective?: {
     isEnabled: boolean;
     title: string;
@@ -84,19 +83,34 @@ export interface TournamentConfig {
     images: ProjectImage[];
   };
 
-  // Prizes
   prizes?: TournamentPrize[];
 }
 
 export interface DonationRequest {
   tournamentId: string;
   amount: number;
-  slipFile: string; // Base64
+  slipFile: string; 
   isEdonation: boolean;
   donorName: string;
   donorPhone: string;
   taxId?: string;
   address?: string;
+  lineUserId?: string; // New
+}
+
+export interface Donation {
+  id: string;
+  timestamp: string;
+  donorName: string;
+  amount: number;
+  phone: string;
+  isEdonation: boolean;
+  taxId?: string;
+  address?: string;
+  slipUrl: string;
+  tournamentId: string;
+  lineUserId?: string; // New
+  status: 'Pending' | 'Verified' | 'Rejected'; // New
 }
 
 export interface Tournament {
@@ -104,7 +118,7 @@ export interface Tournament {
   name: string;
   type: 'Penalty' | '7v7' | '11v11';
   status: 'Active' | 'Archived' | 'Upcoming';
-  config?: string; // JSON string of TournamentConfig
+  config?: string; 
 }
 
 export interface Team {
@@ -129,7 +143,7 @@ export interface Team {
   coachPhone?: string;
 
   tournamentId?: string;
-  creatorId?: string; // Links to UserProfile.userId
+  creatorId?: string;
 }
 
 export interface Player {
@@ -205,7 +219,7 @@ export interface MatchState {
 }
 
 export interface RegistrationData {
-  id?: string; // For updates
+  id?: string;
   schoolName: string;
   shortName?: string;
   district: string;
@@ -228,7 +242,7 @@ export interface RegistrationData {
     number?: string;
     birthDate: string; 
     photoFile: string | null; 
-    photoUrl?: string; // Existing URL for editing
+    photoUrl?: string;
   }[];
   tournamentId?: string;
   creatorId?: string;

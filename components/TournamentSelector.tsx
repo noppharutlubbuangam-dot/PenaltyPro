@@ -1,8 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage, TournamentPrize } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star } from 'lucide-react';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2 } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
+import { shareTournament } from '../services/liffService';
 
 interface TournamentSelectorProps {
   tournaments: Tournament[];
@@ -23,6 +25,44 @@ const getDisplayUrl = (url: string) => {
     return url;
 };
 
+// Image compression utility
+const compressImage = async (file: File): Promise<File> => {
+    if (file.type === 'application/pdf') return file; // Skip PDF
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1024;
+                const scaleSize = MAX_WIDTH / img.width;
+                const width = (scaleSize < 1) ? MAX_WIDTH : img.width;
+                const height = (scaleSize < 1) ? img.height * scaleSize : img.height;
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const newFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now(),
+                        });
+                        resolve(newFile);
+                    } else {
+                        reject(new Error('Canvas is empty'));
+                    }
+                }, 'image/jpeg', 0.7); // 70% Quality
+            };
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+
 const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,6 +76,11 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
       if (showNotification) showNotification(title, msg, type);
       else alert(`${title}: ${msg}`);
+  };
+
+  const handleShare = (e: React.MouseEvent, tournament: Tournament) => {
+      e.stopPropagation();
+      shareTournament(tournament);
   };
 
   const handleCreate = async () => {
@@ -110,8 +155,14 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after' | 'general') => {
       if (!e.target.files || !e.target.files[0]) return;
-      const file = e.target.files[0];
+      let file = e.target.files[0];
+      
       try {
+          // Compress before encoding to base64
+          if (file.type.startsWith('image/')) {
+              file = await compressImage(file);
+          }
+          
           const base64 = await fileToBase64(file);
           setEditConfig(prev => {
               const currentImages = prev.objective?.images || [];
@@ -240,6 +291,15 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                     </div>
                                 </button>
                                 
+                                {/* Share Button */}
+                                <button 
+                                    onClick={(e) => handleShare(e, t)}
+                                    className="absolute bottom-4 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
+                                    title="แชร์รายการนี้"
+                                >
+                                    <Share2 className="w-4 h-4" />
+                                </button>
+
                                 {/* Admin Config Button */}
                                 {isAdmin && (
                                     <button 
@@ -309,7 +369,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
             </div>
         )}
 
-        {/* Edit Modal */}
+        {/* Edit Modal - (Included in full file, truncated here for brevity as it's largely unchanged but using new fileToBase64/compression logic) */}
         {isEditing && editingTournament && (
             <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" style={{ fontFamily: "'Kanit', sans-serif" }}>
                 <div className="bg-white rounded-3xl shadow-2xl p-0 w-full max-w-2xl animate-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[90vh]">
@@ -351,7 +411,6 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                     
                     {/* Content Area */}
                     <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
-                        
                         {editStep === 'general' && (
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                                 <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-2 border-b pb-2">Basic Info</h4>

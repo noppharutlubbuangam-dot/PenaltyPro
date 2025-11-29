@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { NewsItem } from '../types';
 import { Calendar, Bell, X, FileText, Download, Share2, Globe } from 'lucide-react';
@@ -14,7 +15,6 @@ interface NewsFeedProps {
 const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId, currentTournamentId }) => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
-  // Auto-open specific news if deep linked
   useEffect(() => {
     if (initialNewsId && news.length > 0) {
         const item = news.find(n => n.id === initialNewsId);
@@ -111,7 +111,7 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ news, isLoading, initialNewsId, cur
       </div>
 
       {selectedNews && (
-        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 my-8">
                 <div className="relative">
                     {selectedNews.imageUrl && (
