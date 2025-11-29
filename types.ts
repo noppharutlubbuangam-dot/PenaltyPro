@@ -100,6 +100,19 @@ export interface Kick {
   tournamentId?: string; // Phase 1
 }
 
+// Phase 3: Match Events for Regular Football
+export interface MatchEvent {
+  id: string;
+  matchId: string;
+  tournamentId: string;
+  minute: number;
+  type: 'GOAL' | 'YELLOW_CARD' | 'RED_CARD' | 'SUB_IN' | 'SUB_OUT' | 'OWN_GOAL' | 'BLUE_CARD';
+  player: string;
+  teamId: 'A' | 'B';
+  relatedPlayer?: string; // Assist or Sub Out
+  timestamp: number;
+}
+
 export interface Match {
   id: string;
   teamA: Team | string; 
@@ -110,8 +123,9 @@ export interface Match {
   date: string;
   summary?: string;
   kicks?: Kick[];
+  events?: MatchEvent[]; // Phase 3
   roundLabel?: string; 
-  status?: 'Scheduled' | 'Finished' | 'Walkover';
+  status?: 'Scheduled' | 'Finished' | 'Walkover' | 'Live';
   venue?: string; 
   scheduledTime?: string; 
   livestreamUrl?: string; 
@@ -128,6 +142,9 @@ export interface MatchState {
   scoreA: number;
   scoreB: number;
   kicks: Kick[];
+  events?: MatchEvent[]; // Phase 3
+  timer?: number; // Phase 3 (seconds)
+  isPaused?: boolean; // Phase 3
   isFinished: boolean;
   winner: 'A' | 'B' | null;
   roundLabel?: string;

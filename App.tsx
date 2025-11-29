@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament } from './types';
+import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent } from './types';
 import MatchSetup from './components/MatchSetup';
 import ScoreVisualizer from './components/ScoreVisualizer';
 import PenaltyInterface from './components/PenaltyInterface';
+import RegularMatchInterface from './components/RegularMatchInterface';
 import SettingsDialog from './components/SettingsDialog';
 import RegistrationForm from './components/RegistrationForm';
 import TournamentView from './components/TournamentView';
@@ -15,12 +16,13 @@ import ScheduleList from './components/ScheduleList';
 import NewsFeed from './components/NewsFeed'; 
 import TournamentSelector from './components/TournamentSelector';
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
-import { fetchDatabase, saveMatchToSheet, authenticateUser } from './services/sheetService';
+import { fetchDatabase, saveMatchToSheet, authenticateUser, saveMatchEventsToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
 import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+// ... (Rest of imports and DEFAULT_SETTINGS remain same) ...
 const DEFAULT_SETTINGS: AppSettings = {
   competitionName: "การแข่งขันยิงจุดโทษระดับประถมศึกษา",
   competitionLogo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_the_Ministry_of_Education_of_Thailand.svg/1200px-Emblem_of_the_Ministry_of_Education_of_Thailand.svg.png",
@@ -38,7 +40,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   objectiveImageUrl: ""
 };
 
-// ... (Helper functions remain same) ...
+// ... (calculateDistance helper) ...
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371; 
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -102,6 +104,7 @@ function App() {
   const activeMatches = currentTournamentId ? matchesLog.filter(m => m.tournamentId === currentTournamentId || (!m.tournamentId && currentTournamentId === 'default')) : [];
   const activeTournament = tournaments.find(t => t.id === currentTournamentId);
 
+  // ... (useEffect hooks remain same) ...
   useEffect(() => {
     const init = async () => {
         await initializeLiff();
@@ -192,6 +195,7 @@ function App() {
       }
   }, [isLoadingData, availableTeams.length, isAdmin]); 
 
+  // ... (showNotification, removeToast, loadData) ...
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, title, message, type }]);
@@ -236,7 +240,7 @@ function App() {
   const handleLogout = () => { authLogout(); setCurrentUser(null); setIsAdmin(false); showNotification("ออกจากระบบแล้ว"); };
   
   const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => {
-    setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], isFinished: false, winner: null, tournamentId: currentTournamentId || 'default' });
+    setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], events: [], isFinished: false, winner: null, tournamentId: currentTournamentId || 'default' });
     setCurrentView('match');
     showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success");
   };
@@ -337,7 +341,31 @@ function App() {
       );
   }
 
-  // Return logic remains similar but passing active data
+  // Phase 3: Regular Match Handler
+  const handleFinishRegularMatch = async (finalState: MatchState) => {
+      setIsSaving(true);
+      try {
+          await saveMatchToSheet(finalState, '', false, currentTournamentId || 'default');
+          if (finalState.events && finalState.events.length > 0) {
+              await saveMatchEventsToSheet(finalState.events);
+          }
+          showNotification("บันทึกผลเรียบร้อย", "จบการแข่งขันแล้ว", "success");
+          loadData();
+          setCurrentView('home');
+      } catch (e) {
+          console.error(e);
+          showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleUpdateRegularMatchState = (state: MatchState) => {
+      // In a real app, you might sync state periodically or on change
+      // For now, we only save at the end or explicitly
+  };
+
+  // Return logic
   return (
     <div className="bg-slate-50 min-h-screen text-slate-900 font-sans pb-24" style={{ fontFamily: "'Kanit', sans-serif" }}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -348,7 +376,9 @@ function App() {
       
       {/* Modals */}
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
-      {editingKick && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1100] p-4 backdrop-blur-sm" onClick={() => setEditingKick(null)}><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
+      
+      {/* Edit Kick Modal (Only for Penalty Mode) */}
+      {editingKick && activeTournament?.type === 'Penalty' && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1100] p-4 backdrop-blur-sm" onClick={() => setEditingKick(null)}><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
 
       {currentView === 'register' && <RegistrationForm key={viewKey} onBack={() => { loadData(); setCurrentView('home'); }} schools={schools} config={appConfig} showNotification={showNotification} user={currentUser} />}
       {currentView === 'tournament' && <TournamentView key={viewKey} teams={activeTeams} matches={activeMatches} onSelectMatch={handleStartMatchRequest} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onRefresh={loadData} onLoginClick={() => setIsLoginOpen(true)} isLoading={isLoadingData} showNotification={showNotification} />}
@@ -570,9 +600,26 @@ function App() {
               <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xl"><Trophy className="w-6 h-6 text-indigo-600" /><span>การแข่งขันสด</span></div>
               <div className="flex gap-2"><button onClick={() => setCurrentView('home')} className="flex items-center gap-1 px-3 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"><Home className="w-4 h-4" /> หน้าหลัก</button><button onClick={resetMatch} className="p-2 hover:bg-slate-100 rounded-full transition text-slate-500" title="จบการแข่งขัน"><RefreshCw className="w-5 h-5" /></button></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><ScoreVisualizer kicks={matchState.kicks} teamId="A" team={matchState.teamA} /><ScoreVisualizer kicks={matchState.kicks} teamId="B" team={matchState.teamB} /></div>
-            <div className="text-center py-4 bg-white rounded-xl border border-slate-100 shadow-sm relative"><div className="text-5xl font-black text-slate-800 tracking-tighter">{matchState.scoreA} - {matchState.scoreB}</div><div className="text-sm text-slate-500 font-medium mt-1">รอบที่ {matchState.currentRound}</div>{matchState.kicks.length > 0 && !matchState.isFinished && (<button onClick={requestUndoLastKick} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition flex items-center gap-1 text-xs font-bold" title="ยกเลิกการยิงล่าสุด"><Undo2 className="w-5 h-5" /> <span className="hidden sm:inline">Undo</span></button>)}</div>
-            {!matchState.isFinished ? (<div className="flex flex-col gap-6"><PenaltyInterface currentTurn={matchState.currentTurn} team={matchState.currentTurn === 'A' ? matchState.teamA : matchState.teamB} roster={activePlayers.filter(p => p.teamId === (matchState.currentTurn === 'A' ? matchState.teamA.id : matchState.teamB.id))} onRecordResult={handleRecordKick} isProcessing={isProcessing} /><div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="bg-slate-100 px-4 py-2 font-bold text-slate-600 text-sm flex justify-between items-center"><span>ประวัติการยิง</span><span className="text-xs font-normal text-slate-400">แสดงล่าสุด</span></div><div className="max-h-64 overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-500 sticky top-0"><tr><th className="px-4 py-2">รอบ</th><th className="px-4 py-2">ทีม</th><th className="px-4 py-2">ผู้เล่น</th><th className="px-4 py-2">ผล</th><th className="px-4 py-2 text-right">แก้ไข</th></tr></thead><tbody className="divide-y divide-slate-100">{[...matchState.kicks].reverse().map((kick) => (<tr key={kick.id} className="hover:bg-slate-50"><td className="px-4 py-2 text-slate-400">{kick.round}</td><td className="px-4 py-2 font-bold">{kick.teamId === 'A' ? matchState.teamA.shortName : matchState.teamB.shortName}</td><td className="px-4 py-2">{kick.player}</td><td className="px-4 py-2 flex items-center gap-2">{kick.result === KickResult.GOAL ? <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> เข้า</span> : kick.result === KickResult.SAVED ? <span className="text-orange-600 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> เซฟ</span> : <span className="text-red-600 flex items-center gap-1"><XCircle className="w-3 h-3"/> พลาด</span>}</td><td className="px-4 py-2 text-right"><button onClick={() => setEditingKick(kick)} className="text-slate-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition" title="แก้ไข / ลบ"><Edit2 className="w-4 h-4" /></button></td></tr>))} {matchState.kicks.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-slate-300">ยังไม่มีข้อมูลการยิง</td></tr>}</tbody></table></div></div></div>) : (<div className="bg-white rounded-2xl shadow-xl p-8 text-center space-y-6 animate-in zoom-in duration-500"><div className="inline-flex p-4 bg-yellow-100 rounded-full mb-2"><Trophy className="w-12 h-12 text-yellow-600" /></div><h2 className="text-4xl font-black text-slate-800">{matchState.winner === 'A' ? matchState.teamA.name : matchState.teamB.name} ชนะ!</h2><div className="flex flex-col gap-3">{isSaving ? <div className="text-center text-sm text-green-600 animate-pulse">กำลังบันทึกลง Google Sheets...</div> : <div className="text-center text-sm text-gray-400">บันทึกผลการแข่งขันเรียบร้อยแล้ว</div>}<button onClick={() => { const header = "Round,Team,Player,Result"; const rows = matchState.kicks.map(k => `${k.round},${k.teamId},${k.player},${k.result}`).join('\n'); navigator.clipboard.writeText(`${header}\n${rows}`); showNotification("คัดลอกข้อมูล CSV แล้ว"); }} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-indigo-200"><Clipboard className="w-5 h-5" /> คัดลอก CSV (Backup)</button><button onClick={() => setCurrentView('home')} className="text-indigo-600 font-medium hover:underline">กลับสู่หน้าหลัก</button><button onClick={requestUndoLastKick} className="text-slate-400 text-sm hover:text-red-500 flex items-center justify-center gap-1 mt-2"><Undo2 className="w-3 h-3" /> แก้ไขผลการยิงลูกสุดท้าย</button></div></div>)}
+            
+            {/* Conditional Rendering based on Tournament Type */}
+            {activeTournament?.type === 'Penalty' ? (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><ScoreVisualizer kicks={matchState.kicks} teamId="A" team={matchState.teamA} /><ScoreVisualizer kicks={matchState.kicks} teamId="B" team={matchState.teamB} /></div>
+                    <div className="text-center py-4 bg-white rounded-xl border border-slate-100 shadow-sm relative"><div className="text-5xl font-black text-slate-800 tracking-tighter">{matchState.scoreA} - {matchState.scoreB}</div><div className="text-sm text-slate-500 font-medium mt-1">รอบที่ {matchState.currentRound}</div>{matchState.kicks.length > 0 && !matchState.isFinished && (<button onClick={requestUndoLastKick} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition flex items-center gap-1 text-xs font-bold" title="ยกเลิกการยิงล่าสุด"><Undo2 className="w-5 h-5" /> <span className="hidden sm:inline">Undo</span></button>)}</div>
+                    {!matchState.isFinished ? (<div className="flex flex-col gap-6"><PenaltyInterface currentTurn={matchState.currentTurn} team={matchState.currentTurn === 'A' ? matchState.teamA : matchState.teamB} roster={activePlayers.filter(p => p.teamId === (matchState.currentTurn === 'A' ? matchState.teamA.id : matchState.teamB.id))} onRecordResult={handleRecordKick} isProcessing={isProcessing} /><div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="bg-slate-100 px-4 py-2 font-bold text-slate-600 text-sm flex justify-between items-center"><span>ประวัติการยิง</span><span className="text-xs font-normal text-slate-400">แสดงล่าสุด</span></div><div className="max-h-64 overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-500 sticky top-0"><tr><th className="px-4 py-2">รอบ</th><th className="px-4 py-2">ทีม</th><th className="px-4 py-2">ผู้เล่น</th><th className="px-4 py-2">ผล</th><th className="px-4 py-2 text-right">แก้ไข</th></tr></thead><tbody className="divide-y divide-slate-100">{[...matchState.kicks].reverse().map((kick) => (<tr key={kick.id} className="hover:bg-slate-50"><td className="px-4 py-2 text-slate-400">{kick.round}</td><td className="px-4 py-2 font-bold">{kick.teamId === 'A' ? matchState.teamA.shortName : matchState.teamB.shortName}</td><td className="px-4 py-2">{kick.player}</td><td className="px-4 py-2 flex items-center gap-2">{kick.result === KickResult.GOAL ? <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> เข้า</span> : kick.result === KickResult.SAVED ? <span className="text-orange-600 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> เซฟ</span> : <span className="text-red-600 flex items-center gap-1"><XCircle className="w-3 h-3"/> พลาด</span>}</td><td className="px-4 py-2 text-right"><button onClick={() => setEditingKick(kick)} className="text-slate-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition" title="แก้ไข / ลบ"><Edit2 className="w-4 h-4" /></button></td></tr>))} {matchState.kicks.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-slate-300">ยังไม่มีข้อมูลการยิง</td></tr>}</tbody></table></div></div></div>) : (<div className="bg-white rounded-2xl shadow-xl p-8 text-center space-y-6 animate-in zoom-in duration-500"><div className="inline-flex p-4 bg-yellow-100 rounded-full mb-2"><Trophy className="w-12 h-12 text-yellow-600" /></div><h2 className="text-4xl font-black text-slate-800">{matchState.winner === 'A' ? matchState.teamA.name : matchState.teamB.name} ชนะ!</h2><div className="flex flex-col gap-3">{isSaving ? <div className="text-center text-sm text-green-600 animate-pulse">กำลังบันทึกลง Google Sheets...</div> : <div className="text-center text-sm text-gray-400">บันทึกผลการแข่งขันเรียบร้อยแล้ว</div>}<button onClick={() => { const header = "Round,Team,Player,Result"; const rows = matchState.kicks.map(k => `${k.round},${k.teamId},${k.player},${k.result}`).join('\n'); navigator.clipboard.writeText(`${header}\n${rows}`); showNotification("คัดลอกข้อมูล CSV แล้ว"); }} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-indigo-200"><Clipboard className="w-5 h-5" /> คัดลอก CSV (Backup)</button><button onClick={() => setCurrentView('home')} className="text-indigo-600 font-medium hover:underline">กลับสู่หน้าหลัก</button><button onClick={requestUndoLastKick} className="text-slate-400 text-sm hover:text-red-500 flex items-center justify-center gap-1 mt-2"><Undo2 className="w-3 h-3" /> แก้ไขผลการยิงลูกสุดท้าย</button></div></div>)}
+                </>
+            ) : (
+                // Regular Match Mode (7v7 / 11v11)
+                <RegularMatchInterface 
+                    teamA={matchState.teamA} 
+                    teamB={matchState.teamB} 
+                    matchId={matchState.matchId || `M_${Date.now()}`}
+                    tournamentId={currentTournamentId || 'default'}
+                    roster={activePlayers}
+                    onFinishMatch={handleFinishRegularMatch}
+                    onUpdateState={handleUpdateRegularMatchState}
+                />
+            )}
           </div>
         </div>
       )}

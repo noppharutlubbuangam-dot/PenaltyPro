@@ -30,6 +30,8 @@ function doPost(e) {
       return saveMatch(data);
     } else if (action === 'saveKicks') {
        return saveKicks(data.data);
+    } else if (action === 'saveMatchEvents') { // Phase 3
+       return saveMatchEvents(data.events);
     } else if (action === 'saveSettings') {
       return saveSettings(data.settings);
     } else if (action === 'manageNews') {
@@ -88,7 +90,7 @@ function handleAiGenerate(promptText, modelName) {
 function getData() {
   const ss = getSpreadsheet();
   
-  // 0. Tournaments (New Phase 1)
+  // 0. Tournaments
   let tourneySheet = ss.getSheetByName("Tournaments");
   if (!tourneySheet) {
      tourneySheet = ss.insertSheet("Tournaments");
@@ -139,7 +141,7 @@ function getData() {
         slipUrl: toLh3Link(r[15] || ''),
         rejectReason: r[16] || '',
         registrationTime: r[17] || '',
-        tournamentId: r[18] || 'default' // Index 18
+        tournamentId: r[18] || 'default'
       });
     }
   }
@@ -160,7 +162,7 @@ function getData() {
         position: r[4],
         photoUrl: toLh3Link(r[5]),
         birthDate: r[6] ? formatDate(r[6]) : '',
-        tournamentId: r[7] || 'default' // Index 7
+        tournamentId: r[7] || 'default'
       });
     }
   }
@@ -210,13 +212,13 @@ function getData() {
         scheduledTime: r[11] || '',
         livestreamUrl: r[12] || '',
         livestreamCover: toLh3Link(r[13]),
-        tournamentId: r[14] || 'default', // Index 14
+        tournamentId: r[14] || 'default', 
         kicks: matchKicks 
       });
     }
   }
 
-  // 4. Config, Schools, News (Global, not per tournament for now)
+  // 4. Config, Schools, News (Global)
   let configSheet = ss.getSheetByName("Config");
   if(!configSheet) { configSheet = ss.insertSheet("Config"); configSheet.appendRow(["CompName","Logo","BankName","BankAccount","AccountName","Location","Link","Announcement","PIN","Lat","Lng","Fee","Goal","ObjTitle","ObjDesc","ObjImg"]); }
   let config = {};
@@ -268,45 +270,6 @@ function createTournament(name, type) {
   const id = "T" + Date.now();
   sheet.appendRow([id, name, type, "Active", "{}"]);
   return successResponse({ tournamentId: id });
-}
-
-// ... AUTH Functions (unchanged) ...
-function handleAuth(data) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Users");
-  if (!sheet) { sheet = ss.insertSheet("Users"); sheet.appendRow(["ID", "Username", "Password", "DisplayName", "Role", "Phone", "PictureUrl", "LineUserId", "LastLogin"]); }
-  const users = sheet.getDataRange().getValues();
-  const type = data.authType; 
-
-  if (type === 'register') {
-    for (let i = 1; i < users.length; i++) { if (users[i][1] && String(users[i][1]).toLowerCase() === String(data.username).toLowerCase()) return errorResponse("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"); }
-    const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
-    sheet.appendRow([newId, data.username, data.password, data.displayName, role, data.phone || '', data.pictureUrl || '', '', new Date()]);
-    return successResponse({ userId: newId, username: data.username, displayName: data.displayName, role: role, phoneNumber: data.phone, pictureUrl: data.pictureUrl });
-  } else if (type === 'login') {
-    for (let i = 1; i < users.length; i++) {
-      if (String(users[i][1]).toLowerCase() === String(data.username).toLowerCase() && String(users[i][2]) === String(data.password)) {
-        sheet.getRange(i + 1, 9).setValue(new Date());
-        return successResponse({ userId: users[i][0], username: users[i][1], displayName: users[i][3], role: users[i][4], phoneNumber: users[i][5], pictureUrl: users[i][6] });
-      }
-    }
-    return errorResponse("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
-  } else if (type === 'line') {
-    const lineId = data.lineUserId; let foundIndex = -1;
-    for (let i = 1; i < users.length; i++) { if (String(users[i][7]) === String(lineId)) { foundIndex = i; break; } }
-    if (foundIndex !== -1) {
-      sheet.getRange(foundIndex + 1, 9).setValue(new Date());
-      if (data.pictureUrl) sheet.getRange(foundIndex + 1, 7).setValue(data.pictureUrl);
-      if (data.displayName) sheet.getRange(foundIndex + 1, 4).setValue(data.displayName);
-      const u = users[foundIndex];
-      return successResponse({ userId: u[0], username: u[1], displayName: data.displayName, role: u[4], phoneNumber: u[5], pictureUrl: data.pictureUrl });
-    } else {
-      const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
-      sheet.appendRow([newId, '', '', data.displayName, role, '', data.pictureUrl, lineId, new Date()]);
-      return successResponse({ userId: newId, displayName: data.displayName, role: role, pictureUrl: data.pictureUrl, type: 'line' });
-    }
-  }
-  return errorResponse("Invalid Auth Type");
 }
 
 function registerTeam(data) {
@@ -413,7 +376,6 @@ function updateTeamData(teamData, playersData) {
   return errorResponse("Server busy");
 }
 
-// ... updateTeamStatus, manageNews (unchanged) ...
 function updateTeamStatus(teamId, status, group, reason) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName("Teams");
@@ -526,6 +488,21 @@ function saveKicks(kicksArray) {
    return successResponse("Kicks Saved");
 }
 
+// Phase 3: Save Match Events
+function saveMatchEvents(eventsArray) {
+   if (!eventsArray || eventsArray.length === 0) return successResponse("No events");
+   const ss = getSpreadsheet();
+   let sheet = ss.getSheetByName("MatchEvents");
+   if (!sheet) { sheet = ss.insertSheet("MatchEvents"); sheet.appendRow(["ID", "MatchID", "TournamentID", "Minute", "Type", "Player", "TeamID", "RelatedPlayer", "Timestamp"]); }
+   
+   const newRows = eventsArray.map(e => [e.id, e.matchId, e.tournamentId, e.minute, e.type, e.player, e.teamId, e.relatedPlayer || '', e.timestamp]);
+   if (newRows.length > 0) {
+       const lastRow = sheet.getLastRow();
+       sheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
+   }
+   return successResponse("Events Saved");
+}
+
 // ... saveSettings, deleteMatch, utility functions (unchanged) ...
 function saveSettings(settings) {
   const ss = getSpreadsheet();
@@ -559,6 +536,86 @@ function deleteMatch(matchId) {
     } finally { lock.releaseLock(); }
   }
   return errorResponse("Busy");
+}
+
+function handleAuth(data) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("Users");
+  if (!sheet) { sheet = ss.insertSheet("Users"); sheet.appendRow(["ID", "Username", "Password", "DisplayName", "Role", "Phone", "PictureUrl", "LineUserId", "LastLogin"]); }
+  const users = sheet.getDataRange().getValues();
+  const type = data.authType; 
+
+  if (type === 'register') {
+    for (let i = 1; i < users.length; i++) { if (users[i][1] && String(users[i][1]).toLowerCase() === String(data.username).toLowerCase()) return errorResponse("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"); }
+    const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
+    sheet.appendRow([newId, data.username, data.password, data.displayName, role, data.phone || '', data.pictureUrl || '', '', new Date()]);
+    return successResponse({ userId: newId, username: data.username, displayName: data.displayName, role: role, phoneNumber: data.phone, pictureUrl: data.pictureUrl });
+  } else if (type === 'login') {
+    for (let i = 1; i < users.length; i++) {
+      if (String(users[i][1]).toLowerCase() === String(data.username).toLowerCase() && String(users[i][2]) === String(data.password)) {
+        sheet.getRange(i + 1, 9).setValue(new Date());
+        return successResponse({ userId: users[i][0], username: users[i][1], displayName: users[i][3], role: users[i][4], phoneNumber: users[i][5], pictureUrl: users[i][6] });
+      }
+    }
+    return errorResponse("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+  } else if (type === 'line') {
+    const lineId = data.lineUserId; let foundIndex = -1;
+    for (let i = 1; i < users.length; i++) { if (String(users[i][7]) === String(lineId)) { foundIndex = i; break; } }
+    if (foundIndex !== -1) {
+      sheet.getRange(foundIndex + 1, 9).setValue(new Date());
+      if (data.pictureUrl) sheet.getRange(foundIndex + 1, 7).setValue(data.pictureUrl);
+      if (data.displayName) sheet.getRange(foundIndex + 1, 4).setValue(data.displayName);
+      const u = users[foundIndex];
+      return successResponse({ userId: u[0], username: u[1], displayName: data.displayName, role: u[4], phoneNumber: u[5], pictureUrl: data.pictureUrl });
+    } else {
+      const newId = "U" + Date.now(); const role = users.length <= 1 ? 'admin' : 'user';
+      sheet.appendRow([newId, '', '', data.displayName, role, '', data.pictureUrl, lineId, new Date()]);
+      return successResponse({ userId: newId, displayName: data.displayName, role: role, pictureUrl: data.pictureUrl, type: 'line' });
+    }
+  }
+  return errorResponse("Invalid Auth Type");
+}
+
+function manageNews(data) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("News");
+  if (!sheet) sheet = ss.insertSheet("News");
+  const subAction = data.subAction;
+  const item = data.newsItem;
+  const lock = LockService.getScriptLock();
+  if (lock.tryLock(10000)) {
+    try {
+      if (subAction === 'add') {
+         let imgUrl = item.imageUrl && item.imageUrl.startsWith('data:') ? saveFileToDrive(item.imageUrl, `news_img_${Date.now()}`) : '';
+         let docUrl = item.documentUrl && item.documentUrl.startsWith('data:') ? saveFileToDrive(item.documentUrl, `news_doc_${Date.now()}`) : '';
+         sheet.appendRow([item.id || Date.now().toString(), item.title, item.content, imgUrl, item.timestamp || Date.now(), docUrl]);
+      } else if (subAction === 'edit') {
+         const rows = sheet.getDataRange().getValues();
+         for (let i = 1; i < rows.length; i++) {
+            if (String(rows[i][0]) === String(item.id)) {
+               sheet.getRange(i+1, 2).setValue(item.title);
+               sheet.getRange(i+1, 3).setValue(item.content);
+               if (item.imageUrl && item.imageUrl.startsWith('data:')) {
+                  sheet.getRange(i+1, 4).setValue(saveFileToDrive(item.imageUrl, `news_img_${item.id}`));
+               }
+               if (item.documentUrl && item.documentUrl.startsWith('data:')) {
+                  sheet.getRange(i+1, 6).setValue(saveFileToDrive(item.documentUrl, `news_doc_${item.id}`));
+               }
+               break;
+            }
+         }
+      } else if (subAction === 'delete') {
+         const rows = sheet.getDataRange().getValues();
+         for (let i = 1; i < rows.length; i++) {
+            if (String(rows[i][0]) === String(item.id)) {
+               sheet.deleteRow(i+1); break;
+            }
+         }
+      }
+      return successResponse("News updated");
+    } finally { lock.releaseLock(); }
+  }
+  return errorResponse("Server busy");
 }
 
 function getSpreadsheet() { return SpreadsheetApp.getActiveSpreadsheet(); }

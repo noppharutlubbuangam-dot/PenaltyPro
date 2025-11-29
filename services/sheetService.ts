@@ -1,4 +1,4 @@
-import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament } from '../types';
+import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament, MatchEvent } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
 
@@ -257,6 +257,7 @@ export const saveMatchToSheet = async (matchState: MatchState | any, summary: st
     winner: resolvedWinner, 
     summary: summary || matchState.summary,
     kicks: (skipKicks || !matchState.kicks) ? [] : matchState.kicks.map((k: any) => ({ ...k, teamId: k.teamId === 'A' ? teamAName : (k.teamId === 'B' ? teamBName : k.teamId) })),
+    events: matchState.events, // Phase 3: Events
     livestreamUrl: matchState.livestreamUrl,
     livestreamCover: matchState.livestreamCover,
     tournamentId
@@ -292,6 +293,21 @@ export const saveKicksToSheet = async (kicks: Kick[], matchId: string, teamAName
             redirect: 'follow',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'saveKicks', data: formattedKicks })
+        });
+        return true;
+    } catch (error) { return false; }
+}
+
+// Phase 3: Save Match Events
+export const saveMatchEventsToSheet = async (events: MatchEvent[]) => {
+    if (!events || events.length === 0) return true;
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'saveMatchEvents', events: events })
         });
         return true;
     } catch (error) { return false; }
