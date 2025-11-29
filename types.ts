@@ -55,6 +55,17 @@ export interface TournamentConfig {
   maxSubs?: number; // 0 = Unlimited
   extraTime?: boolean;
   registrationDeadline?: string; // ISO Date String
+  maxTeams?: number; // 0 or undefined = Unlimited
+  
+  // Overrides
+  bankName?: string;
+  bankAccount?: string;
+  accountName?: string;
+  locationName?: string;
+  locationLink?: string;
+  locationLat?: number;
+  locationLng?: number;
+
   // Objective Specifics
   objective?: {
     isEnabled: boolean;

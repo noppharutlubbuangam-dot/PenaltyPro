@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout } from 'lucide-react';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 
 interface TournamentSelectorProps {
@@ -31,7 +31,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const [newTourneyType, setNewTourneyType] = useState('Penalty');
   const [editConfig, setEditConfig] = useState<TournamentConfig>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editStep, setEditStep] = useState<'general' | 'rules' | 'objective' | 'summary'>('general');
+  const [editStep, setEditStep] = useState<'general' | 'rules' | 'location' | 'objective' | 'summary'>('general');
 
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
       if (showNotification) showNotification(title, msg, type);
@@ -308,6 +308,9 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                         <button onClick={() => setEditStep('rules')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'rules' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
                             <Shield className="w-4 h-4"/> กติกา
                         </button>
+                        <button onClick={() => setEditStep('location')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'location' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <MapPin className="w-4 h-4"/> สถานที่/บัญชี
+                        </button>
                         <button onClick={() => setEditStep('objective')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'objective' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
                             <Heart className="w-4 h-4"/> โครงการ
                         </button>
@@ -362,14 +365,26 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
                         {editStep === 'rules' && (
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> วันปิดรับสมัคร</label>
-                                    <input 
-                                        type="date" 
-                                        value={editConfig.registrationDeadline || ''} 
-                                        onChange={e => setEditConfig({...editConfig, registrationDeadline: e.target.value})} 
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> วันปิดรับสมัคร</label>
+                                        <input 
+                                            type="date" 
+                                            value={editConfig.registrationDeadline || ''} 
+                                            onChange={e => setEditConfig({...editConfig, registrationDeadline: e.target.value})} 
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Users className="w-3 h-3"/> จำกัดจำนวนทีม</label>
+                                        <input 
+                                            type="number" 
+                                            value={editConfig.maxTeams || ''} 
+                                            onChange={e => setEditConfig({...editConfig, maxTeams: parseInt(e.target.value) || 0})} 
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+                                            placeholder="0 = ไม่จำกัด"
+                                        />
+                                    </div>
                                 </div>
 
                                 {editingTournament.type !== 'Penalty' ? (
@@ -419,6 +434,44 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                         <p className="text-xs text-slate-400">โหมดจุดโทษใช้กติกามาตรฐาน FIFA<br/>ไม่มีการตั้งค่าเวลาเพิ่มเติม</p>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {editStep === 'location' && (
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                                <div className="text-xs text-slate-400 mb-2 italic">* เว้นว่างไว้หากต้องการใช้ค่าเริ่มต้นจาก Global Settings</div>
+                                
+                                <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2 border-b pb-1"><MapPin className="w-4 h-4"/> สถานที่แข่งขัน</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อสถานที่</label>
+                                        <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="Default: ใช้ค่าเดิม" value={editConfig.locationName || ''} onChange={e => setEditConfig({...editConfig, locationName: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Google Maps Link</label>
+                                        <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="https://maps..." value={editConfig.locationLink || ''} onChange={e => setEditConfig({...editConfig, locationLink: e.target.value})} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input type="number" step="any" className="w-full p-2 border rounded-lg text-sm" placeholder="Lat" value={editConfig.locationLat || ''} onChange={e => setEditConfig({...editConfig, locationLat: parseFloat(e.target.value)})} />
+                                        <input type="number" step="any" className="w-full p-2 border rounded-lg text-sm" placeholder="Lng" value={editConfig.locationLng || ''} onChange={e => setEditConfig({...editConfig, locationLng: parseFloat(e.target.value)})} />
+                                    </div>
+                                </div>
+
+                                <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2 border-b pb-1 pt-4"><CreditCard className="w-4 h-4"/> บัญชีรับโอนเงิน</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อธนาคาร</label>
+                                        <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="Default: ใช้ค่าเดิม" value={editConfig.bankName || ''} onChange={e => setEditConfig({...editConfig, bankName: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">เลขบัญชี</label>
+                                        <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="xxx-x-xxxxx-x" value={editConfig.bankAccount || ''} onChange={e => setEditConfig({...editConfig, bankAccount: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อบัญชี</label>
+                                        <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="นาย..." value={editConfig.accountName || ''} onChange={e => setEditConfig({...editConfig, accountName: e.target.value})} />
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -493,6 +546,8 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                         <li className="flex justify-between"><span>ชื่อ:</span> <span className="font-bold">{editingTournament.name}</span></li>
                                         <li className="flex justify-between"><span>ประเภท:</span> <span className="font-bold">{editingTournament.type}</span></li>
                                         <li className="flex justify-between"><span>ปิดรับสมัคร:</span> <span className="font-bold">{editConfig.registrationDeadline ? new Date(editConfig.registrationDeadline).toLocaleDateString() : '-'}</span></li>
+                                        <li className="flex justify-between"><span>จำกัดทีม:</span> <span className="font-bold">{editConfig.maxTeams ? editConfig.maxTeams + ' ทีม' : 'ไม่จำกัด'}</span></li>
+                                        <li className="flex justify-between"><span>สถานที่:</span> <span className="font-bold">{editConfig.locationName || 'Global Default'}</span></li>
                                         {editConfig.objective?.isEnabled && (
                                             <li className="flex justify-between border-t pt-2 mt-2">
                                                 <span className="flex items-center gap-1 text-pink-600 font-bold"><Heart className="w-3 h-3"/> โครงการ:</span> 

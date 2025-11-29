@@ -328,13 +328,44 @@ function registerTeam(data) {
   const lock = LockService.getScriptLock();
   if (lock.tryLock(30000)) { 
     try {
+      const tId = data.tournamentId || 'default';
+      
+      // CHECK MAX TEAMS LIMIT
+      let maxTeams = 0;
+      const tourneySheet = ss.getSheetByName("Tournaments");
+      if (tourneySheet) {
+          const tRows = tourneySheet.getDataRange().getValues();
+          for(let i=1; i<tRows.length; i++) {
+              if (String(tRows[i][0]) === tId) {
+                  try {
+                      const config = JSON.parse(tRows[i][4]);
+                      if (config.maxTeams) maxTeams = parseInt(config.maxTeams);
+                  } catch(e) {}
+                  break;
+              }
+          }
+      }
+
       let teamSheet = ss.getSheetByName("Teams");
       if (!teamSheet) { teamSheet = ss.insertSheet("Teams"); teamSheet.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID"]); }
       
+      // Count existing teams in this tournament
+      if (maxTeams > 0) {
+          const allTeamsData = teamSheet.getDataRange().getValues();
+          let currentTeamCount = 0;
+          for(let i=1; i<allTeamsData.length; i++) {
+              if (String(allTeamsData[i][18]) === tId && allTeamsData[i][5] !== 'Rejected') {
+                  currentTeamCount++;
+              }
+          }
+          if (currentTeamCount >= maxTeams) {
+              return errorResponse("การลงทะเบียนเต็มแล้ว (Full)");
+          }
+      }
+
       const teamId = "T" + Date.now();
       const shortName = data.shortName || data.schoolName.substring(0, 3).toUpperCase();
       const regTime = data.registrationTime ? new Date(data.registrationTime).toLocaleString() : new Date().toLocaleString();
-      const tId = data.tournamentId || 'default';
 
       const teamRow = [teamId, data.schoolName, shortName, data.color, "", "Pending", "", data.district, data.province, data.directorName, data.managerName, "'" + data.phone, data.coachName, "'" + data.coachPhone, "", "", "", regTime, tId];
       teamSheet.appendRow(teamRow);

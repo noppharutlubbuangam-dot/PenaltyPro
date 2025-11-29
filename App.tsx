@@ -108,22 +108,38 @@ function App() {
   // Image Comparer State
   const [activeImageMode, setActiveImageMode] = useState<'before' | 'after'>('before');
 
-  const announcements = appConfig.announcement ? appConfig.announcement.split('|').filter(s => s.trim() !== '') : [];
-
   const activeTeams = currentTournamentId ? availableTeams.filter(t => t.tournamentId === currentTournamentId || (!t.tournamentId && currentTournamentId === 'default')) : [];
   const activePlayers = currentTournamentId ? availablePlayers.filter(p => p.tournamentId === currentTournamentId || (!p.tournamentId && currentTournamentId === 'default')) : [];
   const activeMatches = currentTournamentId ? matchesLog.filter(m => m.tournamentId === currentTournamentId || (!m.tournamentId && currentTournamentId === 'default')) : [];
   const activeTournament = tournaments.find(t => t.id === currentTournamentId);
 
-  // Tournament Configuration Parsing
+  // Tournament Configuration Parsing & Effective Settings
   const getTournamentConfig = (): TournamentConfig => {
       try {
           return activeTournament?.config ? JSON.parse(activeTournament.config) : {};
       } catch(e) { return {}; }
   };
   const tConfig = getTournamentConfig();
+  
+  // Compute Effective Settings (Merge Global + Tournament Overrides)
+  const effectiveSettings: AppSettings = {
+      ...appConfig,
+      bankName: tConfig.bankName || appConfig.bankName,
+      bankAccount: tConfig.bankAccount || appConfig.bankAccount,
+      accountName: tConfig.accountName || appConfig.accountName,
+      locationName: tConfig.locationName || appConfig.locationName,
+      locationLink: tConfig.locationLink || appConfig.locationLink,
+      locationLat: tConfig.locationLat || appConfig.locationLat,
+      locationLng: tConfig.locationLng || appConfig.locationLng,
+  };
+
   const registrationDeadline = tConfig.registrationDeadline;
   
+  // Max Teams Check
+  const maxTeams = tConfig.maxTeams || 0;
+  const currentTeamCount = activeTeams.filter(t => t.status !== 'Rejected').length;
+  const isRegistrationFull = maxTeams > 0 && currentTeamCount >= maxTeams;
+
   // Objective Data (Prioritize Tournament Config, Fallback to Global AppConfig for legacy)
   const objectiveData = tConfig.objective?.isEnabled ? {
       title: tConfig.objective.title,
@@ -141,6 +157,7 @@ function App() {
 
   // User's own teams in this tournament
   const myTeams = currentUser ? activeTeams.filter(t => t.creatorId === currentUser.userId) : [];
+  const announcements = effectiveSettings.announcement ? effectiveSettings.announcement.split('|').filter(s => s.trim() !== '') : [];
 
   // ... (useEffect Hooks and Handlers remain essentially the same, just keeping the structure) ...
   useEffect(() => {
@@ -171,11 +188,11 @@ function App() {
 
   // ... (Other useEffects same) ...
   useEffect(() => {
-      if (userLocation && appConfig.locationLat && appConfig.locationLng) {
-          const dist = calculateDistance(userLocation.lat, userLocation.lng, appConfig.locationLat, appConfig.locationLng);
+      if (userLocation && effectiveSettings.locationLat && effectiveSettings.locationLng) {
+          const dist = calculateDistance(userLocation.lat, userLocation.lng, effectiveSettings.locationLat, effectiveSettings.locationLng);
           setDistanceToVenue(dist);
       }
-  }, [userLocation, appConfig.locationLat, appConfig.locationLng]);
+  }, [userLocation, effectiveSettings.locationLat, effectiveSettings.locationLng]);
 
   useEffect(() => {
       if (announcements.length > 1) {
@@ -255,6 +272,10 @@ function App() {
   };
 
   const handleRegisterClick = () => { 
+      if (isRegistrationFull) {
+          showNotification("ขออภัย", "การลงทะเบียนเต็มจำนวนแล้ว", "info");
+          return;
+      }
       setEditingTeamData(null); 
       if (currentUser) setCurrentView('register'); else setIsUserLoginOpen(true); 
   };
@@ -358,7 +379,7 @@ function App() {
             key={viewKey} 
             onBack={() => { loadData(); setCurrentView('home'); setEditingTeamData(null); }} 
             schools={schools} 
-            config={appConfig} 
+            config={effectiveSettings} 
             showNotification={showNotification} 
             user={currentUser} 
             initialData={editingTeamData}
@@ -374,7 +395,7 @@ function App() {
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
       <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={appConfig.adminPin || "1234"} title="กรุณากรอกรหัสเริ่มแข่ง" />
       <UserLoginDialog isOpen={isUserLoginOpen} onClose={() => setIsUserLoginOpen(false)} onLoginSuccess={handleUserLoginSuccess} />
-      <DonationDialog isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} config={appConfig} tournamentName={activeTournament?.name || ''} />
+      <DonationDialog isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} config={effectiveSettings} tournamentName={activeTournament?.name || ''} />
       
       {/* ... (Modals remain same) ... */}
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
@@ -382,7 +403,7 @@ function App() {
 
       {/* Views */}
       {currentView === 'tournament' && <TournamentView key={viewKey} teams={activeTeams} matches={activeMatches} onSelectMatch={handleStartMatchRequest} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onRefresh={loadData} onLoginClick={() => setIsLoginOpen(true)} isLoading={isLoadingData} showNotification={showNotification} />}
-      {currentView === 'schedule' && ( <ScheduleList key={viewKey} matches={activeMatches} teams={activeTeams} players={activePlayers} onBack={() => setCurrentView('home')} isAdmin={isAdmin} isLoading={isLoadingData} onRefresh={loadData} showNotification={showNotification} onStartMatch={handleStartMatchRequest} config={appConfig} initialMatchId={initialMatchId} /> )}
+      {currentView === 'schedule' && ( <ScheduleList key={viewKey} matches={activeMatches} teams={activeTeams} players={activePlayers} onBack={() => setCurrentView('home')} isAdmin={isAdmin} isLoading={isLoadingData} onRefresh={loadData} showNotification={showNotification} onStartMatch={handleStartMatchRequest} config={effectiveSettings} initialMatchId={initialMatchId} /> )}
       {currentView === 'standings' && <StandingsView key={viewKey} matches={activeMatches} teams={activeTeams} onBack={() => setCurrentView('home')} isLoading={isLoadingData} />}
       {currentView === 'admin' && ( <AdminDashboard key={viewKey} teams={activeTeams} players={activePlayers} settings={appConfig} onLogout={() => { setIsAdmin(false); setCurrentView('home'); }} onRefresh={loadData} news={newsItems} showNotification={showNotification} initialTeamId={initialTeamId} currentTournament={activeTournament} /> )}
 
@@ -393,7 +414,7 @@ function App() {
           {/* Top Bar */}
           <div className="bg-white sticky top-0 z-40 border-b border-slate-200 shadow-sm px-4 py-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
-                  <img src={appConfig.competitionLogo || "https://via.placeholder.com/40"} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
+                  <img src={effectiveSettings.competitionLogo || "https://via.placeholder.com/40"} className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
                   <h1 className="font-bold text-slate-800 truncate max-w-[100px] sm:max-w-[200px] text-sm sm:text-base">
                       {activeTournament ? activeTournament.name : appConfig.competitionName}
                   </h1>
@@ -402,8 +423,16 @@ function App() {
                   <button onClick={() => setCurrentTournamentId(null)} className="hidden md:flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600 bg-slate-100 px-2 py-1 rounded-full transition">
                       <ArrowLeftRight className="w-3 h-3"/> เปลี่ยนรายการ
                   </button>
-                  <button onClick={handleRegisterClick} className="bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm hover:bg-green-700 transition">
-                      <UserPlus className="w-3 h-3" /> สมัครแข่ง
+                  <button 
+                    onClick={handleRegisterClick} 
+                    className={`text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm transition ${isRegistrationFull ? 'bg-slate-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                    disabled={isRegistrationFull}
+                  >
+                      {isRegistrationFull ? (
+                          <>เต็มแล้ว (Full)</>
+                      ) : (
+                          <><UserPlus className="w-3 h-3" /> สมัครแข่ง</>
+                      )}
                   </button>
                   {currentUser ? (
                       <div className="flex items-center gap-2 pl-2 ml-2 border-l border-slate-200">
@@ -430,11 +459,11 @@ function App() {
               <div className="relative z-10 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center text-center mb-6">
                       <div className="bg-white/10 p-4 rounded-full mb-4 backdrop-blur-sm border border-white/20">
-                          <img src={appConfig.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/100?text=LOGO'}/>
+                          <img src={effectiveSettings.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/100?text=LOGO'}/>
                       </div>
                       <h2 className="text-2xl font-bold mb-2">{activeTournament ? activeTournament.name : appConfig.competitionName}</h2>
                       <div className="flex items-center gap-2">
-                          <span className="text-indigo-200 text-sm flex items-center gap-1"><MapPin className="w-4 h-4" /> {appConfig.locationName}</span>
+                          <span className="text-indigo-200 text-sm flex items-center gap-1"><MapPin className="w-4 h-4" /> {effectiveSettings.locationName}</span>
                           <button onClick={() => setCurrentTournamentId(null)} className="md:hidden text-xs bg-white/20 px-2 py-1 rounded text-white hover:bg-white/30">เปลี่ยนรายการ</button>
                       </div>
                   </div>
@@ -559,14 +588,14 @@ function App() {
               )}
 
               {/* Advanced Location Card */}
-              {appConfig.locationLink && (
+              {effectiveSettings.locationLink && (
                   <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-4 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                           <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 shrink-0">
                               <MapPin className="w-6 h-6" />
                           </div>
                           <div>
-                              <h3 className="font-bold text-slate-800 text-sm">สถานที่: {appConfig.locationName}</h3>
+                              <h3 className="font-bold text-slate-800 text-sm">สถานที่: {effectiveSettings.locationName}</h3>
                               {distanceToVenue ? (
                                   <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                                       <Target className="w-3 h-3 text-blue-500" /> ห่างจากคุณ {distanceToVenue} กม.
@@ -577,7 +606,7 @@ function App() {
                           </div>
                       </div>
                       <a 
-                          href={appConfig.locationLink} 
+                          href={effectiveSettings.locationLink} 
                           target="_blank" 
                           rel="noreferrer"
                           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-blue-200 transition"
