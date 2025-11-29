@@ -31,7 +31,10 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
 
   const standings: Record<string, Standing> = {};
   
+  // Filter only Approved teams
   teams.forEach(t => {
+    if (t.status !== 'Approved') return; // Skip if not approved
+
     standings[t.name] = {
       teamId: t.id,
       teamName: t.name,
@@ -56,6 +59,7 @@ const StandingsView: React.FC<StandingsViewProps> = ({ matches, teams, onBack, i
     const teamA = standings[typeof m.teamA === 'object' ? m.teamA.name : m.teamA];
     const teamB = standings[typeof m.teamB === 'object' ? m.teamB.name : m.teamB];
     
+    // Only calculate if BOTH teams are in the standings object (meaning both are Approved)
     if (teamA && teamB) {
         teamA.played++;
         teamB.played++;

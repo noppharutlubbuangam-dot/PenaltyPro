@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera, Copy, Check } from 'lucide-react';
+import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera, Copy, Check, ChevronDown, Printer as PrinterIcon } from 'lucide-react';
 import { registerTeam, fileToBase64, updateMyTeam } from '../services/sheetService';
 import { shareRegistration } from '../services/liffService';
 import { RegistrationData, AppSettings, School as SchoolType, UserProfile, Team, Player } from '../types';
@@ -17,7 +19,7 @@ interface RegistrationFormProps {
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_DOC_SIZE = 3 * 1024 * 1024;   // 3MB
 
-// ... (compressImage function remains same) ...
+// Image compression utility
 const compressImage = async (file: File): Promise<File> => {
     if (file.type === 'application/pdf') return file; // Skip PDF
     return new Promise((resolve, reject) => {
@@ -148,6 +150,19 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
           }));
           setPlayers(loadedPlayers);
           
+          // Populate registeredData for printing purposes even before edit
+          setRegisteredData({
+              schoolName: team.name, shortName: team.shortName, district: team.district || '', province: team.province || '',
+              phone: team.managerPhone || '', directorName: team.directorName || '', managerName: team.managerName || '',
+              managerPhone: team.managerPhone || '', coachName: team.coachName || '', coachPhone: team.coachPhone || '',
+              color: team.color, logoFile: null, documentFile: null, slipFile: null,
+              players: loadedPlayers.map(p => ({
+                  sequence: p.sequence, name: p.name, number: p.number, birthDate: p.birthDate, photoFile: null, photoUrl: p.photoPreview || undefined
+              })),
+              registrationTime: team.registrationTime
+          });
+          
+          setRegisteredTeamId(team.id); // Set ID for sharing
           // Files are not re-loaded as Files, just kept as null to signify no change unless user uploads new
           if (team.slipUrl) setSlipPreview(team.slipUrl);
       } else if (user) {
@@ -160,6 +175,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
       if (registeredData && registeredTeamId) {
           shareRegistration(registeredData, registeredTeamId);
       }
+  };
+
+  const handlePrint = () => {
+      window.print();
   };
 
   useEffect(() => {
@@ -200,7 +219,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
     }
   };
 
-  // ... (updatePlayer, addPlayer, removePlayer, handleFileChanges ... same as original) ...
   const updatePlayer = (index: number, field: string, value: any) => { const newPlayers = [...players]; if (field === 'photoFile' && value) { const immediateUrl = URL.createObjectURL(value); newPlayers[index] = { ...newPlayers[index], photoFile: value, photoPreview: immediateUrl }; setPlayers(newPlayers); compressImage(value).then(compressed => { const compressedUrl = URL.createObjectURL(compressed); setPlayers(prev => { const updated = [...prev]; updated[index] = { ...updated[index], photoFile: compressed }; return updated; }); }).catch(err => { console.error("Compression failed, using original", err); }); } else { newPlayers[index] = { ...newPlayers[index], [field]: value }; setPlayers(newPlayers); } };
   const updatePlayerDate = (index: number, value: string) => { let cleaned = value.replace(/[^0-9]/g, ''); if (cleaned.length > 8) cleaned = cleaned.substring(0, 8); let formatted = cleaned; if (cleaned.length > 2) { formatted = cleaned.substring(0, 2) + '/' + cleaned.substring(2); } if (cleaned.length > 4) { formatted = formatted.substring(0, 5) + '/' + cleaned.substring(4); } updatePlayer(index, 'birthDate', formatted); };
   const addPlayer = () => { setPlayers([...players, { sequence: players.length + 1, name: '', number: '', birthDate: '', photoFile: null, photoPreview: null }]); };
@@ -208,8 +226,16 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   const handleLogoChange = async (file: File) => { try { const compressed = await compressImage(file); setTeamLogo(compressed); } catch (e) { setTeamLogo(file); } };
   const handleDocChange = (file: File) => { if (validateFile(file, 'doc')) { setDocumentFile(file); } };
   const handleSlipChange = async (file: File) => { try { const compressed = await compressImage(file); setSlipFile(compressed); } catch (e) { setSlipFile(file); } };
-  const handleSchoolSelect = (school: SchoolType) => { setSchoolName(school.name); setDistrict(school.district); setProvince(school.province); setShowSuggestions(false); };
-  const filteredSchools = schools.filter(s => s.name.toLowerCase().includes(schoolName.toLowerCase()) && schoolName.length > 0 );
+  
+  // School Autocomplete Logic
+  const handleSchoolSelect = (school: SchoolType) => { 
+      setSchoolName(school.name); 
+      setDistrict(school.district); 
+      setProvince(school.province); 
+      setShowSuggestions(false); 
+  };
+  const filteredSchools = schools.filter(s => s.name.toLowerCase().includes(schoolName.toLowerCase()));
+  
   const generateThaiAcronym = (name: string): string => { if (/^[A-Za-z0-9\s]+$/.test(name)) { const parts = name.split(/\s+/); if (parts.length === 1) return name.substring(0, 3).toUpperCase(); return parts.slice(0, 3).map(p => p[0]).join('').toUpperCase(); } return "T" + Math.floor(Math.random() * 100).toString().padStart(2, '0'); };
 
   const handleSubmit = async () => {
@@ -279,9 +305,21 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
 
           setUploadStage("กำลังบันทึกการแก้ไข...");
           await updateMyTeam(teamUpdate, playersUpdate, user?.userId || '');
+          
+          // Reconstruct data for view/print
+          const finalData: RegistrationData = {
+              schoolName, shortName, district, province, phone, directorName, managerName, managerPhone, coachName, coachPhone,
+              color: combinedColors, logoFile: logoBase64, documentFile: docBase64, slipFile: slipBase64,
+              players: validPlayers.map(p => ({ sequence: parseInt(p.number || '0'), name: p.name, number: p.number, birthDate: p.birthDate, photoFile: null, photoUrl: p.photoUrl || undefined })),
+              registrationTime: initialData.team.registrationTime,
+              lineUserId: user?.lineUserId
+          };
+          setRegisteredData(finalData);
+          setRegisteredTeamId(initialData.team.id);
+          
           setUploadProgress(100);
           setUploadStage("บันทึกเสร็จสิ้น");
-          setIsSuccess(true); // Reuse success screen or redirect
+          setIsSuccess(true);
           notify("สำเร็จ", "แก้ไขข้อมูลทีมเรียบร้อย", "success");
       } else {
           // REGISTER MODE
@@ -290,13 +328,15 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
             color: combinedColors, logoFile: logoBase64, documentFile: docBase64, slipFile: slipBase64,
             players: validPlayers.map(p => ({
                 sequence: parseInt(p.number || p.sequence.toString()),
-                name: p.name, birthDate: p.birthDate, photoFile: p.photoFile
+                name: p.name, number: p.number, birthDate: p.birthDate, photoFile: p.photoFile
             })),
-            registrationTime: new Date().toISOString()
+            registrationTime: new Date().toISOString(),
+            lineUserId: user?.lineUserId // Include Line User ID if available
           };
 
           setUploadStage("กำลังบันทึกลงฐานข้อมูล...");
-          const teamId = await registerTeam(payload, 'default', user?.userId); // Pass user ID
+          // Pass user.userId as creatorId
+          const teamId = await registerTeam(payload, 'default', user?.userId); 
           
           if (teamId) {
               setRegisteredData(payload);
@@ -308,12 +348,100 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
               throw new Error("Server did not return Team ID");
           }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      notify("ผิดพลาด", "เกิดข้อผิดพลาดในการส่งข้อมูล (โปรดลองใหม่)", "error");
+      // Specific handling for duplicate team name error from backend
+      if (error.message && error.message.includes("Duplicate")) {
+          notify("ชื่อซ้ำ", "ชื่อทีมนี้ถูกใช้งานแล้ว กรุณาใช้ชื่ออื่น", "error");
+      } else {
+          notify("ผิดพลาด", error.message || "เกิดข้อผิดพลาดในการส่งข้อมูล", "error");
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const PrintableForm = () => {
+      if (!registeredData) return null;
+      return (
+          <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-8 text-black" style={{ fontFamily: "'Kanit', sans-serif" }}>
+              <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
+                  <div className="flex items-center gap-4">
+                      {config.competitionLogo && <img src={config.competitionLogo} className="w-24 h-24 object-contain" />}
+                      <div>
+                          <h1 className="text-3xl font-bold">{config.competitionName}</h1>
+                          <p className="text-lg">ใบสมัครเข้าร่วมการแข่งขัน</p>
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <p className="font-bold text-xl">TEAM: {registeredData.schoolName}</p>
+                      <p className="text-sm">วันที่สมัคร: {new Date(registeredData.registrationTime || Date.now()).toLocaleDateString('th-TH')}</p>
+                      <p className="text-sm text-gray-500">ID: {registeredTeamId?.slice(-6)}</p>
+                  </div>
+              </div>
+
+              <div className="mb-8 grid grid-cols-2 gap-8 text-base border-b border-gray-300 pb-6">
+                  <div>
+                      <h3 className="font-bold mb-3 text-xl border-b w-fit border-black pb-1">ข้อมูลโรงเรียน</h3>
+                      <div className="space-y-1">
+                        <p><span className="font-bold w-24 inline-block">โรงเรียน:</span> {registeredData.schoolName}</p>
+                        <p><span className="font-bold w-24 inline-block">อำเภอ:</span> {registeredData.district}</p> 
+                        <p><span className="font-bold w-24 inline-block">จังหวัด:</span> {registeredData.province}</p>
+                        <p><span className="font-bold w-24 inline-block">ผู้ติดต่อ:</span> {registeredData.phone}</p>
+                      </div>
+                  </div>
+                  <div>
+                      <h3 className="font-bold mb-3 text-xl border-b w-fit border-black pb-1">คณะผู้ควบคุมทีม</h3>
+                      <div className="space-y-1">
+                        <p><span className="font-bold w-28 inline-block">ผู้อำนวยการ:</span> {registeredData.directorName}</p>
+                        <p><span className="font-bold w-28 inline-block">ผู้จัดการทีม:</span> {registeredData.managerName} ({registeredData.managerPhone})</p>
+                        <p><span className="font-bold w-28 inline-block">ผู้ฝึกสอน:</span> {registeredData.coachName} ({registeredData.coachPhone})</p>
+                      </div>
+                  </div>
+              </div>
+
+              <div>
+                  <h3 className="font-bold mb-4 text-xl border-b w-fit border-black pb-1">รายชื่อนักกีฬา</h3>
+                  <div className="grid grid-cols-4 gap-4">
+                      {registeredData.players.map((p, idx) => (
+                          <div key={idx} className="border border-gray-400 p-2 rounded flex flex-col items-center text-center">
+                              <div className="w-32 h-40 bg-gray-100 mb-2 border border-gray-200 flex items-center justify-center overflow-hidden relative">
+                                  {p.photoUrl ? (
+                                      <img src={p.photoUrl} className="w-full h-full object-cover" />
+                                  ) : (
+                                      <div className="flex flex-col items-center text-gray-400">
+                                          <User className="w-12 h-12 mb-1 opacity-20"/>
+                                          <span className="text-[10px]">ติดรูปถ่าย</span>
+                                      </div>
+                                  )}
+                                  <div className="absolute top-1 left-1 bg-black text-white text-xs px-1.5 rounded font-bold">{idx + 1}</div>
+                              </div>
+                              <div className="text-2xl font-black">{p.number || '-'}</div>
+                              <div className="font-bold text-sm leading-tight h-10 flex items-center justify-center w-full px-1">{p.name}</div>
+                              <div className="text-xs text-gray-600 mt-1 border-t w-full pt-1">เกิด: {p.birthDate || '-'}</div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="mt-16 flex justify-around text-center pt-8">
+                  <div>
+                      <div className="border-b border-black w-64 mb-2"></div>
+                      <p className="font-bold">({registeredData.managerName || '......................................................'})</p>
+                      <p className="text-sm">ผู้จัดการทีม</p>
+                  </div>
+                  <div>
+                      <div className="border-b border-black w-64 mb-2"></div>
+                      <p className="font-bold">({registeredData.directorName || '......................................................'})</p>
+                      <p className="text-sm">ผู้อำนวยการสถานศึกษา</p>
+                  </div>
+              </div>
+              
+              <div className="absolute bottom-4 right-4 text-xs text-gray-400">
+                  Generated by Penalty Pro Recorder
+              </div>
+          </div>
+      );
   };
 
   if (isDeadlinePassed && !initialData) {
@@ -332,6 +460,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
   if (isSuccess) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl shadow-xl border border-green-100">
+        <PrintableForm />
         <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
           <CheckCircle className="w-12 h-12 text-green-600" />
         </div>
@@ -339,20 +468,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         <p className="text-slate-500 mb-8 text-lg">ข้อมูลของคุณถูกบันทึกเข้าสู่ระบบแล้ว</p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
-            {initialData ? (
-                 <button onClick={onBack} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition">
-                    กลับหน้าหลัก
-                </button>
-            ) : (
-                <>
-                    <button onClick={handleShare} className="px-6 py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
-                        <Share2 className="w-5 h-5" /> แชร์ LINE
-                    </button>
-                    <button onClick={onBack} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition">
-                        กลับหน้าหลัก
-                    </button>
-                </>
-            )}
+            <button onClick={handlePrint} className="px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
+                <PrinterIcon className="w-5 h-5" /> พิมพ์ใบสมัคร (PDF)
+            </button>
+            
+            <button onClick={handleShare} className="px-6 py-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl shadow font-bold text-lg transition flex items-center justify-center gap-2">
+                <Share2 className="w-5 h-5" /> แชร์ให้แอดมินตรวจสอบ
+            </button>
+            
+            <button onClick={onBack} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 font-bold text-lg transition md:col-span-2">
+                กลับหน้าหลัก
+            </button>
         </div>
       </div>
     );
@@ -411,7 +537,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
         {/* Combined Steps if Editing, else wizard */}
         <div className="space-y-8">
             {(step === 1 || initialData) && (
-                // ... (School Info Logic, kept same but wrapped) ...
+                // ... (School Info Logic) ...
                 <div className="space-y-6 animate-in fade-in">
                     <div className="flex items-center gap-2 text-xl font-bold text-slate-800 border-b pb-2">
                         <School className="w-6 h-6 text-indigo-600" />
@@ -419,13 +545,52 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                     </div>
                     {/* ... Existing Inputs for Step 1 ... */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="col-span-2 relative">
+                        <div className="col-span-2 relative group">
                             <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อโรงเรียน</label>
-                            <input type="text" value={schoolName} onChange={e => setSchoolName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" />
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    value={schoolName} 
+                                    onChange={e => {
+                                        setSchoolName(e.target.value);
+                                        setShowSuggestions(true);
+                                    }} 
+                                    onFocus={() => setShowSuggestions(true)}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    className="w-full pl-10 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="พิมพ์ชื่อโรงเรียนเพื่อค้นหา หรือพิมพ์ใหม่"
+                                />
+                                {schoolName && <button onClick={() => setSchoolName('')} className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600"><X className="w-4 h-4"/></button>}
+                            </div>
+                            {/* Autocomplete Dropdown */}
+                            {showSuggestions && (
+                                <div className="absolute z-10 w-full bg-white border border-slate-200 rounded-lg shadow-xl mt-1 max-h-60 overflow-y-auto">
+                                    {filteredSchools.length > 0 ? (
+                                        filteredSchools.map(s => (
+                                            <button 
+                                                key={s.id}
+                                                onClick={() => handleSchoolSelect(s)}
+                                                className="w-full text-left p-3 hover:bg-indigo-50 text-sm border-b border-slate-50 last:border-0 flex justify-between items-center"
+                                            >
+                                                <div>
+                                                    <span className="font-bold block text-slate-800">{s.name}</span>
+                                                    <span className="text-xs text-slate-500">{s.district}, {s.province}</span>
+                                                </div>
+                                                <ChevronDown className="w-4 h-4 text-slate-300 -rotate-90" />
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="p-3 text-sm text-slate-400 text-center italic">
+                                            {schoolName ? 'ไม่พบชื่อโรงเรียน (สามารถพิมพ์ใหม่ได้เลย)' : 'พิมพ์ชื่อเพื่อค้นหา'}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">อำเภอ</label><input type="text" value={district} onChange={e => setDistrict(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">จังหวัด</label><input type="text" value={province} onChange={e => setProvince(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">อำเภอ</label><input type="text" value={district} onChange={e => setDistrict(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="เช่น ท่าม่วง" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">จังหวัด</label><input type="text" value={province} onChange={e => setProvince(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="เช่น กาญจนบุรี" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์ (ติดต่อ)</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="08x-xxx-xxxx" /></div>
                     </div>
                     {/* ... Colors & Logo ... */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
@@ -447,9 +612,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, schools, co
                     </div>
                     {/* ... Existing Inputs for Step 2 ... */}
                     <div className="space-y-4">
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้อำนวยการโรงเรียน</label><input type="text" value={directorName} onChange={e => setDirectorName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้จัดการทีม</label><input type="text" value={managerName} onChange={e => setManagerName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร (ผู้ควบคุม)</label><input type="tel" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div></div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้ฝึกสอน (โค้ช)</label><input type="text" value={coachName} onChange={e => setCoachName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์ (โค้ช)</label><input type="tel" value={coachPhone} onChange={e => setCoachPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" /></div></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้อำนวยการโรงเรียน</label><input type="text" value={directorName} onChange={e => setDirectorName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="ชื่อ-นามสกุล ผอ." /></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้จัดการทีม</label><input type="text" value={managerName} onChange={e => setManagerName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="ชื่อ-นามสกุล" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร (ผู้ควบคุม)</label><input type="tel" value={managerPhone} onChange={e => setManagerPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="08x-xxx-xxxx" /></div></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">ผู้ฝึกสอน (โค้ช)</label><input type="text" value={coachName} onChange={e => setCoachName(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="ชื่อ-นามสกุล" /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์ (โค้ช)</label><input type="tel" value={coachPhone} onChange={e => setCoachPhone(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg" placeholder="08x-xxx-xxxx" /></div></div>
                     </div>
                 </div>
             )}

@@ -1,4 +1,5 @@
 
+
 import { Team, Player, MatchState, RegistrationData, AppSettings, School, NewsItem, Kick, UserProfile, Tournament, MatchEvent, Donation } from '../types';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbztQtSLYW3wE5j-g2g7OMDxKL6WFuyUymbGikt990wn4gCpwQN_MztGCcBQJgteZQmvyg/exec";
@@ -173,7 +174,8 @@ export const registerTeam = async (data: RegistrationData, tournamentId: string 
     coachPhone: data.coachPhone,
     registrationTime: data.registrationTime, 
     tournamentId,
-    creatorId, 
+    creatorId,
+    lineUserId: data.lineUserId, // Pass Line User ID
     players: data.players.map(p => ({
         name: p.name,
         number: p.sequence, 
@@ -192,10 +194,16 @@ export const registerTeam = async (data: RegistrationData, tournamentId: string 
     
     if (response.ok) {
         const result = await response.json();
+        if (result.status === 'error') {
+            throw new Error(result.message);
+        }
         return result.teamId || null;
     }
     return null;
-  } catch (error) { return null; }
+  } catch (error: any) { 
+      console.error(error);
+      throw error; 
+  }
 };
 
 export const updateMyTeam = async (team: Partial<Team>, players: Partial<Player>[], userId: string) => {

@@ -91,7 +91,7 @@ function getData() {
   }
   if(!ss.getSheetByName("Teams")) {
      const s = ss.insertSheet("Teams");
-     s.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID"]);
+     s.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID", "CreatorID", "LineUserID"]);
   }
   if(!ss.getSheetByName("Players")) {
      const s = ss.insertSheet("Players");
@@ -149,7 +149,29 @@ function getData() {
   const teamsData = read("Teams");
   const teams = [];
   for(let i=1; i<teamsData.length; i++) {
-      if(teamsData[i][0]) teams.push({ id: String(teamsData[i][0]), name: teamsData[i][1], shortName: teamsData[i][2], color: teamsData[i][3], logoUrl: toLh3Link(teamsData[i][4]), status: teamsData[i][5] || 'Pending', group: teamsData[i][6] || '', district: teamsData[i][7], province: teamsData[i][8], directorName: teamsData[i][9], managerName: teamsData[i][10], managerPhone: String(teamsData[i][11]).replace(/^'/, ''), coachName: teamsData[i][12], coachPhone: String(teamsData[i][13]).replace(/^'/, ''), docUrl: teamsData[i][14], slipUrl: toLh3Link(teamsData[i][15]), rejectReason: teamsData[i][16], registrationTime: teamsData[i][17], tournamentId: teamsData[i][18] || 'default' });
+      if(teamsData[i][0]) teams.push({ 
+        id: String(teamsData[i][0]), 
+        name: teamsData[i][1], 
+        shortName: teamsData[i][2], 
+        color: teamsData[i][3], 
+        logoUrl: toLh3Link(teamsData[i][4]), 
+        status: teamsData[i][5] || 'Pending', 
+        group: teamsData[i][6] || '', 
+        district: teamsData[i][7], 
+        province: teamsData[i][8], 
+        directorName: teamsData[i][9], 
+        managerName: teamsData[i][10], 
+        managerPhone: String(teamsData[i][11]).replace(/^'/, ''), 
+        coachName: teamsData[i][12], 
+        coachPhone: String(teamsData[i][13]).replace(/^'/, ''), 
+        docUrl: teamsData[i][14], 
+        slipUrl: toLh3Link(teamsData[i][15]), 
+        rejectReason: teamsData[i][16], 
+        registrationTime: teamsData[i][17], 
+        tournamentId: teamsData[i][18] || 'default',
+        creatorId: String(teamsData[i][19] || ''), // Read Creator ID
+        // LineUserID is at index 20, but not explicitly returned in the Team object to frontend usually, unless needed
+      });
   }
 
   const playersData = read("Players");
@@ -193,6 +215,174 @@ function getData() {
   return successResponse({ teams, players, matches, config, schools, news, tournaments, donations });
 }
 
+function registerTeam(data) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("Teams");
+  if (!sheet) { 
+    sheet = ss.insertSheet("Teams"); 
+    sheet.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID", "CreatorID", "LineUserID"]); 
+  }
+  
+  // DUPLICATE CHECK
+  const teamsData = sheet.getDataRange().getValues();
+  // Skip header
+  for (let i = 1; i < teamsData.length; i++) {
+    // Check Name (Column B -> Index 1) and Tournament ID (Column S -> Index 18)
+    if (String(teamsData[i][1]).trim().toLowerCase() === String(data.schoolName).trim().toLowerCase() && 
+        String(teamsData[i][18]) === String(data.tournamentId)) {
+        return errorResponse("ชื่อทีมนี้ถูกใช้งานแล้ว กรุณาใช้ชื่ออื่น (Duplicate Name)");
+    }
+  }
+
+  let playersSheet = ss.getSheetByName("Players");
+  if (!playersSheet) { playersSheet = ss.insertSheet("Players"); playersSheet.appendRow(["ID", "TeamID", "Name", "Number", "Position", "PhotoUrl", "BirthDate", "TournamentID"]); }
+  
+  const logoUrl = saveFileToDrive(data.logoFile, `logo_${data.schoolName}_${Date.now()}`);
+  const docUrl = saveFileToDrive(data.documentFile, `doc_${data.schoolName}_${Date.now()}`);
+  const slipUrl = saveFileToDrive(data.slipFile, `slip_${data.schoolName}_${Date.now()}`);
+  const teamId = "T_" + Date.now();
+  
+  // Append Row with new fields at the end: CreatorID (19), LineUserID (20)
+  sheet.appendRow([ 
+    teamId, 
+    data.schoolName, 
+    data.shortName, 
+    data.color, 
+    logoUrl, 
+    'Pending', 
+    '', 
+    data.district, 
+    data.province, 
+    data.directorName, 
+    data.managerName, 
+    "'" + data.managerPhone, 
+    data.coachName, 
+    "'" + data.coachPhone, 
+    docUrl, 
+    slipUrl, 
+    '', 
+    data.registrationTime, 
+    data.tournamentId,
+    data.creatorId || '',
+    data.lineUserId || '' 
+  ]);
+  
+  if (data.players && data.players.length > 0) {
+    data.players.forEach(p => {
+       let photoUrl = ''; if (p.photoFile && p.photoFile.startsWith('data:')) photoUrl = saveFileToDrive(p.photoFile, `p_${teamId}_${p.sequence}`);
+       playersSheet.appendRow([ "P_" + Date.now() + "_" + Math.floor(Math.random()*1000), teamId, p.name, "'" + p.number, p.position || 'Player', photoUrl, p.birthDate, data.tournamentId ]);
+    });
+  }
+  return successResponse({ status: 'success', teamId: teamId });
+}
+
+// ... (Rest of existing functions in Code.js like updateTeamStatus, etc. remain unchanged) ...
+// Ensure you copy all helper functions and other handlers from previous Code.js content
+// The crucial part above is registerTeam and getData updates.
+
+function updateTeamStatus(teamId, status, group, reason) {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName("Teams");
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(teamId)) {
+      sheet.getRange(i + 1, 6).setValue(status);
+      if (group) sheet.getRange(i + 1, 7).setValue(group); 
+      if (reason !== undefined) sheet.getRange(i + 1, 17).setValue(reason);
+      return successResponse({ status: 'success' });
+    }
+  }
+  return errorResponse("Team not found");
+}
+
+function updateTeamData(team, players) {
+  const ss = getSpreadsheet();
+  let teamSheet = ss.getSheetByName("Teams");
+  let playerSheet = ss.getSheetByName("Players");
+  
+  if (!teamSheet || !playerSheet) return errorResponse("Sheets missing");
+
+  // 1. Update Team Info
+  const tData = teamSheet.getDataRange().getValues();
+  for (let i = 1; i < tData.length; i++) {
+      if (String(tData[i][0]) === String(team.id)) {
+          if (team.name) teamSheet.getRange(i+1, 2).setValue(team.name);
+          if (team.color) teamSheet.getRange(i+1, 4).setValue(team.color);
+          if (team.district) teamSheet.getRange(i+1, 8).setValue(team.district);
+          if (team.province) teamSheet.getRange(i+1, 9).setValue(team.province);
+          if (team.directorName) teamSheet.getRange(i+1, 10).setValue(team.directorName);
+          if (team.managerName) teamSheet.getRange(i+1, 11).setValue(team.managerName);
+          if (team.managerPhone) teamSheet.getRange(i+1, 12).setValue("'" + team.managerPhone);
+          if (team.coachName) teamSheet.getRange(i+1, 13).setValue(team.coachName);
+          if (team.coachPhone) teamSheet.getRange(i+1, 14).setValue("'" + team.coachPhone);
+          if (team.group) teamSheet.getRange(i+1, 7).setValue(team.group);
+
+          // Handle File Uploads (Base64 check)
+          if (team.logoUrl && team.logoUrl.startsWith('data:')) {
+              const url = saveFileToDrive(team.logoUrl, `logo_${team.id}_${Date.now()}`);
+              teamSheet.getRange(i+1, 5).setValue(url);
+          }
+          if (team.docUrl && team.docUrl.startsWith('data:')) {
+              const url = saveFileToDrive(team.docUrl, `doc_${team.id}_${Date.now()}`);
+              teamSheet.getRange(i+1, 15).setValue(url);
+          }
+          if (team.slipUrl && team.slipUrl.startsWith('data:')) {
+              const url = saveFileToDrive(team.slipUrl, `slip_${team.id}_${Date.now()}`);
+              teamSheet.getRange(i+1, 16).setValue(url);
+          }
+          break;
+      }
+  }
+
+  // 2. Update/Add Players
+  if (players && players.length > 0) {
+      const pData = playerSheet.getDataRange().getValues();
+      
+      players.forEach(p => {
+          let found = false;
+          let photoLink = p.photoUrl;
+          if (photoLink && photoLink.startsWith('data:')) {
+              photoLink = saveFileToDrive(photoLink, `player_${p.id}_${Date.now()}`);
+          }
+
+          // Try to find existing player by ID
+          for (let j = 1; j < pData.length; j++) {
+              if (String(pData[j][0]) === String(p.id)) {
+                  playerSheet.getRange(j+1, 3).setValue(p.name);
+                  playerSheet.getRange(j+1, 4).setValue("'" + p.number);
+                  playerSheet.getRange(j+1, 5).setValue(p.position || 'Player');
+                  if (photoLink !== undefined) playerSheet.getRange(j+1, 6).setValue(photoLink); 
+                  if (p.birthDate) playerSheet.getRange(j+1, 7).setValue(p.birthDate);
+                  
+                  if (p.photoUrl === '') playerSheet.getRange(j+1, 6).setValue('');
+
+                  found = true;
+                  break;
+              }
+          }
+
+          if (!found && p.id.startsWith('TEMP')) {
+              const newId = "P_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+              playerSheet.appendRow([ newId, team.id, p.name, "'" + p.number, p.position || 'Player', photoLink || '', p.birthDate, team.tournamentId || 'default' ]);
+          }
+      });
+      
+      // Handle Player Deletion (Safe removal)
+      const survivingIds = players.map(p => p.id).filter(id => !id.startsWith('TEMP'));
+      for (let j = pData.length - 1; j >= 1; j--) {
+          if (String(pData[j][1]) === String(team.id)) { // Matches Team ID
+              const rowId = String(pData[j][0]);
+              if (!survivingIds.includes(rowId)) {
+                  playerSheet.deleteRow(j + 1);
+              }
+          }
+      }
+  }
+
+  return successResponse({ status: 'success' });
+}
+
+// ... Include other save/update functions (saveMatch, saveKicks, etc.) ...
 function saveMatch(data) {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName("Matches");
@@ -228,10 +418,8 @@ function saveKicks(kicks) {
         sheet.appendRow(["MatchID", "Round", "Team", "Player", "Result", "Timestamp", "TournamentID"]);
     }
     const matchId = kicks[0].matchId;
-    if(!matchId) return successResponse({ status: 'success' }); // Safety check
+    if(!matchId) return successResponse({ status: 'success' });
 
-    // Simple append approach for now to avoid complexity of bulk delete in Apps Script
-    // Ideally, filter out existing by ID then append, but append is safer for low conflict
     kicks.forEach(k => {
         sheet.appendRow([ k.matchId, k.round, k.teamId, k.player, k.result, k.timestamp, k.tournamentId || 'default' ]);
     });
@@ -248,10 +436,8 @@ function handleAuth(data) {
   
   if (data.authType === 'line') {
     const rows = sheet.getDataRange().getValues();
-    // Search by LineUserId (Column H -> Index 7)
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][7]) === String(data.lineUserId)) {
-         // Found user, update last login
          sheet.getRange(i+1, 9).setValue(new Date());
          return successResponse({
              userId: String(rows[i][0]),
@@ -263,7 +449,6 @@ function handleAuth(data) {
          });
       }
     }
-    // New Line User
     const newId = 'U_' + Date.now();
     sheet.appendRow([newId, data.lineUserId, '', data.displayName, 'user', '', data.pictureUrl, data.lineUserId, new Date()]);
     return successResponse({ userId: newId, username: data.lineUserId, displayName: data.displayName, role: 'user', phoneNumber: '', pictureUrl: data.pictureUrl });
@@ -289,18 +474,57 @@ function handleAuth(data) {
   }
 }
 
-// ... include other standard functions (updateTeamStatus, registerTeam, manageNews, etc) with check for sheet existence ...
-// Keeping brevity for the response, assumed other functions follow the pattern:
-// let sheet = ss.getSheetByName("Name"); if(!sheet) { sheet = ss.insertSheet("Name"); ...header }
+function saveMatchEvents(events) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("MatchEvents");
+    if (!sheet) { sheet = ss.insertSheet("MatchEvents"); sheet.appendRow(["ID", "MatchID", "TournamentID", "Minute", "Type", "Player", "TeamID", "Timestamp"]); }
+    if (events && events.length > 0) { events.forEach(e => { sheet.appendRow([e.id, e.matchId, e.tournamentId, e.minute, e.type, e.player, e.teamId, e.timestamp]); }); }
+    return successResponse({ status: 'success' });
+}
 
-function getSpreadsheet() { return SpreadsheetApp.getActiveSpreadsheet(); }
-function successResponse(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
-function errorResponse(message) { return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: message })).setMimeType(ContentService.MimeType.JSON); }
-function toLh3Link(url) { if (!url || !url.includes("drive.google.com")) return url || ""; try { return "https://lh3.googleusercontent.com/d/" + url.match(/\/d\/(.+?)\//)[1]; } catch (e) { return url; } }
-function formatDate(dateObj) { try { const d = new Date(dateObj); if (isNaN(d.getTime())) return String(dateObj); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; } catch (e) { return String(dateObj); } }
-function saveFileToDrive(base64Data, filename) { try { if (!base64Data || base64Data === "") return ""; const split = base64Data.split(','); const type = split[0].split(';')[0].replace('data:', ''); const data = Utilities.base64Decode(split[1]); const blob = Utilities.newBlob(data, type, filename); const folders = DriveApp.getFoldersByName(FOLDER_NAME); let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(FOLDER_NAME); folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); const file = folder.createFile(blob); file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW); return file.getUrl(); } catch (e) { return ""; } }
+function saveSettings(settings) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Config");
+    if (!sheet) { sheet = ss.insertSheet("Config"); sheet.appendRow(["CompName","Logo","BankName","BankAccount","AccountName","Location","Link","Announcement","PIN","Lat","Lng","Fee","Goal","ObjTitle","ObjDesc","ObjImg"]); }
+    let logoUrl = settings.competitionLogo; if (logoUrl && logoUrl.startsWith('data:')) logoUrl = saveFileToDrive(logoUrl, 'comp_logo_' + Date.now());
+    let objImgUrl = settings.objectiveImageUrl; if (objImgUrl && objImgUrl.startsWith('data:')) objImgUrl = saveFileToDrive(objImgUrl, 'obj_img_' + Date.now());
+    const rowData = [ settings.competitionName, logoUrl, settings.bankName, settings.bankAccount, settings.accountName, settings.locationName, settings.locationLink, settings.announcement, settings.adminPin, settings.locationLat, settings.locationLng, settings.registrationFee, settings.fundraisingGoal, settings.objectiveTitle, settings.objectiveDescription, objImgUrl ];
+    if (sheet.getLastRow() < 2) sheet.appendRow(rowData); else sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);
+    return successResponse({ status: 'success' });
+}
 
-// Add missing functions for full compliance
+function scheduleMatch(data) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Matches");
+    if (!sheet) { sheet = ss.insertSheet("Matches"); sheet.appendRow(["MatchID","TeamA","TeamB","ScoreA","ScoreB","Winner","Date","Summary","Round","Status","Venue","ScheduledTime","LiveURL","LiveCover","TournamentID"]); }
+    const rows = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === String(data.matchId)) { rowIndex = i + 1; break; } }
+    let coverUrl = "";
+    if (data.livestreamCover && data.livestreamCover.startsWith("data:")) coverUrl = saveFileToDrive(data.livestreamCover, `cover_${data.matchId}`); else if (data.livestreamCover) coverUrl = data.livestreamCover;
+    if (rowIndex === -1) {
+        sheet.appendRow([ data.matchId, data.teamA, data.teamB, 0, 0, '', new Date().toISOString(), '', data.roundLabel, 'Scheduled', data.venue, data.scheduledTime, data.livestreamUrl, coverUrl, data.tournamentId || 'default' ]);
+    } else {
+        if(data.teamA) sheet.getRange(rowIndex, 2).setValue(data.teamA);
+        if(data.teamB) sheet.getRange(rowIndex, 3).setValue(data.teamB);
+        sheet.getRange(rowIndex, 9).setValue(data.roundLabel);
+        sheet.getRange(rowIndex, 11).setValue(data.venue);
+        sheet.getRange(rowIndex, 12).setValue(data.scheduledTime);
+        sheet.getRange(rowIndex, 13).setValue(data.livestreamUrl);
+        if (coverUrl) sheet.getRange(rowIndex, 14).setValue(coverUrl);
+        if (data.tournamentId) sheet.getRange(rowIndex, 15).setValue(data.tournamentId);
+    }
+    return successResponse({ status: 'success' });
+}
+
+function deleteMatch(matchId) {
+    const ss = getSpreadsheet();
+    let sheet = ss.getSheetByName("Matches");
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === String(matchId)) { sheet.deleteRow(i + 1); return successResponse({ status: 'success' }); } }
+    return errorResponse("Match not found");
+}
+
 function updateUserRole(userId, role) {
   const ss = getSpreadsheet();
   let sheet = ss.getSheetByName("Users");
@@ -385,7 +609,6 @@ function updateTournament(tournament) {
     const ss = getSpreadsheet();
     let sheet = ss.getSheetByName("Tournaments");
     const data = sheet.getDataRange().getValues();
-    // Parse config for images
     let config = {};
     try { config = JSON.parse(tournament.config); if (config.objective && config.objective.images) { config.objective.images = config.objective.images.map(img => { if (img.url && img.url.startsWith('data:')) return { ...img, url: saveFileToDrive(img.url, `proj_img_${tournament.id}_${Date.now()}`) }; return img; }); } tournament.config = JSON.stringify(config); } catch(e) {}
     for(let i=1; i<data.length; i++) {
@@ -400,197 +623,9 @@ function updateTournament(tournament) {
     return errorResponse("Tournament not found");
 }
 
-function scheduleMatch(data) {
-    const ss = getSpreadsheet();
-    let sheet = ss.getSheetByName("Matches");
-    if (!sheet) { sheet = ss.insertSheet("Matches"); sheet.appendRow(["MatchID","TeamA","TeamB","ScoreA","ScoreB","Winner","Date","Summary","Round","Status","Venue","ScheduledTime","LiveURL","LiveCover","TournamentID"]); }
-    const rows = sheet.getDataRange().getValues();
-    let rowIndex = -1;
-    for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === String(data.matchId)) { rowIndex = i + 1; break; } }
-    let coverUrl = "";
-    if (data.livestreamCover && data.livestreamCover.startsWith("data:")) coverUrl = saveFileToDrive(data.livestreamCover, `cover_${data.matchId}`); else if (data.livestreamCover) coverUrl = data.livestreamCover;
-    if (rowIndex === -1) {
-        sheet.appendRow([ data.matchId, data.teamA, data.teamB, 0, 0, '', new Date().toISOString(), '', data.roundLabel, 'Scheduled', data.venue, data.scheduledTime, data.livestreamUrl, coverUrl, data.tournamentId || 'default' ]);
-    } else {
-        if(data.teamA) sheet.getRange(rowIndex, 2).setValue(data.teamA);
-        if(data.teamB) sheet.getRange(rowIndex, 3).setValue(data.teamB);
-        sheet.getRange(rowIndex, 9).setValue(data.roundLabel);
-        sheet.getRange(rowIndex, 11).setValue(data.venue);
-        sheet.getRange(rowIndex, 12).setValue(data.scheduledTime);
-        sheet.getRange(rowIndex, 13).setValue(data.livestreamUrl);
-        if (coverUrl) sheet.getRange(rowIndex, 14).setValue(coverUrl);
-        if (data.tournamentId) sheet.getRange(rowIndex, 15).setValue(data.tournamentId);
-    }
-    return successResponse({ status: 'success' });
-}
-
-function deleteMatch(matchId) {
-    const ss = getSpreadsheet();
-    let sheet = ss.getSheetByName("Matches");
-    const rows = sheet.getDataRange().getValues();
-    for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === String(matchId)) { sheet.deleteRow(i + 1); return successResponse({ status: 'success' }); } }
-    return errorResponse("Match not found");
-}
-
-function saveMatchEvents(events) {
-    const ss = getSpreadsheet();
-    let sheet = ss.getSheetByName("MatchEvents");
-    if (!sheet) { sheet = ss.insertSheet("MatchEvents"); sheet.appendRow(["ID", "MatchID", "TournamentID", "Minute", "Type", "Player", "TeamID", "Timestamp"]); }
-    if (events && events.length > 0) { events.forEach(e => { sheet.appendRow([e.id, e.matchId, e.tournamentId, e.minute, e.type, e.player, e.teamId, e.timestamp]); }); }
-    return successResponse({ status: 'success' });
-}
-
-function saveSettings(settings) {
-    const ss = getSpreadsheet();
-    let sheet = ss.getSheetByName("Config");
-    if (!sheet) { sheet = ss.insertSheet("Config"); sheet.appendRow(["CompName","Logo","BankName","BankAccount","AccountName","Location","Link","Announcement","PIN","Lat","Lng","Fee","Goal","ObjTitle","ObjDesc","ObjImg"]); }
-    let logoUrl = settings.competitionLogo; if (logoUrl && logoUrl.startsWith('data:')) logoUrl = saveFileToDrive(logoUrl, 'comp_logo_' + Date.now());
-    let objImgUrl = settings.objectiveImageUrl; if (objImgUrl && objImgUrl.startsWith('data:')) objImgUrl = saveFileToDrive(objImgUrl, 'obj_img_' + Date.now());
-    const rowData = [ settings.competitionName, logoUrl, settings.bankName, settings.bankAccount, settings.accountName, settings.locationName, settings.locationLink, settings.announcement, settings.adminPin, settings.locationLat, settings.locationLng, settings.registrationFee, settings.fundraisingGoal, settings.objectiveTitle, settings.objectiveDescription, objImgUrl ];
-    if (sheet.getLastRow() < 2) sheet.appendRow(rowData); else sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);
-    return successResponse({ status: 'success' });
-}
-
-function registerTeam(data) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Teams");
-  if (!sheet) { sheet = ss.insertSheet("Teams"); sheet.appendRow(["ID", "Name", "ShortName", "Color", "LogoUrl", "Status", "Group", "District", "Province", "Director", "Manager", "ManagerPhone", "Coach", "CoachPhone", "DocUrl", "SlipUrl", "RejectReason", "RegistrationTime", "TournamentID"]); }
-  let playersSheet = ss.getSheetByName("Players");
-  if (!playersSheet) { playersSheet = ss.insertSheet("Players"); playersSheet.appendRow(["ID", "TeamID", "Name", "Number", "Position", "PhotoUrl", "BirthDate", "TournamentID"]); }
-  
-  const logoUrl = saveFileToDrive(data.logoFile, `logo_${data.schoolName}_${Date.now()}`);
-  const docUrl = saveFileToDrive(data.documentFile, `doc_${data.schoolName}_${Date.now()}`);
-  const slipUrl = saveFileToDrive(data.slipFile, `slip_${data.schoolName}_${Date.now()}`);
-  const teamId = "T_" + Date.now();
-  
-  sheet.appendRow([ teamId, data.schoolName, data.shortName, data.color, logoUrl, 'Pending', '', data.district, data.province, data.directorName, data.managerName, "'" + data.managerPhone, data.coachName, "'" + data.coachPhone, docUrl, slipUrl, '', data.registrationTime, data.tournamentId ]);
-  
-  if (data.players && data.players.length > 0) {
-    data.players.forEach(p => {
-       let photoUrl = ''; if (p.photoFile && p.photoFile.startsWith('data:')) photoUrl = saveFileToDrive(p.photoFile, `p_${teamId}_${p.sequence}`);
-       playersSheet.appendRow([ "P_" + Date.now() + "_" + Math.floor(Math.random()*1000), teamId, p.name, "'" + p.number, p.position || 'Player', photoUrl, p.birthDate, data.tournamentId ]);
-    });
-  }
-  return successResponse({ status: 'success', teamId: teamId });
-}
-
-function updateTeamStatus(teamId, status, group, reason) {
-  const ss = getSpreadsheet();
-  let sheet = ss.getSheetByName("Teams");
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(teamId)) {
-      sheet.getRange(i + 1, 6).setValue(status);
-      if (group) sheet.getRange(i + 1, 7).setValue(group); 
-      if (reason !== undefined) sheet.getRange(i + 1, 17).setValue(reason);
-      return successResponse({ status: 'success' });
-    }
-  }
-  return errorResponse("Team not found");
-}
-
-function updateTeamData(team, players) {
-  const ss = getSpreadsheet();
-  let teamSheet = ss.getSheetByName("Teams");
-  let playerSheet = ss.getSheetByName("Players");
-  
-  if (!teamSheet || !playerSheet) return errorResponse("Sheets missing");
-
-  // 1. Update Team Info
-  const tData = teamSheet.getDataRange().getValues();
-  for (let i = 1; i < tData.length; i++) {
-      if (String(tData[i][0]) === String(team.id)) {
-          if (team.name) teamSheet.getRange(i+1, 2).setValue(team.name);
-          if (team.color) teamSheet.getRange(i+1, 4).setValue(team.color);
-          if (team.district) teamSheet.getRange(i+1, 8).setValue(team.district);
-          if (team.province) teamSheet.getRange(i+1, 9).setValue(team.province);
-          if (team.directorName) teamSheet.getRange(i+1, 10).setValue(team.directorName);
-          if (team.managerName) teamSheet.getRange(i+1, 11).setValue(team.managerName);
-          if (team.managerPhone) teamSheet.getRange(i+1, 12).setValue("'" + team.managerPhone);
-          if (team.coachName) teamSheet.getRange(i+1, 13).setValue(team.coachName);
-          if (team.coachPhone) teamSheet.getRange(i+1, 14).setValue("'" + team.coachPhone);
-          if (team.group) teamSheet.getRange(i+1, 7).setValue(team.group);
-
-          // Handle File Uploads (Base64 check)
-          if (team.logoUrl && team.logoUrl.startsWith('data:')) {
-              const url = saveFileToDrive(team.logoUrl, `logo_${team.id}_${Date.now()}`);
-              teamSheet.getRange(i+1, 5).setValue(url);
-          }
-          if (team.docUrl && team.docUrl.startsWith('data:')) {
-              const url = saveFileToDrive(team.docUrl, `doc_${team.id}_${Date.now()}`);
-              teamSheet.getRange(i+1, 15).setValue(url);
-          }
-          if (team.slipUrl && team.slipUrl.startsWith('data:')) {
-              const url = saveFileToDrive(team.slipUrl, `slip_${team.id}_${Date.now()}`);
-              teamSheet.getRange(i+1, 16).setValue(url);
-          }
-          break;
-      }
-  }
-
-  // 2. Update/Add Players
-  if (players && players.length > 0) {
-      const pData = playerSheet.getDataRange().getValues();
-      
-      players.forEach(p => {
-          let found = false;
-          let photoLink = p.photoUrl;
-          if (photoLink && photoLink.startsWith('data:')) {
-              photoLink = saveFileToDrive(photoLink, `player_${p.id}_${Date.now()}`);
-          }
-
-          // Try to find existing player by ID
-          for (let j = 1; j < pData.length; j++) {
-              if (String(pData[j][0]) === String(p.id)) {
-                  // If name is empty, it might be a delete request in some designs, 
-                  // but here we just update fields if present.
-                  // For true deletion, we'd need a separate action or flag.
-                  // Updating fields:
-                  playerSheet.getRange(j+1, 3).setValue(p.name);
-                  playerSheet.getRange(j+1, 4).setValue("'" + p.number);
-                  playerSheet.getRange(j+1, 5).setValue(p.position || 'Player');
-                  if (photoLink !== undefined) playerSheet.getRange(j+1, 6).setValue(photoLink); // Only update if provided/changed
-                  if (p.birthDate) playerSheet.getRange(j+1, 7).setValue(p.birthDate);
-                  
-                  // Check if this was a "remove photo" operation (empty string passed explicitly)
-                  if (p.photoUrl === '') playerSheet.getRange(j+1, 6).setValue('');
-
-                  found = true;
-                  break;
-              }
-          }
-
-          // If new player (temp ID or not found)
-          if (!found && p.id.startsWith('TEMP')) {
-              const newId = "P_" + Date.now() + "_" + Math.floor(Math.random()*1000);
-              playerSheet.appendRow([ newId, team.id, p.name, "'" + p.number, p.position || 'Player', photoLink || '', p.birthDate, team.tournamentId || 'default' ]);
-          } else if (!found && !p.id.startsWith('TEMP')) {
-             // Case: existing ID but not found in sheet (deleted externally?), treat as error or ignore
-          }
-      });
-      
-      // Optional: Handle Player Deletion
-      // If the frontend sends the *full* list of current players, we could compare 
-      // with the sheet rows for this team and delete missing ones.
-      // However, the current prompt asks to "manage" (add/edit), and simple removal from UI list.
-      // For safety, the `updateTeamData` above only updates/adds.
-      // If we want to support deletion, we need to know which IDs were removed.
-      // The frontend `handleRemovePlayer` removes from the `editForm` state.
-      // So `players` passed here is the *surviving* list.
-      // To implement delete, we'd iterate sheet rows for this teamId, and if row's ID is NOT in `players`, delete it.
-      
-      // Let's implement robust deletion logic:
-      const survivingIds = players.map(p => p.id).filter(id => !id.startsWith('TEMP'));
-      // Iterate backwards to safely delete rows
-      for (let j = pData.length - 1; j >= 1; j--) {
-          if (String(pData[j][1]) === String(team.id)) { // Matches Team ID
-              const rowId = String(pData[j][0]);
-              if (!survivingIds.includes(rowId)) {
-                  playerSheet.deleteRow(j + 1);
-              }
-          }
-      }
-  }
-
-  return successResponse({ status: 'success' });
-}
+function getSpreadsheet() { return SpreadsheetApp.getActiveSpreadsheet(); }
+function successResponse(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
+function errorResponse(message) { return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: message })).setMimeType(ContentService.MimeType.JSON); }
+function toLh3Link(url) { if (!url || !url.includes("drive.google.com")) return url || ""; try { return "https://lh3.googleusercontent.com/d/" + url.match(/\/d\/(.+?)\//)[1]; } catch (e) { return url; } }
+function formatDate(dateObj) { try { const d = new Date(dateObj); if (isNaN(d.getTime())) return String(dateObj); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; } catch (e) { return String(dateObj); } }
+function saveFileToDrive(base64Data, filename) { try { if (!base64Data || base64Data === "") return ""; const split = base64Data.split(','); const type = split[0].split(';')[0].replace('data:', ''); const data = Utilities.base64Decode(split[1]); const blob = Utilities.newBlob(data, type, filename); const folders = DriveApp.getFoldersByName(FOLDER_NAME); let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(FOLDER_NAME); folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); const file = folder.createFile(blob); file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW); return file.getUrl(); } catch (e) { return ""; } }

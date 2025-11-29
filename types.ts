@@ -1,4 +1,5 @@
 
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -144,6 +145,7 @@ export interface Team {
 
   tournamentId?: string;
   creatorId?: string;
+  registrationTime?: string;
 }
 
 export interface Player {
@@ -247,6 +249,7 @@ export interface RegistrationData {
   }[];
   tournamentId?: string;
   creatorId?: string;
+  lineUserId?: string; // New field for Line ID
 }
 
 export interface Standing {
