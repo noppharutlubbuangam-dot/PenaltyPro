@@ -349,6 +349,7 @@ function App() {
                   onRefresh={loadData}
                   showNotification={showNotification}
                   isLoading={isLoadingData}
+                  defaultFee={appConfig.registrationFee} // Pass default fee from global config
               />
               {!isAdmin && tournaments.length === 0 && (<div className="fixed bottom-4 right-4"><button onClick={() => setIsLoginOpen(true)} className="bg-white/50 p-2 rounded-full hover:bg-white transition text-slate-400"><Lock className="w-4 h-4"/></button></div>)}
               <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />

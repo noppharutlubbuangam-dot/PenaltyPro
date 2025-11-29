@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage, TournamentPrize, Team, Donation } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2 } from 'lucide-react';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2, DollarSign, Wallet } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 import { shareTournament } from '../services/liffService';
 
@@ -13,7 +13,8 @@ interface TournamentSelectorProps {
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   isLoading?: boolean;
   teams?: Team[]; 
-  donations?: Donation[]; // Added prop
+  donations?: Donation[]; 
+  defaultFee?: number;
 }
 
 // Helper for Drive Images
@@ -64,7 +65,7 @@ const compressImage = async (file: File): Promise<File> => {
     });
 };
 
-const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading, teams = [], donations = [] }) => {
+const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading, teams = [], donations = [], defaultFee = 0 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -268,33 +269,48 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                 ) : (
                     <>
                         {visibleTournaments.map(t => {
-                            // Calculate Stats
+                            // --- LOGIC SECTION ---
                             const config = t.config ? JSON.parse(t.config) : {};
-                            const maxTeams = config.maxTeams || 0;
-                            // Count approved or pending teams for this tournament
-                            const teamCount = teams.filter(team => team.tournamentId === t.id && team.status !== 'Rejected').length;
-                            const approvedTeamCount = teams.filter(team => team.tournamentId === t.id && team.status === 'Approved').length;
-                            const percentage = maxTeams > 0 ? Math.min(100, (teamCount / maxTeams) * 100) : 0;
+                            const maxTeams = parseInt(String(config.maxTeams || 0));
+                            
+                            // Fee Calculation: Use specific fee if exists, else fallback to defaultFee (global), else 0
+                            const configFee = config.registrationFee;
+                            const feeToUse = (configFee !== undefined && configFee !== null && configFee !== '') ? configFee : defaultFee;
+                            const regFee = parseInt(String(feeToUse || 0).replace(/,/g, '')) || 0;
+
+                            const objective = config.objective || {};
+                            const prizes = config.prizes || [];
                             const deadline = config.registrationDeadline ? new Date(config.registrationDeadline) : null;
                             const isPastDeadline = deadline && new Date() > deadline;
 
-                            // Fundraising Calcs
-                            const objective = config.objective || {};
-                            const prizes = config.prizes || [];
-                            const regFee = config.registrationFee || 0;
+                            // Teams
+                            const teamCount = teams.filter(team => (team.tournamentId === t.id || (!team.tournamentId && t.id === 'default')) && team.status !== 'Rejected').length;
+                            const approvedTeamCount = teams.filter(team => (team.tournamentId === t.id || (!team.tournamentId && t.id === 'default')) && team.status === 'Approved').length;
+                            const percentage = maxTeams > 0 ? Math.min(100, (teamCount / maxTeams) * 100) : 0;
+
+                            // Financials: Income
+                            // 1. Fees from Approved Teams
                             const incomeFromFees = approvedTeamCount * regFee;
+                            // 2. Verified Donations
                             const tournamentDonations = donations.filter(d => d.tournamentId === t.id && d.status === 'Verified');
-                            const totalDonations = tournamentDonations.reduce((sum, d) => sum + d.amount, 0);
+                            const totalDonations = tournamentDonations.reduce((sum, d) => sum + Number(d.amount), 0);
+                            const totalIncome = incomeFromFees + totalDonations;
+
+                            // Financials: Expenses (Prizes)
                             const totalPrizes = prizes.reduce((sum: number, p: any) => {
                                 const amt = parseInt(String(p.amount).replace(/,/g, '')) || 0;
                                 return sum + amt;
                             }, 0);
-                            
-                            const totalIncome = incomeFromFees + totalDonations;
-                            const netRaised = Math.max(0, totalIncome - totalPrizes);
-                            const goal = objective.goal || 0;
-                            const fundProgress = goal > 0 ? Math.min(100, (netRaised / goal) * 100) : 0;
-                            
+
+                            // Financials: Net Raised
+                            // Formula: (Approved Teams * Fee) + Verified Donations - Total Prizes
+                            const netRaised = totalIncome - totalPrizes;
+                            const displayNetRaised = Math.max(0, netRaised); 
+
+                            // Goal Progress
+                            const goal = parseInt(String(objective.goal || 0).replace(/,/g, ''));
+                            const fundProgress = goal > 0 ? Math.min(100, (displayNetRaised / goal) * 100) : 0;
+
                             // Image Logic - prioritize 'before' image
                             const beforeImage = objective.images?.find((img: any) => img.type === 'before')?.url;
 
@@ -336,29 +352,55 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                         
                                         <div className="relative z-10 w-full flex-1 flex flex-col p-4">
                                             
-                                            {/* Objective Title (if any) */}
+                                            {/* Objective Title */}
                                             {objective.title && objective.isEnabled && (
                                                 <p className="text-xs text-slate-500 font-medium mb-3 line-clamp-1 flex items-center gap-1">
                                                     <Target className="w-3 h-3 text-indigo-500"/> {objective.title}
                                                 </p>
                                             )}
 
-                                            {/* Fundraising Progress */}
-                                            {objective.isEnabled && goal > 0 && (
-                                                <div className="mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                                                        <span>ระดมทุน (สุทธิ)</span>
-                                                        <span className="font-bold text-indigo-600">{fundProgress.toFixed(0)}%</span>
+                                            {/* Fundraising / Financial Logic - Enhanced Breakdown */}
+                                            {goal > 0 && (
+                                                <div className="mb-4 bg-white/50 p-3 rounded-xl border border-slate-200/60 backdrop-blur-sm">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                                            <Heart className="w-3 h-3 text-rose-500 fill-rose-500"/> Fund Progress
+                                                        </span>
+                                                        <span className={`text-xs font-bold ${fundProgress >= 100 ? 'text-green-600' : 'text-indigo-600'}`}>
+                                                            {fundProgress.toFixed(0)}%
+                                                        </span>
                                                     </div>
-                                                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden mb-1">
+                                                    
+                                                    {/* Progress Bar */}
+                                                    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden mb-2 shadow-inner">
                                                         <div 
-                                                            className="h-full rounded-full bg-gradient-to-r from-pink-500 to-indigo-500 transition-all duration-1000" 
+                                                            className={`h-full rounded-full transition-all duration-1000 ${fundProgress >= 100 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-rose-400 to-indigo-500'}`} 
                                                             style={{ width: `${fundProgress}%` }}
                                                         ></div>
                                                     </div>
-                                                    <div className="flex justify-between items-end">
-                                                        <span className="text-[10px] text-slate-400 font-mono">เป้า {goal.toLocaleString()}</span>
-                                                        <span className="text-xs font-bold text-slate-800">{netRaised.toLocaleString()} บ.</span>
+
+                                                    {/* Detailed Breakdown */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex justify-between items-center text-[10px] text-slate-600">
+                                                            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> ค่าสมัคร ({approvedTeamCount} ทีม x {regFee})</span>
+                                                            <span className="font-mono opacity-80">+{incomeFromFees.toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-[10px] text-slate-600">
+                                                            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div> ยอดบริจาค</span>
+                                                            <span className="font-mono opacity-80">+{totalDonations.toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-[10px] text-rose-600">
+                                                            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div> หักเงินรางวัล</span>
+                                                            <span className="font-mono opacity-80">-{totalPrizes.toLocaleString()}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-2 pt-2 border-t border-slate-200/50 flex justify-between items-end">
+                                                        <div className="text-[9px] text-slate-400">เป้าหมาย {goal.toLocaleString()}</div>
+                                                        <div className="text-right leading-none">
+                                                            <span className="text-[9px] text-slate-400 block mb-0.5">ยอดสุทธิ</span>
+                                                            <span className="text-sm font-black text-slate-800">{displayNetRaised.toLocaleString()} <span className="text-[9px] font-normal text-slate-400">บาท</span></span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
@@ -645,6 +687,10 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
                                 <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2 border-b pb-1 pt-4"><CreditCard className="w-4 h-4"/> บัญชีรับโอนเงิน</h4>
                                 <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">ค่าสมัคร (บาท)</label>
+                                        <input type="number" className="w-full p-2 border rounded-lg text-sm" placeholder="0" value={editConfig.registrationFee || ''} onChange={e => setEditConfig({...editConfig, registrationFee: parseInt(e.target.value)})} />
+                                    </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อธนาคาร</label>
                                         <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="Default: ใช้ค่าเดิม" value={editConfig.bankName || ''} onChange={e => setEditConfig({...editConfig, bankName: e.target.value})} />
