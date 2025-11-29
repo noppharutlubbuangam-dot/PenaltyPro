@@ -1,6 +1,7 @@
 
 
 
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -83,6 +84,7 @@ export interface TournamentConfig {
     description: string;
     goal: number;
     images: ProjectImage[];
+    docUrl?: string; // New: Project Detail File
   };
 
   prizes?: TournamentPrize[];
@@ -97,7 +99,8 @@ export interface DonationRequest {
   donorPhone: string;
   taxId?: string;
   address?: string;
-  lineUserId?: string; // New
+  lineUserId?: string; 
+  isAnonymous?: boolean; // New
 }
 
 export interface Donation {
@@ -111,8 +114,9 @@ export interface Donation {
   address?: string;
   slipUrl: string;
   tournamentId: string;
-  lineUserId?: string; // New
-  status: 'Pending' | 'Verified' | 'Rejected'; // New
+  lineUserId?: string; 
+  status: 'Pending' | 'Verified' | 'Rejected'; 
+  isAnonymous?: boolean; // New
 }
 
 export interface Tournament {
