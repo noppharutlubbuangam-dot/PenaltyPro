@@ -26,16 +26,8 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editStep, setEditStep] = useState<'form' | 'summary'>('form');
 
-  useEffect(() => {
-      if (editingTournament) {
-          try {
-              const parsed = JSON.parse(editingTournament.config || '{}');
-              setEditConfig(parsed);
-          } catch(e) {
-              setEditConfig({});
-          }
-      }
-  }, [editingTournament]);
+  // REMOVED useEffect that resets config on tournament change to prevent data loss
+  // Logic moved to openEdit
 
   const handleCreate = async () => {
       if (!newTourneyName) return;
@@ -69,9 +61,18 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
       if (!editingTournament) return;
       setIsSubmitting(true);
       try {
+          // Ensure defaults are saved if values are missing but type requires them
+          const finalConfig = { ...editConfig };
+          if (editingTournament.type !== 'Penalty') {
+              if (finalConfig.halfTimeDuration === undefined) finalConfig.halfTimeDuration = 20;
+              if (finalConfig.playersPerTeam === undefined) finalConfig.playersPerTeam = 7;
+              if (finalConfig.maxSubs === undefined) finalConfig.maxSubs = 0;
+              if (finalConfig.extraTime === undefined) finalConfig.extraTime = false;
+          }
+
           const updatedTournament = {
               ...editingTournament,
-              config: JSON.stringify(editConfig)
+              config: JSON.stringify(finalConfig)
           };
           const success = await updateTournament(updatedTournament);
           if (success) {
@@ -91,7 +92,13 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
   const openEdit = (e: React.MouseEvent, t: Tournament) => {
       e.stopPropagation();
-      setEditingTournament(t);
+      setEditingTournament({...t}); // Clone object to detach reference
+      try {
+          const parsed = JSON.parse(t.config || '{}');
+          setEditConfig(parsed);
+      } catch(e) {
+          setEditConfig({});
+      }
       setEditStep('form');
       setIsEditing(true);
   };
@@ -357,7 +364,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                             </div>
                                             <div className="bg-white p-2 rounded border border-slate-100">
                                                 <div className="text-[10px] text-slate-400">เปลี่ยนตัว</div>
-                                                <div className="font-bold text-indigo-600">{editConfig.maxSubs === 0 ? "ไม่จำกัด" : `${editConfig.maxSubs} คน`}</div>
+                                                <div className="font-bold text-indigo-600">{editConfig.maxSubs === 0 ? "ไม่จำกัด" : `${editConfig.maxSubs || 0} คน`}</div>
                                             </div>
                                             <div className="bg-white p-2 rounded border border-slate-100">
                                                 <div className="text-[10px] text-slate-400">ต่อเวลา</div>
