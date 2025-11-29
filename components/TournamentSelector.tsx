@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Tournament, TournamentConfig, ProjectImage } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard } from 'lucide-react';
+import { Tournament, TournamentConfig, ProjectImage, TournamentPrize } from '../types';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 
 interface TournamentSelectorProps {
@@ -31,7 +31,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const [newTourneyType, setNewTourneyType] = useState('Penalty');
   const [editConfig, setEditConfig] = useState<TournamentConfig>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editStep, setEditStep] = useState<'general' | 'rules' | 'location' | 'objective' | 'summary'>('general');
+  const [editStep, setEditStep] = useState<'general' | 'rules' | 'location' | 'objective' | 'prizes' | 'summary'>('general');
 
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
       if (showNotification) showNotification(title, msg, type);
@@ -144,6 +144,33 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
               ...prev.objective!,
               images: prev.objective?.images.filter(img => img.id !== imgId) || []
           }
+      }));
+  };
+
+  const addPrize = () => {
+      const newPrize: TournamentPrize = {
+          id: Date.now().toString(),
+          rankLabel: '',
+          amount: '',
+          description: ''
+      };
+      setEditConfig(prev => ({
+          ...prev,
+          prizes: [...(prev.prizes || []), newPrize]
+      }));
+  };
+
+  const updatePrize = (id: string, field: keyof TournamentPrize, value: string) => {
+      setEditConfig(prev => ({
+          ...prev,
+          prizes: (prev.prizes || []).map(p => p.id === id ? { ...p, [field]: value } : p)
+      }));
+  };
+
+  const removePrize = (id: string) => {
+      setEditConfig(prev => ({
+          ...prev,
+          prizes: (prev.prizes || []).filter(p => p.id !== id)
       }));
   };
 
@@ -313,6 +340,9 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                         </button>
                         <button onClick={() => setEditStep('objective')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'objective' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
                             <Heart className="w-4 h-4"/> โครงการ
+                        </button>
+                        <button onClick={() => setEditStep('prizes')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'prizes' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <Banknote className="w-4 h-4"/> เงินรางวัล
                         </button>
                         <button onClick={() => setEditStep('summary')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'summary' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
                             <FileCheck className="w-4 h-4"/> ยืนยัน
@@ -538,6 +568,37 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                             </div>
                         )}
 
+                        {editStep === 'prizes' && (
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                                <div className="flex justify-between items-center border-b pb-2">
+                                    <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2"><Star className="w-4 h-4 text-yellow-500"/> ตั้งค่าเงินรางวัล</h4>
+                                    <button onClick={addPrize} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-indigo-100"><Plus className="w-3 h-3"/> เพิ่มรางวัล</button>
+                                </div>
+                                <div className="space-y-2">
+                                    {editConfig.prizes && editConfig.prizes.length > 0 ? (
+                                        editConfig.prizes.map((prize, idx) => (
+                                            <div key={prize.id || idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                                <div className="col-span-3">
+                                                    <input type="text" placeholder="อันดับ (เช่น 1, Top Score)" className="w-full p-2 border rounded text-xs" value={prize.rankLabel} onChange={e => updatePrize(prize.id, 'rankLabel', e.target.value)} />
+                                                </div>
+                                                <div className="col-span-3">
+                                                    <input type="text" placeholder="รางวัล (เช่น 5,000)" className="w-full p-2 border rounded text-xs font-bold text-green-700" value={prize.amount} onChange={e => updatePrize(prize.id, 'amount', e.target.value)} />
+                                                </div>
+                                                <div className="col-span-5">
+                                                    <input type="text" placeholder="รายละเอียดเพิ่มเติม" className="w-full p-2 border rounded text-xs" value={prize.description || ''} onChange={e => updatePrize(prize.id, 'description', e.target.value)} />
+                                                </div>
+                                                <div className="col-span-1 flex justify-center">
+                                                    <button onClick={() => removePrize(prize.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">ยังไม่มีการตั้งค่ารางวัล</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {editStep === 'summary' && (
                             <div className="space-y-4">
                                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 shadow-sm">
@@ -552,6 +613,12 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                             <li className="flex justify-between border-t pt-2 mt-2">
                                                 <span className="flex items-center gap-1 text-pink-600 font-bold"><Heart className="w-3 h-3"/> โครงการ:</span> 
                                                 <span className="font-bold">{editConfig.objective.title}</span>
+                                            </li>
+                                        )}
+                                        {editConfig.prizes && editConfig.prizes.length > 0 && (
+                                            <li className="flex justify-between border-t pt-2 mt-2">
+                                                <span className="flex items-center gap-1 text-yellow-600 font-bold"><Trophy className="w-3 h-3"/> รางวัล:</span>
+                                                <span className="font-bold">{editConfig.prizes.length} รายการ</span>
                                             </li>
                                         )}
                                     </ul>

@@ -1,3 +1,4 @@
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {
@@ -49,6 +50,13 @@ export interface ProjectImage {
   caption?: string;
 }
 
+export interface TournamentPrize {
+  id: string;
+  rankLabel: string; // "1st", "2nd", "Top Scorer"
+  amount: string; // Allow text like "Trophy + 5000"
+  description?: string;
+}
+
 export interface TournamentConfig {
   halfTimeDuration?: number; // Minutes
   playersPerTeam?: number; // 7 or 11
@@ -74,6 +82,20 @@ export interface TournamentConfig {
     goal: number;
     images: ProjectImage[];
   };
+
+  // Prizes
+  prizes?: TournamentPrize[];
+}
+
+export interface DonationRequest {
+  tournamentId: string;
+  amount: number;
+  slipFile: string; // Base64
+  isEdonation: boolean;
+  donorName: string;
+  donorPhone: string;
+  taxId?: string;
+  address?: string;
 }
 
 export interface Tournament {

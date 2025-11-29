@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent, TournamentConfig } from './types';
+import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent, TournamentConfig, TournamentPrize } from './types';
 import MatchSetup from './components/MatchSetup';
 import ScoreVisualizer from './components/ScoreVisualizer';
 import PenaltyInterface from './components/PenaltyInterface';
@@ -21,7 +21,7 @@ import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, authenticateUser, saveMatchEventsToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3, ArrowLeft, Star, Coins } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // ... (Constants and helpers remain the same) ...
@@ -154,6 +154,9 @@ function App() {
   };
 
   const hasComparisonImages = objectiveData.images.some(i => i.type === 'before') && objectiveData.images.some(i => i.type === 'after');
+
+  // Prizes
+  const prizes = tConfig.prizes || [];
 
   // User's own teams in this tournament
   const myTeams = currentUser ? activeTeams.filter(t => t.creatorId === currentUser.userId) : [];
@@ -508,6 +511,37 @@ function App() {
                                   <button onClick={() => handleEditMyTeam(t)} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 font-bold flex items-center gap-1 transition">
                                       <Edit3 className="w-3 h-3" /> แก้ไข
                                   </button>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
+              {/* Prize Summary Card */}
+              {prizes.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-yellow-500 to-amber-500 p-4 text-white">
+                          <h3 className="font-bold text-lg flex items-center gap-2"><Trophy className="w-6 h-6 text-white" /> รางวัลการแข่งขัน</h3>
+                      </div>
+                      <div className="p-0">
+                          {prizes.map((prize, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition">
+                                  <div className="flex items-center gap-4">
+                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm ${
+                                          idx === 0 ? 'bg-yellow-400' : 
+                                          idx === 1 ? 'bg-slate-300' : 
+                                          idx === 2 ? 'bg-amber-600' : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                          {idx < 3 ? <Trophy className="w-5 h-5" /> : idx + 1}
+                                      </div>
+                                      <div>
+                                          <p className="font-bold text-slate-800 text-sm">{prize.rankLabel}</p>
+                                          {prize.description && <p className="text-xs text-slate-500">{prize.description}</p>}
+                                      </div>
+                                  </div>
+                                  <div className="text-right">
+                                      <span className="font-bold text-indigo-600 text-lg">{prize.amount}</span>
+                                  </div>
                               </div>
                           ))}
                       </div>

@@ -49,6 +49,8 @@ function doPost(e) {
       return createTournament(data.name, data.type);
     } else if (action === 'updateTournament') { // Phase 4
       return updateTournament(data.tournament);
+    } else if (action === 'submitDonation') { // Phase 5
+      return submitDonation(data);
     }
     
     return errorResponse("Unknown action: " + action);
@@ -316,6 +318,46 @@ function updateTournament(data) {
         }
       }
       return errorResponse("Tournament not found");
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  return errorResponse("Server busy");
+}
+
+function submitDonation(data) {
+  const ss = getSpreadsheet();
+  const lock = LockService.getScriptLock();
+  if (lock.tryLock(30000)) {
+    try {
+      let sheet = ss.getSheetByName("Donations");
+      if (!sheet) {
+        sheet = ss.insertSheet("Donations");
+        sheet.appendRow(["ID", "Timestamp", "TournamentID", "Amount", "DonorName", "DonorPhone", "eDonation", "TaxID", "Address", "SlipURL"]);
+      }
+      
+      const donationId = "D" + Date.now();
+      let slipUrl = "";
+      if (data.slipFile && data.slipFile.startsWith('data:')) {
+         slipUrl = saveFileToDrive(data.slipFile, `donation_slip_${donationId}`);
+      }
+      
+      sheet.appendRow([
+        donationId,
+        new Date().toISOString(),
+        data.tournamentId,
+        data.amount,
+        data.donorName,
+        "'" + data.donorPhone,
+        data.isEdonation ? "Yes" : "No",
+        data.isEdonation ? data.taxId : "",
+        data.isEdonation ? data.address : "",
+        slipUrl
+      ]);
+      
+      return successResponse({ status: 'success', donationId: donationId });
+    } catch (e) {
+      return errorResponse("Donation Error: " + e.toString());
     } finally {
       lock.releaseLock();
     }
