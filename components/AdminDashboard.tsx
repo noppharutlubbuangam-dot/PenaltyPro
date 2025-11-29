@@ -48,6 +48,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const [currentSpinGroup, setCurrentSpinGroup] = useState("");
   const [poolTeams, setPoolTeams] = useState<Team[]>([]);
   const [drawnCount, setDrawnCount] = useState(0);
+  const [removeConfirmModal, setRemoveConfirmModal] = useState<{ isOpen: boolean, team: Team | null, group: string | null }>({ isOpen: false, team: null, group: null });
 
   // View States
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -241,29 +242,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       return target;
   };
 
-  const handleRemoveTeamFromGroup = (team: Team, group: string) => {
-      if (liveDrawStep === 'spinning') return; // Prevent during spin
+  const requestRemoveTeam = (team: Team, group: string) => {
+      if (liveDrawStep === 'spinning') return;
+      setRemoveConfirmModal({ isOpen: true, team, group });
+  };
+
+  const confirmRemoveTeam = () => {
+      const { team, group } = removeConfirmModal;
+      if (!team || !group) return;
       
-      if (confirm(`ต้องการลบทีม ${team.name} ออกจากกลุ่ม ${group} ใช่หรือไม่?`)) {
-          // Remove from group
-          setLiveGroups(prev => ({
-              ...prev,
-              [group]: prev[group].filter(t => t.id !== team.id)
-          }));
-          
-          // Add back to pool
-          setPoolTeams(prev => [team, ...prev]);
-          
-          // Decrement count
-          setDrawnCount(prev => prev - 1);
-          
-          // Reset state to allow drawing again if finished
-          if (liveDrawStep === 'finished') {
-              setLiveDrawStep('idle');
-              setCurrentSpinName("...");
-              setCurrentSpinGroup("");
-          }
+      setLiveGroups(prev => ({
+          ...prev,
+          [group]: prev[group].filter(t => t.id !== team.id)
+      }));
+      
+      setPoolTeams(prev => [team, ...prev]);
+      setDrawnCount(prev => prev - 1);
+      
+      if (liveDrawStep === 'finished') {
+          setLiveDrawStep('idle');
+          setCurrentSpinName("...");
+          setCurrentSpinGroup("");
       }
+      
+      setRemoveConfirmModal({ isOpen: false, team: null, group: null });
   };
 
   const startLiveDrawSequence = async (isFastMode: boolean = false) => {
@@ -672,7 +674,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                               </div>
                                               {/* Remove Button - Always visible for ease of use */}
                                               <button 
-                                                  onClick={() => handleRemoveTeamFromGroup(team, group)}
+                                                  onClick={() => requestRemoveTeam(team, group)}
                                                   className="text-slate-400 hover:text-red-500 p-1 transition"
                                                   title="ลบออกจากกลุ่ม"
                                                   disabled={liveDrawStep === 'spinning'}
@@ -726,6 +728,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                           <PlayCircle className="w-5 h-5"/> เข้าสู่ Live Draw Studio
                       </button>
                       <button onClick={() => setIsDrawModalOpen(false)} className="w-full py-2 text-slate-400 hover:text-slate-600 text-sm font-medium">ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* CONFIRM REMOVE TEAM MODAL */}
+      {removeConfirmModal.isOpen && removeConfirmModal.team && (
+          <div className="fixed inset-0 z-[2100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200 border border-red-100">
+                  <div className="flex flex-col items-center text-center gap-4">
+                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-2">
+                          <Trash2 className="w-8 h-8 text-red-500" />
+                      </div>
+                      <div>
+                          <h3 className="text-lg font-bold text-slate-800">ยืนยันการลบทีม</h3>
+                          <p className="text-sm text-slate-500 mt-1">
+                              ต้องการนำทีม <span className="font-bold text-slate-800">{removeConfirmModal.team.name}</span> <br/>
+                              ออกจาก <span className="font-bold text-indigo-600">กลุ่ม {removeConfirmModal.group}</span> ใช่หรือไม่?
+                          </p>
+                          <p className="text-xs text-slate-400 mt-2 bg-slate-50 p-2 rounded">
+                              ทีมจะถูกย้ายกลับไปที่ "โถจับฉลาก" เพื่อสุ่มใหม่
+                          </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 w-full mt-2">
+                          <button 
+                              onClick={() => setRemoveConfirmModal({ isOpen: false, team: null, group: null })}
+                              className="py-2.5 px-4 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition"
+                          >
+                              ยกเลิก
+                          </button>
+                          <button 
+                              onClick={confirmRemoveTeam}
+                              className="py-2.5 px-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition"
+                          >
+                              ลบออก
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>
