@@ -1,13 +1,6 @@
-
-
-
-
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Team, Player, AppSettings, NewsItem, Tournament, UserProfile, Donation } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward, Minus, Layers } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData, fetchUsers, updateUserRole, verifyDonation } from '../services/sheetService';
 
 interface AdminDashboardProps {
@@ -44,6 +37,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   // Draw Logic State
   const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
   const [drawGroupCount, setDrawGroupCount] = useState(4);
+  const [teamsPerGroup, setTeamsPerGroup] = useState(4); // New State: Teams per group
   const [isDrawing, setIsDrawing] = useState(false);
   
   // LIVE DRAW STATES
@@ -229,57 +223,186 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       setIsDrawModalOpen(false); // Close setup modal
   };
 
-  const startLiveDrawSequence = async () => {
-      setLiveDrawStep('spinning');
-      const groupNames = Object.keys(liveGroups);
-      const totalTeams = poolTeams.length + drawnCount; // Use initial total if possible, or just pool length
+  // Get next group ensuring balance (always fills the group with minimum items first)
+  const getNextTargetGroup = () => {
+      const groupNames = Object.keys(liveGroups).sort();
+      let minCount = Infinity;
+      let target = groupNames[0];
+
+      // Find group with fewest teams
+      for (const g of groupNames) {
+          if (liveGroups[g].length < minCount) {
+              minCount = liveGroups[g].length;
+              target = g;
+          }
+      }
+      // If the targeted group is already full, then we are done/full
+      if (minCount >= teamsPerGroup) return null;
+      return target;
+  };
+
+  const handleRemoveTeamFromGroup = (team: Team, group: string) => {
+      if (liveDrawStep === 'spinning') return; // Prevent during spin
       
-      // Shuffle pool initially
+      if (confirm(`ต้องการลบทีม ${team.name} ออกจากกลุ่ม ${group} ใช่หรือไม่?`)) {
+          // Remove from group
+          setLiveGroups(prev => ({
+              ...prev,
+              [group]: prev[group].filter(t => t.id !== team.id)
+          }));
+          
+          // Add back to pool
+          setPoolTeams(prev => [team, ...prev]);
+          
+          // Decrement count
+          setDrawnCount(prev => prev - 1);
+          
+          // Reset state to allow drawing again if finished
+          if (liveDrawStep === 'finished') {
+              setLiveDrawStep('idle');
+              setCurrentSpinName("...");
+              setCurrentSpinGroup("");
+          }
+      }
+  };
+
+  const startLiveDrawSequence = async (isFastMode: boolean = false) => {
+      // 1. Validation & Setup
+      const targetGroup = getNextTargetGroup();
+      if (!targetGroup) {
+          notify("เต็มแล้ว", "ทุกกลุ่มมีจำนวนทีมครบตามที่กำหนด", "warning");
+          setLiveDrawStep('finished');
+          return false;
+      }
+      
+      if (poolTeams.length === 0) {
+          notify("หมดทีม", "ไม่มีทีมในโถแล้ว", "warning");
+          setLiveDrawStep('finished');
+          return false;
+      }
+
+      setLiveDrawStep('spinning');
+      setCurrentSpinGroup(targetGroup);
+
+      // 2. Shuffle Pool (Internal Logic)
       let currentPool = [...poolTeams];
+      // Simple shuffle
       for (let i = currentPool.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [currentPool[i], currentPool[j]] = [currentPool[j], currentPool[i]];
       }
 
-      // Loop through remaining pool
-      while (currentPool.length > 0) {
-          const groupIndex = drawnCount % drawGroupCount;
-          const currentGroup = groupNames[groupIndex];
-          setCurrentSpinGroup(currentGroup);
-
-          // Spin Animation
-          const spinDuration = 800; // ms
-          const interval = 50;
-          const steps = spinDuration / interval;
-          
-          for (let s = 0; s < steps; s++) {
-              const randomTeam = currentPool[Math.floor(Math.random() * currentPool.length)];
-              setCurrentSpinName(randomTeam.name);
-              await new Promise(r => setTimeout(r, interval));
-          }
-
-          // Pick actual team
-          const pickedTeam = currentPool.shift(); // Take first one after shuffle
-          if (!pickedTeam) break;
-
-          setCurrentSpinName(pickedTeam.name);
-          
-          // Add to group
-          setLiveGroups(prev => ({
-              ...prev,
-              [currentGroup]: [...prev[currentGroup], pickedTeam]
-          }));
-          
-          setDrawnCount(prev => prev + 1);
-          setPoolTeams([...currentPool]); // Update UI pool
-
-          // Small pause before next
-          await new Promise(r => setTimeout(r, 1000));
+      // 3. Animation
+      const spinDuration = isFastMode ? 300 : 800; // ms
+      const interval = 50;
+      const steps = spinDuration / interval;
+      
+      for (let s = 0; s < steps; s++) {
+          const randomTeam = currentPool[Math.floor(Math.random() * currentPool.length)];
+          setCurrentSpinName(randomTeam.name);
+          await new Promise(r => setTimeout(r, interval));
       }
 
-      setLiveDrawStep('finished');
-      setCurrentSpinName("เสร็จสิ้น!");
-      setCurrentSpinGroup("-");
+      // 4. Pick Winner
+      const pickedTeam = currentPool.shift(); 
+      if (!pickedTeam) {
+          setLiveDrawStep('finished');
+          return false;
+      }
+
+      setCurrentSpinName(pickedTeam.name);
+      
+      // 5. Update State
+      setLiveGroups(prev => ({
+          ...prev,
+          [targetGroup]: [...prev[targetGroup], pickedTeam]
+      }));
+      
+      setDrawnCount(prev => prev + 1);
+      setPoolTeams([...currentPool]); // Update UI pool
+
+      // 6. Check Completion
+      const nextTarget = getNextTargetGroup(); // Check if any space left AFTER this draw
+      
+      // We must wait for state update before checking final completion? 
+      // Actually we can check logic: if no pool OR no next target
+      if (currentPool.length === 0 || !nextTarget) {
+          if (!isFastMode) { // Only auto-finish UI in single mode
+             setLiveDrawStep('finished');
+             setCurrentSpinName("เสร็จสิ้น!");
+             setCurrentSpinGroup("-");
+          }
+      } else {
+          setLiveDrawStep('idle');
+      }
+      return true;
+  };
+
+  const drawRoundBatch = async () => {
+      if (isDrawing || liveDrawStep === 'spinning') return;
+      setIsDrawing(true);
+      
+      // Use local pool tracker to ensure uniqueness during the async loop
+      let localPool = [...poolTeams];
+      const groupNames = Object.keys(liveGroups).sort();
+      
+      // Iterate through each group once (A -> B -> C -> D)
+      for (const groupName of groupNames) {
+          // Check if pool is empty
+          if (localPool.length === 0) break;
+          
+          // Check if specific group is full (read from state + allow for pending updates if needed, 
+          // but since we do one pass, state check is usually okay if we assume sync or simply check length)
+          if (liveGroups[groupName].length >= teamsPerGroup) continue;
+
+          // START DRAW FOR THIS GROUP
+          setLiveDrawStep('spinning');
+          setCurrentSpinGroup(groupName);
+
+          // Animation
+          const spinDuration = 300; 
+          const steps = 6; // 300ms / 50ms
+          
+          for (let s = 0; s < steps; s++) {
+              const randomIdx = Math.floor(Math.random() * localPool.length);
+              setCurrentSpinName(localPool[randomIdx].name);
+              await new Promise(r => setTimeout(r, 50));
+          }
+
+          // Select Winner
+          const winnerIdx = Math.floor(Math.random() * localPool.length);
+          const winner = localPool[winnerIdx];
+          
+          // Update Local Pool (remove winner immediately to prevent duplicate pick in next loop iteration)
+          localPool.splice(winnerIdx, 1);
+
+          // Update State (UI)
+          setCurrentSpinName(winner.name);
+          
+          // Update Groups State
+          setLiveGroups(prev => ({
+              ...prev,
+              [groupName]: [...prev[groupName], winner]
+          }));
+          
+          // Update Pool State
+          setPoolTeams(prev => prev.filter(t => t.id !== winner.id));
+          setDrawnCount(prev => prev + 1);
+
+          // Wait before next group
+          await new Promise(r => setTimeout(r, 500));
+      }
+      
+      setLiveDrawStep('idle');
+      setIsDrawing(false);
+      setCurrentSpinGroup("");
+      
+      // Check if completely finished (using localPool as the truth)
+      if (localPool.length === 0) {
+          setLiveDrawStep('finished');
+          setCurrentSpinName("เสร็จสิ้น!");
+          setCurrentSpinGroup("-");
+      }
   };
 
   const handleSaveDrawResults = async () => {
@@ -475,9 +598,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
               <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
                   {/* LEFT: POOL & CONTROLS */}
                   <div className="col-span-12 md:col-span-3 flex flex-col bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden backdrop-blur-sm">
-                      <div className="p-4 bg-slate-800 border-b border-slate-700 font-bold flex justify-between items-center">
-                          <span>ทีมในโถ ({poolTeams.length})</span>
-                          {liveDrawStep === 'idle' && <button onClick={startLiveDrawSequence} className="text-xs bg-indigo-600 px-3 py-1 rounded-full hover:bg-indigo-500 transition shadow-lg shadow-indigo-500/50">เริ่มจับฉลาก</button>}
+                      <div className="p-4 bg-slate-800 border-b border-slate-700 font-bold flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                              <span>ทีมในโถ ({poolTeams.length})</span>
+                          </div>
+                          
+                          {/* Control Buttons */}
+                          {liveDrawStep === 'idle' && poolTeams.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mt-2">
+                                  <button onClick={() => startLiveDrawSequence(false)} className="text-xs bg-indigo-600 px-2 py-3 rounded-lg hover:bg-indigo-500 transition shadow-lg shadow-indigo-500/30 flex flex-col items-center justify-center gap-1">
+                                      <PlayCircle className="w-4 h-4" /> สุ่มทีละใบ
+                                  </button>
+                                  <button onClick={drawRoundBatch} className="text-xs bg-cyan-600 px-2 py-3 rounded-lg hover:bg-cyan-500 transition shadow-lg shadow-cyan-500/30 flex flex-col items-center justify-center gap-1">
+                                      <Layers className="w-4 h-4" /> สุ่มยกแผง
+                                  </button>
+                              </div>
+                          )}
                       </div>
                       <div className="flex-1 overflow-y-auto p-2 space-y-1">
                           {poolTeams.map((t, idx) => (
@@ -507,7 +643,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                           {liveDrawStep === 'idle' && (
                               <div className="text-slate-500 flex flex-col items-center gap-4">
                                   <PlayCircle className="w-16 h-16 opacity-50" />
-                                  <span className="text-lg">กด "เริ่มจับฉลาก" เพื่อดำเนินการ</span>
+                                  <span className="text-lg">เลือกโหมดการจับฉลากเพื่อดำเนินการ</span>
                               </div>
                           )}
                           {liveDrawStep === 'finished' && (
@@ -521,16 +657,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
                       {/* GROUPS GRID */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {Object.keys(liveGroups).map(group => (
+                          {Object.keys(liveGroups).sort().map(group => (
                               <div key={group} className={`bg-slate-800 rounded-xl border ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-slate-700'} overflow-hidden transition-all duration-300`}>
-                                  <div className={`p-3 font-bold text-center border-b border-slate-700 ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300'}`}>
-                                      GROUP {group}
+                                  <div className={`p-3 font-bold text-center border-b border-slate-700 flex justify-between items-center ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300'}`}>
+                                      <span>GROUP {group}</span>
+                                      <span className="text-xs opacity-70">({liveGroups[group].length}/{teamsPerGroup})</span>
                                   </div>
                                   <div className="p-2 space-y-2 min-h-[150px]">
                                       {liveGroups[group].map((team, idx) => (
-                                          <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center gap-2 animate-in zoom-in duration-300">
-                                              {team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded object-cover" /> : <div className="w-6 h-6 bg-slate-600 rounded flex items-center justify-center text-[10px] font-bold">{team.shortName.charAt(0)}</div>}
-                                              <span className="text-sm font-medium truncate">{team.name}</span>
+                                          <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center justify-between gap-2 animate-in zoom-in duration-300 group">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                  {team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded object-cover shrink-0" /> : <div className="w-6 h-6 bg-slate-600 rounded flex items-center justify-center text-[10px] font-bold shrink-0">{team.shortName.charAt(0)}</div>}
+                                                  <span className="text-sm font-medium truncate">{team.name}</span>
+                                              </div>
+                                              {/* Remove Button - Always visible for ease of use */}
+                                              <button 
+                                                  onClick={() => handleRemoveTeamFromGroup(team, group)}
+                                                  className="text-slate-400 hover:text-red-500 p-1 transition"
+                                                  title="ลบออกจากกลุ่ม"
+                                                  disabled={liveDrawStep === 'spinning'}
+                                              >
+                                                  <X className="w-3 h-3" />
+                                              </button>
                                           </div>
                                       ))}
                                       {liveGroups[group].length === 0 && <div className="text-center text-slate-600 text-xs py-4 opacity-50">รอผล...</div>}
@@ -551,16 +699,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                       <Shuffle className="w-6 h-6" />
                       <h3 className="font-bold text-lg">ตั้งค่าการจับฉลาก</h3>
                   </div>
-                  <p className="text-sm text-slate-600 mb-4">เลือกจำนวนกลุ่มที่ต้องการ ระบบจะทำการสุ่มทีมที่สถานะ "Approved" เข้าสู่สายการแข่งขัน</p>
+                  <p className="text-sm text-slate-600 mb-4">ระบบจะทำการสุ่มทีม "Approved" ลงกลุ่มแบบ Round-Robin (A-B-C...)</p>
                   
-                  <div className="mb-6">
+                  <div className="mb-4">
                       <label className="block text-sm font-bold text-slate-700 mb-2">จำนวนกลุ่ม (Groups)</label>
                       <div className="flex items-center gap-4">
-                          <button onClick={() => setDrawGroupCount(Math.max(2, drawGroupCount - 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><X className="w-4 h-4 rotate-45" /></button>
+                          <button onClick={() => setDrawGroupCount(Math.max(2, drawGroupCount - 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Minus className="w-4 h-4" /></button>
                           <span className="text-2xl font-black text-indigo-600 w-12 text-center">{drawGroupCount}</span>
                           <button onClick={() => setDrawGroupCount(Math.min(16, drawGroupCount + 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Plus className="w-4 h-4" /></button>
                       </div>
                       <p className="text-xs text-slate-400 mt-2">กลุ่มจะเป็น A - {String.fromCharCode(65 + drawGroupCount - 1)}</p>
+                  </div>
+
+                  <div className="mb-6">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">จำนวนทีมต่อกลุ่ม (Teams/Group)</label>
+                      <div className="flex items-center gap-4">
+                          <button onClick={() => setTeamsPerGroup(Math.max(2, teamsPerGroup - 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Minus className="w-4 h-4" /></button>
+                          <span className="text-2xl font-black text-green-600 w-12 text-center">{teamsPerGroup}</span>
+                          <button onClick={() => setTeamsPerGroup(Math.min(16, teamsPerGroup + 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Plus className="w-4 h-4" /></button>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2">รองรับสูงสุด {drawGroupCount * teamsPerGroup} ทีม</p>
                   </div>
 
                   <div className="flex gap-3 flex-col">

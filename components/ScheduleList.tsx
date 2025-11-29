@@ -17,6 +17,7 @@ interface ScheduleListProps {
   onStartMatch: (teamA: Team, teamB: Team, matchId: string) => void;
   config: AppSettings;
   initialMatchId?: string | null;
+  currentTournamentId?: string | null;
 }
 
 const VENUE_OPTIONS = ["สนาม 1", "สนาม 2", "สนาม 3", "สนาม 4", "สนามกลาง (Main Stadium)"];
@@ -101,7 +102,7 @@ const TeamSelectorModal: React.FC<TeamSelectorProps> = ({ isOpen, onClose, onSel
     );
 };
 
-const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId }) => {
+const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [], onBack, isAdmin, isLoading, onRefresh, showNotification, onStartMatch, config, initialMatchId, currentTournamentId }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -330,7 +331,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
               newMatchId, 
               typeof match.teamA === 'string' ? match.teamA : match.teamA.name,
               typeof match.teamB === 'string' ? match.teamB : match.teamB.name,
-              match.roundLabel || '', match.venue, match.scheduledTime, match.livestreamUrl, match.livestreamCover
+              match.roundLabel || '', match.venue, match.scheduledTime, match.livestreamUrl, match.livestreamCover,
+              match.tournamentId || currentTournamentId || 'default'
           );
           if(showNotification) showNotification("สำเร็จ", "รีเซ็ตสถานะเป็น 'รอแข่ง' เรียบร้อย", "success");
           setMatchToReset(null); setSelectedMatch(null);
@@ -345,6 +347,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
       try { 
           let coverBase64 = matchCover.preview;
           if (matchCover.file) coverBase64 = await fileToBase64(matchCover.file);
+          const tournamentIdToSave = currentTournamentId || 'default';
 
           if (matchForm.id) {
                let finalLabel = matchForm.roundLabel;
@@ -354,7 +357,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                    const groupName = matchForm.roundLabel.replace('Group ', '').trim();
                    finalLabel = `Group ${groupName}: ${teamAObj?.shortName || matchForm.teamA} vs ${teamBObj?.shortName || matchForm.teamB}`;
                }
-               await scheduleMatch(matchForm.id, matchForm.teamA, matchForm.teamB, finalLabel, matchForm.venue, new Date(`${matchForm.date}T${matchForm.time}`).toISOString(), matchForm.livestreamUrl, coverBase64 || undefined);
+               await scheduleMatch(matchForm.id, matchForm.teamA, matchForm.teamB, finalLabel, matchForm.venue, new Date(`${matchForm.date}T${matchForm.time}`).toISOString(), matchForm.livestreamUrl, coverBase64 || undefined, tournamentIdToSave);
           } else {
               if (activeMatchType === 'group') {
                   for (const m of bulkMatches) {
@@ -364,12 +367,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
                        const teamBObj = teams.find(t => t.name === m.teamB);
                        const groupName = matchForm.roundLabel.replace('Group ', '').trim();
                        const uniqueLabel = `Group ${groupName}: ${teamAObj?.shortName || m.teamA} vs ${teamBObj?.shortName || m.teamB}`;
-                       await scheduleMatch(newId, m.teamA, m.teamB, uniqueLabel, m.venue, new Date(`${matchForm.date}T${m.time}`).toISOString());
+                       await scheduleMatch(newId, m.teamA, m.teamB, uniqueLabel, m.venue, new Date(`${matchForm.date}T${m.time}`).toISOString(), undefined, undefined, tournamentIdToSave);
                        await new Promise(r => setTimeout(r, 100));
                   }
               } else {
                   const newId = `M_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-                  await scheduleMatch(newId, matchForm.teamA, matchForm.teamB, matchForm.roundLabel, matchForm.venue, new Date(`${matchForm.date}T${matchForm.time}`).toISOString(), matchForm.livestreamUrl, coverBase64 || undefined);
+                  await scheduleMatch(newId, matchForm.teamA, matchForm.teamB, matchForm.roundLabel, matchForm.venue, new Date(`${matchForm.date}T${matchForm.time}`).toISOString(), matchForm.livestreamUrl, coverBase64 || undefined, tournamentIdToSave);
               }
           }
           if (showNotification) showNotification("สำเร็จ", "บันทึกข้อมูลเรียบร้อย", "success"); 
