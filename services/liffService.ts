@@ -78,81 +78,178 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
         return;
     }
     
-    const name = truncate(tournament.name || "รายการแข่งขัน", 40);
+    const name = truncate(tournament.name || "รายการแข่งขัน", 60);
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
     const liffUrl = `https://liff.line.me/${LIFF_ID}`; 
+    const statusColor = tournament.status === 'Active' ? "#16a34a" : "#2563eb";
     
-    let capacityText = "";
+    // Progress Calculation
+    let percentage = 0;
     if (maxTeams > 0) {
-        capacityText = `${teamCount}/${maxTeams} ทีม`;
+        percentage = Math.min(100, Math.floor((teamCount / maxTeams) * 100));
     } else {
-        capacityText = `${teamCount} ทีม (ไม่จำกัด)`;
+        percentage = 100; // Unlimited
     }
+    const progressBarColor = percentage >= 100 ? "#ef4444" : "#3b82f6";
+    const capacityText = maxTeams > 0 ? `${teamCount} / ${maxTeams}` : `${teamCount} (ไม่จำกัด)`;
 
-    const altText = `เปิดรับสมัคร: ${name}`;
+    const altText = `🏆 เชิญสมัครแข่ง: ${name}`;
 
     const flexMessage = {
         type: "flex",
         altText: altText,
         contents: {
             "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "OFFICIAL INVITATION",
+                        "color": "#ffffff",
+                        "weight": "bold",
+                        "size": "xxs",
+                        "letterSpacing": "2px",
+                        "align": "center",
+                        "alpha": 0.7
+                    },
+                    {
+                        "type": "text",
+                        "text": "TOURNAMENT REGISTRATION",
+                        "color": "#ffffff",
+                        "weight": "bold",
+                        "size": "sm",
+                        "margin": "sm",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#1e3a8a",
+                "paddingAll": "lg"
+            },
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
                         "type": "text",
-                        "text": "🏆 เปิดรับสมัครแข่งขัน",
-                        "weight": "bold",
-                        "color": "#1e40af",
-                        "size": "sm"
-                    },
-                    {
-                        "type": "text",
                         "text": name,
                         "weight": "bold",
                         "size": "xl",
-                        "margin": "md",
-                        "wrap": true
+                        "color": "#1e293b",
+                        "wrap": true,
+                        "lineSpacing": "6px"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": type,
+                                "size": "xs",
+                                "color": "#64748b",
+                                "backgroundColor": "#f1f5f9",
+                                "paddingAll": "xs",
+                                "cornerRadius": "sm",
+                                "align": "center",
+                                "flex": 0
+                            },
+                            {
+                                "type": "text",
+                                "text": tournament.status,
+                                "size": "xs",
+                                "color": "#ffffff",
+                                "backgroundColor": statusColor,
+                                "paddingAll": "xs",
+                                "cornerRadius": "sm",
+                                "align": "center",
+                                "flex": 0,
+                                "margin": "sm",
+                                "weight": "bold"
+                            }
+                        ],
+                        "margin": "md"
                     },
                     {
                         "type": "separator",
-                        "margin": "md"
+                        "margin": "lg",
+                        "color": "#e2e8f0"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "Registered",
+                                        "size": "xxs",
+                                        "color": "#94a3b8"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": `${teamCount} Teams`,
+                                        "size": "lg",
+                                        "color": "#1e293b",
+                                        "weight": "bold"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "Capacity",
+                                        "size": "xxs",
+                                        "color": "#94a3b8",
+                                        "align": "end"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": maxTeams > 0 ? `${maxTeams}` : "∞",
+                                        "size": "lg",
+                                        "color": "#1e293b",
+                                        "weight": "bold",
+                                        "align": "end"
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         "type": "box",
                         "layout": "vertical",
                         "margin": "md",
-                        "spacing": "sm",
                         "contents": [
                             {
                                 "type": "box",
-                                "layout": "baseline",
+                                "layout": "vertical",
                                 "contents": [
-                                    { "type": "text", "text": "ประเภท", "color": "#888888", "size": "sm", "flex": 2 },
-                                    { "type": "text", "text": type, "color": "#111111", "size": "sm", "flex": 4 }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "baseline",
-                                "contents": [
-                                    { "type": "text", "text": "สมัครแล้ว", "color": "#888888", "size": "sm", "flex": 2 },
-                                    { "type": "text", "text": capacityText, "color": "#111111", "size": "sm", "flex": 4 }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "baseline",
-                                "contents": [
-                                    { "type": "text", "text": "สถานะ", "color": "#888888", "size": "sm", "flex": 2 },
-                                    { "type": "text", "text": tournament.status, "color": tournament.status === 'Active' ? "#16a34a" : "#2563eb", "size": "sm", "flex": 4, "weight": "bold" }
-                                ]
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "width": `${percentage}%`,
+                                        "backgroundColor": progressBarColor,
+                                        "height": "6px",
+                                        "cornerRadius": "md"
+                                    }
+                                ],
+                                "backgroundColor": "#e2e8f0",
+                                "height": "6px",
+                                "cornerRadius": "md"
                             }
                         ]
                     }
                 ],
-                "paddingAll": "lg"
+                "paddingAll": "xl"
             },
             "footer": {
                 "type": "box",
@@ -160,13 +257,14 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
                 "contents": [
                     {
                         "type": "button",
-                        "action": { "type": "uri", "label": "สมัครแข่งขัน", "uri": liffUrl },
+                        "action": { "type": "uri", "label": "สมัครแข่งขันทันที", "uri": liffUrl },
                         "style": "primary",
                         "color": "#1e40af",
                         "height": "sm"
                     }
                 ],
-                "paddingAll": "md"
+                "paddingAll": "lg",
+                "backgroundColor": "#f8fafc"
             }
         }
     };
@@ -176,8 +274,6 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
             const res = await window.liff.shareTargetPicker([flexMessage]);
             if (res) {
                 console.log("Share success");
-            } else {
-                console.log("Share canceled");
             }
         } else {
             alert("อุปกรณ์ของคุณไม่รองรับฟีเจอร์การแชร์ (ShareTargetPicker)");
