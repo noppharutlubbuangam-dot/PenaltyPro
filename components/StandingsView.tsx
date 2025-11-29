@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Team, Standing, Match, KickResult, Player } from '../types'; 
 import { Trophy, ArrowLeft, Calendar, LayoutGrid, X, User, Phone, MapPin, Info, BarChart3, History, Sparkles } from 'lucide-react'; 
@@ -247,7 +248,8 @@ const TeamDetailModal: React.FC<TeamDetailModalProps> = ({ team, matches, onClos
         if (m.kicks) {
             m.kicks.forEach(k => {
                 if (k.result === KickResult.GOAL && (k.teamId === team.name || k.teamId === 'A' && (typeof m.teamA === 'string' ? m.teamA : m.teamA.name) === team.name || k.teamId === 'B' && (typeof m.teamB === 'string' ? m.teamB : m.teamB.name) === team.name)) {
-                    let pName = k.player.trim();
+                    // Fix: Ensure player name is a string before trimming
+                    let pName = String(k.player || '').trim();
                     if (pName.includes('(#')) {
                          pName = pName.split('(#')[0].trim();
                     } else {

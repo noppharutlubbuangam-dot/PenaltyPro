@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lock, ArrowRight, X } from 'lucide-react';
 
@@ -22,7 +23,7 @@ const PinDialog: React.FC<PinDialogProps> = ({ isOpen, onClose, onSuccess, corre
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === correctPin) {
+    if (String(pin).trim() === String(correctPin).trim()) {
       onSuccess();
       onClose();
     } else {

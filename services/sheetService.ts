@@ -141,7 +141,8 @@ export const authenticateUser = async (data: any): Promise<UserProfile | null> =
                 pictureUrl: result.pictureUrl,
                 type: data.authType === 'line' ? 'line' : 'credentials',
                 phoneNumber: result.phoneNumber,
-                role: result.role
+                role: result.role,
+                lineUserId: result.lineUserId
             };
         }
         throw new Error("Network response was not ok");
@@ -237,6 +238,13 @@ export const updateTeamStatus = async (teamId: string, status: string, group?: s
 };
 
 export const saveMatchToSheet = async (matchState: any, summary: string, skipKicks: boolean = false, tournamentId: string = 'default') => {
+  // Ensure we inject matchId into kicks if they are missing it
+  const kicksPayload = (matchState.kicks || []).map((k: any) => ({
+      ...k,
+      matchId: k.matchId || matchState.matchId || matchState.id,
+      tournamentId: k.tournamentId || tournamentId
+  }));
+
   const payload = {
     action: 'saveMatch',
     matchId: matchState.matchId || matchState.id,
@@ -247,9 +255,11 @@ export const saveMatchToSheet = async (matchState: any, summary: string, skipKic
     winner: matchState.winner,
     status: matchState.isFinished ? 'Finished' : 'Live',
     summary: summary,
-    kicks: skipKicks ? [] : matchState.kicks,
+    kicks: skipKicks ? [] : kicksPayload,
     roundLabel: matchState.roundLabel,
-    tournamentId: tournamentId
+    tournamentId: tournamentId,
+    livestreamUrl: matchState.livestreamUrl,
+    livestreamCover: matchState.livestreamCover
   };
 
   try {

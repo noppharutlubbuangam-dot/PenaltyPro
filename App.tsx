@@ -212,11 +212,63 @@ function App() {
   const handleEditMyTeam = (team: Team) => { if (registrationDeadline) { const deadline = new Date(registrationDeadline); if (new Date() > deadline && !isAdmin) { showNotification("ปิดรับสมัครแล้ว", "ไม่สามารถแก้ไขข้อมูลได้เนื่องจากเลยกำหนด", "warning"); return; } } const teamPlayers = activePlayers.filter(p => p.teamId === team.id); setEditingTeamData({ team, players: teamPlayers }); setCurrentView('register'); };
   const handleUserLoginSuccess = (user: UserProfile) => { setCurrentUser(user); if (user.role === 'admin') setIsAdmin(true); if (user.type === 'credentials') localStorage.setItem('penalty_pro_user', JSON.stringify(user)); showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success"); };
   const handleLogout = () => { authLogout(); setCurrentUser(null); setIsAdmin(false); showNotification("ออกจากระบบแล้ว"); };
-  const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => { setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], events: [], isFinished: false, winner: null, tournamentId: currentTournamentId || 'default' }); setCurrentView('match'); showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success"); };
+  
+  const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => { 
+      // Ensure we have a match ID, create one if not provided (e.g. ad-hoc match)
+      const finalMatchId = matchId || `M_${Date.now()}`;
+      
+      setMatchState({ 
+          matchId: finalMatchId, 
+          teamA, 
+          teamB, 
+          currentRound: 1, 
+          currentTurn: 'A', 
+          scoreA: 0, 
+          scoreB: 0, 
+          kicks: [], 
+          events: [], 
+          isFinished: false, 
+          winner: null, 
+          tournamentId: currentTournamentId || 'default' 
+      }); 
+      setCurrentView('match'); 
+      showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success"); 
+  };
+
   const handleStartMatchRequest = (teamA: Team, teamB: Team, matchId?: string) => { if (isAdmin || (currentUser && currentUser.role === 'staff')) { startMatchSession(teamA, teamB, matchId); } else { setPendingMatchSetup({ teamA, teamB, matchId }); setIsPinOpen(true); } };
   const handlePinSuccess = () => { if (pendingMatchSetup) { const { teamA, teamB, matchId } = pendingMatchSetup; startMatchSession(teamA, teamB, matchId); setPendingMatchSetup(null); setIsPinOpen(false); } };
   const checkWinCondition = (state: MatchState): MatchState => { const kicksA = state.kicks.filter(k => k.teamId === 'A'); const kicksB = state.kicks.filter(k => k.teamId === 'B'); const scoreA = kicksA.filter(k => k.result === KickResult.GOAL).length; const scoreB = kicksB.filter(k => k.result === KickResult.GOAL).length; const roundsPlayedA = kicksA.length; const roundsPlayedB = kicksB.length; let newState = { ...state, scoreA, scoreB, winner: null, isFinished: false }; if (roundsPlayedA <= 5 && roundsPlayedB <= 5) { const remainingKicksA = 5 - roundsPlayedA; const remainingKicksB = 5 - roundsPlayedB; if (scoreA > scoreB + remainingKicksB) { newState.winner = 'A'; newState.isFinished = true; } else if (scoreB > scoreA + remainingKicksA) { newState.winner = 'B'; newState.isFinished = true; } } else { if (roundsPlayedA === roundsPlayedB && roundsPlayedA >= 5) { if (scoreA !== scoreB) { newState.winner = scoreA > scoreB ? 'A' : 'B'; newState.isFinished = true; } } } return newState; };
-  const handleRecordKick = async (player: string, result: KickResult) => { if (!matchState || matchState.isFinished) return; setIsProcessing(true); const newKick: Kick = { id: Date.now().toString(), round: matchState.currentRound, teamId: matchState.currentTurn, player, result, timestamp: Date.now(), tournamentId: currentTournamentId || 'default' }; setMatchState(prev => { if (!prev) return null; const updatedKicks = [...prev.kicks, newKick]; const nextTurn = prev.currentTurn === 'A' ? 'B' : 'A'; const nextRound = prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound; let nextState: MatchState = { ...prev, kicks: updatedKicks, currentTurn: nextTurn, currentRound: nextRound }; nextState = checkWinCondition(nextState); if (nextState.isFinished) { confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] }); setIsSaving(true); Promise.all([ saveMatchToSheet(nextState, "", false, currentTournamentId || 'default') ]).then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); }); } return nextState; }); setIsProcessing(false); };
+  
+  const handleRecordKick = async (player: string, result: KickResult) => { 
+      if (!matchState || matchState.isFinished) return; 
+      setIsProcessing(true); 
+      const newKick: Kick = { 
+          id: Date.now().toString(), 
+          round: matchState.currentRound, 
+          teamId: matchState.currentTurn, 
+          player, 
+          result, 
+          timestamp: Date.now(), 
+          tournamentId: currentTournamentId || 'default',
+          matchId: matchState.matchId || '' // Include Match ID
+      }; 
+      setMatchState(prev => { 
+          if (!prev) return null; 
+          const updatedKicks = [...prev.kicks, newKick]; 
+          const nextTurn = prev.currentTurn === 'A' ? 'B' : 'A'; 
+          const nextRound = prev.currentTurn === 'B' ? prev.currentRound + 1 : prev.currentRound; 
+          let nextState: MatchState = { ...prev, kicks: updatedKicks, currentTurn: nextTurn, currentRound: nextRound }; 
+          nextState = checkWinCondition(nextState); 
+          if (nextState.isFinished) { 
+              confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: nextState.winner === 'A' ? ['#2563EB', '#60A5FA'] : ['#E11D48', '#FB7185'] }); 
+              setIsSaving(true); 
+              Promise.all([ saveMatchToSheet(nextState, "", false, currentTournamentId || 'default') ]).then(() => { setIsSaving(false); loadData(); showNotification("บันทึกผลการแข่งขันเรียบร้อย", "", "success"); }); 
+          } 
+          return nextState; 
+      }); 
+      setIsProcessing(false); 
+  };
+
   const handleUpdateOldKick = (kickId: string, newResult: KickResult, newPlayerName: string) => { setMatchState(prev => { if (!prev) return null; const updatedKicks = prev.kicks.map(k => k.id === kickId ? { ...k, result: newResult, player: newPlayerName } : k); let nextState = { ...prev, kicks: updatedKicks }; nextState = checkWinCondition(nextState); return nextState; }); setEditingKick(null); showNotification("แก้ไขผลการยิงเรียบร้อย", "", "success"); };
   const confirmDeleteKick = (kickId: string) => { setConfirmModal({ isOpen: true, title: "ลบรายการนี้?", message: "ยืนยันการลบผลการยิงนี้?", isDangerous: true, onConfirm: () => { handleDeleteKick(kickId); setConfirmModal(null); } }); };
   const handleDeleteKick = (kickId: string) => { setMatchState(prev => { if (!prev) return null; const newKicks = prev.kicks.filter(k => k.id !== kickId); const kicksA = newKicks.filter(k => k.teamId === 'A'); const kicksB = newKicks.filter(k => k.teamId === 'B'); const currentTurn: 'A' | 'B' = kicksA.length > kicksB.length ? 'B' : 'A'; const currentRound = Math.floor(newKicks.length / 2) + 1; let tempState = { ...prev, kicks: newKicks, currentTurn, currentRound }; return checkWinCondition(tempState); }); setEditingKick(null); showNotification("ลบรายการเรียบร้อย", "", "warning"); };
@@ -270,7 +322,7 @@ function App() {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onSave={loadData} currentSettings={appConfig} />
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
-      <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={appConfig.adminPin || "1234"} title="กรุณากรอกรหัสเริ่มแข่ง" />
+      <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={String(appConfig.adminPin || "1234")} title="กรุณากรอกรหัสเริ่มแข่ง" />
       <UserLoginDialog isOpen={isUserLoginOpen} onClose={() => setIsUserLoginOpen(false)} onLoginSuccess={handleUserLoginSuccess} />
       <DonationDialog 
         isOpen={isDonationOpen} 
@@ -373,7 +425,7 @@ function App() {
                               <img src={currentUser.pictureUrl} className="w-8 h-8 rounded-full border border-slate-200" />
                           ) : (
                               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                                  {currentUser.displayName.charAt(0)}
+                                  {String(currentUser.displayName || 'U').charAt(0)}
                               </div>
                           )}
                           <button onClick={handleLogout} className="ml-1 text-slate-400 hover:text-red-500"><LogOut className="w-4 h-4" /></button>
@@ -508,7 +560,7 @@ function App() {
                           <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
                           <h3 className="font-bold text-slate-800">ถ่ายทอดสด (LIVE)</h3>
                       </div>
-                      <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x">
+                      <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x scrollbar-hide">
                           {liveMatches.map(m => {
                               const tA = resolveTeam(m.teamA);
                               const tB = resolveTeam(m.teamB);

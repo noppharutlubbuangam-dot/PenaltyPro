@@ -166,6 +166,7 @@ export interface Kick {
   timestamp: number;
   commentary?: string;
   tournamentId?: string; 
+  matchId?: string;
 }
 
 export interface MatchEvent {
@@ -270,4 +271,5 @@ export interface UserProfile {
   type: 'line' | 'guest' | 'credentials';
   phoneNumber?: string; 
   role?: 'admin' | 'staff' | 'user';
+  lineUserId?: string;
 }
