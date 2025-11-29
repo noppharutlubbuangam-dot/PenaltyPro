@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield } from 'lucide-react';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle } from 'lucide-react';
 import { createTournament, updateTournament } from '../services/sheetService';
 
 interface TournamentSelectorProps {
