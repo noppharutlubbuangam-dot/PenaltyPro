@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Team, Player, AppSettings, NewsItem, Tournament, UserProfile, Donation } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward, Minus, Layers, RotateCcw } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward, Minus, Layers, RotateCcw, Sparkles } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData, fetchUsers, updateUserRole, verifyDonation } from '../services/sheetService';
 import confetti from 'canvas-confetti';
 
@@ -51,6 +51,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
   const [drawnCount, setDrawnCount] = useState(0);
   const [removeConfirmModal, setRemoveConfirmModal] = useState<{ isOpen: boolean, team: Team | null, group: string | null }>({ isOpen: false, team: null, group: null });
   const [resetConfirmModal, setResetConfirmModal] = useState(false);
+  const [latestReveal, setLatestReveal] = useState<Team | null>(null); // New: For Big Reveal Animation
+
+  // Confetti Canvas Ref
+  const confettiCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // View States
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -226,6 +230,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       setIsDrawModalOpen(false); // Close setup modal
   };
 
+  // Helper to fire confetti from the specific canvas
+  const fireLocalConfetti = (opts: any) => {
+      if (confettiCanvasRef.current) {
+          const myConfetti = confetti.create(confettiCanvasRef.current, {
+              resize: true,
+              useWorker: true
+          });
+          myConfetti(opts);
+      }
+  };
+
   // Get next group ensuring balance (always fills the group with minimum items first)
   const getNextTargetGroup = () => {
       const groupNames = Object.keys(liveGroups).sort();
@@ -325,7 +340,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       }
 
       // 3. Animation
-      const spinDuration = isFastMode ? 300 : 800; // ms
+      const spinDuration = isFastMode ? 300 : 1000; // ms
       const interval = 50;
       const steps = spinDuration / interval;
       
@@ -343,8 +358,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       }
 
       setCurrentSpinName(pickedTeam.name);
-      // High Z-Index ensures visibility over modal
-      confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 }, zIndex: 9999 }); 
+      
+      // SHOW BIG REVEAL (Standard Mode only)
+      if (!isFastMode) {
+          setLatestReveal(pickedTeam);
+          fireLocalConfetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+          await new Promise(r => setTimeout(r, 2000)); // Show reveal for 2s
+          setLatestReveal(null);
+      }
       
       // 5. Update State
       setLiveGroups(prev => ({
@@ -358,14 +379,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       // 6. Check Completion
       const nextTarget = getNextTargetGroup(); // Check if any space left AFTER this draw
       
-      // We must wait for state update before checking final completion? 
-      // Actually we can check logic: if no pool OR no next target
       if (currentPool.length === 0 || !nextTarget) {
-          if (!isFastMode) { // Only auto-finish UI in single mode
+          if (!isFastMode) { 
              setLiveDrawStep('finished');
              setCurrentSpinName("เสร็จสิ้น!");
              setCurrentSpinGroup("-");
-             confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, zIndex: 9999 });
+             fireLocalConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
           }
       } else {
           setLiveDrawStep('idle');
@@ -395,7 +414,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setCurrentSpinGroup(groupName);
 
           // Animation
-          const spinDuration = 300; 
           const steps = 6; // 300ms / 50ms
           
           for (let s = 0; s < steps; s++) {
@@ -425,7 +443,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setDrawnCount(prev => prev + 1);
 
           // Wait before next group
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 300));
       }
       
       setLiveDrawStep('idle');
@@ -437,7 +455,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setLiveDrawStep('finished');
           setCurrentSpinName("เสร็จสิ้น!");
           setCurrentSpinGroup("-");
-          confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#f43f5e', '#8b5cf6', '#10b981'], zIndex: 9999 });
+          fireLocalConfetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#f43f5e', '#8b5cf6', '#10b981'] });
       }
   };
 
@@ -606,8 +624,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
       {/* LIVE DRAW STUDIO OVERLAY */}
       {isLiveDrawActive && (
-          <div className="fixed inset-0 z-[2000] bg-slate-900 flex flex-col p-4 md:p-8 text-white overflow-hidden">
-              <div className="flex justify-between items-center mb-6">
+          <div className="fixed inset-0 z-[2000] bg-slate-900 flex flex-col p-0 text-white overflow-hidden">
+              {/* Confetti Canvas - Local to this modal */}
+              <canvas 
+                  ref={confettiCanvasRef} 
+                  className="absolute inset-0 pointer-events-none z-[2001] w-full h-full"
+              />
+
+              <div className="flex justify-between items-center p-4 md:p-6 bg-slate-900/90 backdrop-blur z-10 border-b border-white/10">
                   <div className="flex items-center gap-3">
                       <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/50">
                           <Shuffle className="w-6 h-6 text-white" />
@@ -631,9 +655,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                   </div>
               </div>
 
-              <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
+              <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden p-4 md:p-6 relative">
+                  
+                  {/* BIG REVEAL OVERLAY */}
+                  {latestReveal && (
+                      <div className="absolute inset-0 z-[2002] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+                          <div className="flex flex-col items-center animate-in zoom-in-50 duration-500">
+                              <div className="w-64 h-64 bg-white rounded-3xl p-4 shadow-[0_0_100px_rgba(255,215,0,0.5)] border-4 border-yellow-400 mb-6 flex items-center justify-center relative overflow-hidden">
+                                  <div className="absolute inset-0 bg-gradient-to-tr from-yellow-200/50 to-transparent animate-pulse"></div>
+                                  {latestReveal.logoUrl ? (
+                                      <img src={latestReveal.logoUrl} className="w-full h-full object-contain drop-shadow-xl" />
+                                  ) : (
+                                      <div className="text-9xl font-black text-slate-800 opacity-20">{latestReveal.shortName.charAt(0)}</div>
+                                  )}
+                              </div>
+                              <h2 className="text-6xl font-black text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] text-center tracking-tighter uppercase">
+                                  {latestReveal.name}
+                              </h2>
+                              <div className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-full font-bold text-xl shadow-xl border border-indigo-400">
+                                  GROUP {currentSpinGroup}
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
                   {/* LEFT: POOL & CONTROLS */}
-                  <div className="col-span-12 md:col-span-3 flex flex-col bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden backdrop-blur-sm">
+                  <div className="col-span-12 md:col-span-3 flex flex-col bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden backdrop-blur-sm shadow-xl">
                       <div className="p-4 bg-slate-800 border-b border-slate-700 font-bold flex flex-col gap-2">
                           <div className="flex justify-between items-center">
                               <span>ทีมในโถ ({poolTeams.length})</span>
@@ -668,55 +715,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                   </div>
 
                   {/* CENTER: STAGE */}
-                  <div className="col-span-12 md:col-span-9 flex flex-col gap-6 overflow-y-auto pr-2">
+                  <div className="col-span-12 md:col-span-9 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
                       
                       {/* SPOTLIGHT */}
-                      <div className="h-48 shrink-0 bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl border border-indigo-500/30 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl shadow-indigo-900/50">
+                      <div className="h-48 shrink-0 bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl border border-indigo-500/30 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl shadow-indigo-900/50 group">
                           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                          {/* Animated Background */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite]"></div>
+
                           {liveDrawStep === 'spinning' && (
                               <>
-                                  <div className="text-indigo-300 text-sm font-bold uppercase tracking-[0.3em] mb-2 animate-pulse">กำลังสุ่มเลือกเข้าสู่กลุ่ม <span className="text-white text-lg bg-indigo-600 px-2 rounded ml-2">{currentSpinGroup}</span></div>
-                                  <div className="text-4xl md:text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all duration-75 scale-110">
+                                  <div className="text-indigo-300 text-sm font-bold uppercase tracking-[0.3em] mb-2 animate-pulse flex items-center gap-2">
+                                      <Sparkles className="w-4 h-4"/> กำลังสุ่มเข้าสู่กลุ่ม <span className="text-white text-lg bg-indigo-600 px-3 py-0.5 rounded shadow-lg ml-1">{currentSpinGroup}</span>
+                                  </div>
+                                  <div className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-xl transition-all duration-75 scale-110 tracking-tight">
                                       {currentSpinName}
                                   </div>
                               </>
                           )}
                           {liveDrawStep === 'idle' && (
                               <div className="text-slate-500 flex flex-col items-center gap-4">
-                                  <PlayCircle className="w-16 h-16 opacity-50" />
-                                  <span className="text-lg">เลือกโหมดการจับฉลากเพื่อดำเนินการ</span>
+                                  <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center border-4 border-slate-700 shadow-inner">
+                                      <PlayCircle className="w-10 h-10 opacity-50" />
+                                  </div>
+                                  <span className="text-lg font-medium">พร้อมเริ่มการจับฉลาก</span>
                               </div>
                           )}
                           {liveDrawStep === 'finished' && (
-                              <div className="text-green-400 flex flex-col items-center gap-2">
-                                  <CheckCircle2 className="w-12 h-12" />
-                                  <span className="text-2xl font-bold">การจับฉลากเสร็จสิ้น</span>
-                                  <span className="text-sm text-slate-400">กรุณาตรวจสอบผลและกดบันทึก</span>
+                              <div className="text-green-400 flex flex-col items-center gap-3">
+                                  <div className="w-20 h-20 bg-green-900/30 rounded-full flex items-center justify-center border-4 border-green-600 shadow-[0_0_30px_rgba(22,163,74,0.3)] animate-pulse">
+                                      <CheckCircle2 className="w-10 h-10" />
+                                  </div>
+                                  <div>
+                                      <div className="text-3xl font-bold text-center">การจับฉลากเสร็จสิ้น</div>
+                                      <div className="text-sm text-slate-400 text-center mt-1">กรุณาตรวจสอบผลและกดปุ่ม <span className="text-green-400 font-bold">บันทึกผล</span></div>
+                                  </div>
                               </div>
                           )}
                       </div>
 
                       {/* GROUPS GRID */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-10">
                           {Object.keys(liveGroups).sort().map(group => {
                               const isFull = liveGroups[group].length >= teamsPerGroup;
                               return (
-                                  <div key={group} className={`bg-slate-800 rounded-xl border ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : isFull ? 'border-green-800' : 'border-slate-700'} overflow-hidden transition-all duration-300`}>
-                                      <div className={`p-3 font-bold text-center border-b border-slate-700 flex justify-between items-center ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : isFull ? 'bg-emerald-700 text-white' : 'bg-slate-900 text-slate-300'}`}>
-                                          <span>GROUP {group}</span>
-                                          <span className="text-xs opacity-70">({liveGroups[group].length}/{teamsPerGroup})</span>
+                                  <div key={group} className={`bg-slate-800 rounded-xl border ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)] ring-2 ring-indigo-500/50' : isFull ? 'border-emerald-700/50 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:border-indigo-400/50`}>
+                                      <div className={`p-3 font-bold text-center border-b border-slate-700 flex justify-between items-center ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : isFull ? 'bg-emerald-800 text-white' : 'bg-slate-900 text-slate-300'}`}>
+                                          <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-white"></div> GROUP {group}</span>
+                                          <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">({liveGroups[group].length}/{teamsPerGroup})</span>
                                       </div>
-                                      <div className="p-2 space-y-2 min-h-[150px]">
+                                      <div className="p-2 space-y-2 min-h-[180px]">
                                           {liveGroups[group].map((team, idx) => (
-                                              <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center justify-between gap-2 animate-in zoom-in duration-300 group">
-                                                  <div className="flex items-center gap-2 min-w-0">
-                                                      {team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded object-cover shrink-0" /> : <div className="w-6 h-6 bg-slate-600 rounded flex items-center justify-center text-[10px] font-bold shrink-0">{team.shortName.charAt(0)}</div>}
-                                                      <span className="text-sm font-medium truncate">{team.name}</span>
+                                              <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center justify-between gap-2 animate-in zoom-in slide-in-from-bottom-2 duration-300 group border border-transparent hover:border-slate-600 hover:bg-slate-700 transition">
+                                                  <div className="flex items-center gap-3 min-w-0">
+                                                      <div className="w-8 h-8 rounded bg-slate-600 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
+                                                          {team.logoUrl ? <img src={team.logoUrl} className="w-full h-full object-cover" /> : <span className="text-xs font-bold text-slate-300">{team.shortName.charAt(0)}</span>}
+                                                      </div>
+                                                      <div className="flex flex-col min-w-0">
+                                                          <span className="text-sm font-bold text-slate-200 truncate leading-tight">{team.name}</span>
+                                                          <span className="text-[10px] text-slate-500 truncate">{team.province}</span>
+                                                      </div>
                                                   </div>
                                                   {/* Remove Button - Always visible for ease of use */}
                                                   <button 
                                                       onClick={() => requestRemoveTeam(team, group)}
-                                                      className="text-slate-400 hover:text-red-500 p-1 transition"
+                                                      className="text-slate-500 hover:text-red-400 p-1.5 rounded-full hover:bg-red-900/20 transition"
                                                       title="ลบออกจากกลุ่ม"
                                                       disabled={liveDrawStep === 'spinning'}
                                                   >
@@ -724,7 +787,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                                   </button>
                                               </div>
                                           ))}
-                                          {liveGroups[group].length === 0 && <div className="text-center text-slate-600 text-xs py-4 opacity-50">รอผล...</div>}
+                                          {liveGroups[group].length === 0 && <div className="text-center text-slate-600 text-xs py-8 opacity-30 flex flex-col items-center"><div className="w-8 h-8 border-2 border-dashed border-slate-600 rounded-full mb-1"></div>ว่าง</div>}
                                       </div>
                                   </div>
                               );
