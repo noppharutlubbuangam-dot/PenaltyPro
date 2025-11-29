@@ -9,17 +9,24 @@ const FOLDER_NAME = "PenaltyPro_Uploads";
 // --- MAIN WEB APP HANDLERS ---
 
 function doGet(e) {
-  const action = e.parameter.action;
-  
-  // FIX: Explicitly handle getUsers to prevent the "Unexpected token P" error
-  if (action === 'getUsers') {
-    return getUsers();
-  } else if (action === 'getData') {
-    return getData();
+  try {
+    const action = e.parameter.action;
+    
+    // Explicitly handle actions
+    if (action === 'getUsers') {
+      return getUsers();
+    } else if (action === 'getData') {
+      return getData();
+    }
+    
+    // Default response must be JSON if client expects JSON, 
+    // but for browser access we can show text.
+    // Ideally, consistency prevents "Unexpected token" errors.
+    return successResponse({ status: 'running', message: 'Penalty Pro API is active' });
+
+  } catch (error) {
+    return errorResponse(error.toString());
   }
-  
-  // Default response if action matches nothing
-  return ContentService.createTextOutput("Penalty Pro Recorder API is running.");
 }
 
 function doPost(e) {
@@ -360,7 +367,7 @@ function handleAuth(data) {
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === String(data.lineUserId)) {
         user = {
-          userId: rows[i][0],
+          userId: String(rows[i][0]),
           username: rows[i][1],
           displayName: rows[i][3],
           role: rows[i][4],
@@ -396,10 +403,16 @@ function handleAuth(data) {
   else if (data.authType === 'login') {
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][1] === data.username && rows[i][2] === data.password) {
+      // FIX: Force String comparison and trim to handle data type mismatch (Number vs String)
+      const sheetUsername = String(rows[i][1]).trim();
+      const sheetPassword = String(rows[i][2]).trim();
+      const inputUsername = String(data.username).trim();
+      const inputPassword = String(data.password).trim();
+
+      if (sheetUsername === inputUsername && sheetPassword === inputPassword) {
         return successResponse({
-          userId: rows[i][0],
-          username: rows[i][1],
+          userId: String(rows[i][0]),
+          username: sheetUsername,
           displayName: rows[i][3],
           role: rows[i][4],
           phoneNumber: rows[i][5],
@@ -413,7 +426,7 @@ function handleAuth(data) {
     // Check duplicate
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][1] === data.username) return errorResponse("Username already exists");
+      if (String(rows[i][1]).trim() === String(data.username).trim()) return errorResponse("Username already exists");
     }
     const newId = 'U_' + Date.now();
     sheet.appendRow([newId, data.username, data.password, data.displayName, 'user', data.phone, '']);
