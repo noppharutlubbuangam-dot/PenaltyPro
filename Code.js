@@ -312,7 +312,7 @@ function updateTournament(data) {
           sheet.getRange(i + 1, 4).setValue(data.status);
           sheet.getRange(i + 1, 5).setValue(finalConfigStr);
           
-          return successResponse("Updated");
+          return successResponse({ status: 'success' });
         }
       }
       return errorResponse("Tournament not found");
@@ -421,7 +421,7 @@ function updateTeamData(teamData, playersData) {
          if (finalPhoto && finalPhoto.startsWith('data:')) finalPhoto = saveFileToDrive(finalPhoto, `player_${p.name}`);
          playerSheet.appendRow([p.id || "P" + Math.floor(Math.random() * 1000000), teamData.id, p.name, "'" + p.number, 'Player', finalPhoto || '', p.birthDate, currentTId]);
       });
-      return successResponse("Team updated successfully");
+      return successResponse({ status: 'success' });
     } catch (e) { return errorResponse(e.toString()); } finally { lock.releaseLock(); }
   }
   return errorResponse("Server busy");
@@ -436,7 +436,7 @@ function updateTeamStatus(teamId, status, group, reason) {
       sheet.getRange(i + 1, 6).setValue(status);
       if (group !== undefined) sheet.getRange(i + 1, 7).setValue(group);
       if (reason !== undefined) sheet.getRange(i + 1, 17).setValue(reason);
-      return successResponse("Updated");
+      return successResponse({ status: 'success' });
     }
   }
   return errorResponse("Team not found");
@@ -478,7 +478,7 @@ function scheduleMatch(data) {
           if (cover && cover.startsWith('data:')) cover = saveFileToDrive(cover, `cover_${data.matchId || Date.now()}`);
           sheet.appendRow([data.matchId, data.teamA, data.teamB, 0, 0, '', data.scheduledTime || new Date().toISOString(), '', data.roundLabel, 'Scheduled', data.venue || '', data.scheduledTime || '', data.livestreamUrl || '', cover, data.tournamentId || 'default']);
       }
-      return successResponse("Scheduled");
+      return successResponse({ status: 'success' });
     } finally { lock.releaseLock(); }
   }
   return errorResponse("Busy");
@@ -521,7 +521,7 @@ function saveMatch(data) {
              matchId: data.matchId, round: k.round, team: k.teamId, player: k.player, result: k.result, timestamp: k.timestamp || Date.now(), tournamentId: data.tournamentId || 'default'
          })));
       }
-      return successResponse("Match Saved");
+      return successResponse({ status: 'success' });
     } finally { lock.releaseLock(); }
   }
   return errorResponse("Busy");
@@ -536,7 +536,7 @@ function saveKicks(kicksArray) {
        const lastRow = sheet.getLastRow();
        sheet.getRange(lastRow + 1, 1, newRows.length, 7).setValues(newRows);
    }
-   return successResponse("Kicks Saved");
+   return successResponse({ status: 'success' });
 }
 
 // Phase 3: Save Match Events
@@ -551,7 +551,7 @@ function saveMatchEvents(eventsArray) {
        const lastRow = sheet.getLastRow();
        sheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
    }
-   return successResponse("Events Saved");
+   return successResponse({ status: 'success' });
 }
 
 // ... saveSettings, deleteMatch, utility functions (unchanged) ...
@@ -563,7 +563,7 @@ function saveSettings(settings) {
   if (objImg && objImg.startsWith('data:')) objImg = saveFileToDrive(objImg, 'objective_img_' + Date.now());
   const values = [[settings.competitionName, settings.competitionLogo, settings.bankName, settings.bankAccount, settings.accountName, settings.locationName, settings.locationLink, settings.announcement, settings.adminPin, settings.locationLat, settings.locationLng, settings.registrationFee, settings.fundraisingGoal, settings.objectiveTitle, settings.objectiveDescription, objImg || settings.objectiveImageUrl]];
   if (sheet.getLastRow() > 1) sheet.getRange(2, 1, 1, 16).setValues(values); else sheet.appendRow(values[0]);
-  return successResponse("Settings Saved");
+  return successResponse({ status: 'success' });
 }
 
 function deleteMatch(matchId) {
@@ -581,7 +581,7 @@ function deleteMatch(matchId) {
       const sheet = ss.getSheetByName("Matches");
       const rows = sheet.getDataRange().getValues();
       for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][0]) === String(matchId)) { sheet.deleteRow(i + 1); return successResponse("Deleted"); }
+        if (String(rows[i][0]) === String(matchId)) { sheet.deleteRow(i + 1); return successResponse({ status: 'success' }); }
       }
       return errorResponse("Match not found");
     } finally { lock.releaseLock(); }
@@ -663,7 +663,7 @@ function manageNews(data) {
             }
          }
       }
-      return successResponse("News updated");
+      return successResponse({ status: 'success' });
     } finally { lock.releaseLock(); }
   }
   return errorResponse("Server busy");

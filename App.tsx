@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent, TournamentConfig } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -48,6 +49,16 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return (R * c).toFixed(1);
+};
+
+// Helper for Drive Images
+const getDisplayUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('drive.google.com') && url.includes('/view')) {
+        const idMatch = url.match(/\/d\/(.*?)\//);
+        if (idMatch && idMatch[1]) return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+    }
+    return url;
 };
 
 function App() {
@@ -484,7 +495,7 @@ function App() {
                                       <div className="relative w-full h-full">
                                           {/* Simple Toggle View for Comparison */}
                                           <img 
-                                            src={objectiveData.images.find(i => i.type === activeImageMode)?.url} 
+                                            src={getDisplayUrl(objectiveData.images.find(i => i.type === activeImageMode)?.url || '')} 
                                             className="w-full h-full object-cover animate-in fade-in duration-500"
                                           />
                                           <div className="absolute top-2 left-2 flex gap-2">
@@ -500,7 +511,7 @@ function App() {
                                       </div>
                                   ) : (
                                       // General Image Slider or Single
-                                      <img src={objectiveData.images[0].url} className="w-full h-full object-cover" />
+                                      <img src={getDisplayUrl(objectiveData.images[0].url)} className="w-full h-full object-cover" />
                                   )}
                                   
                                   <div className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1">

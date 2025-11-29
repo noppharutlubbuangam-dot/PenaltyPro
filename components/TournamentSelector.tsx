@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage } from '../types';
 import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout } from 'lucide-react';
@@ -11,6 +12,16 @@ interface TournamentSelectorProps {
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   isLoading?: boolean;
 }
+
+// Helper for Drive Images
+const getDisplayUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('drive.google.com') && url.includes('/view')) {
+        const idMatch = url.match(/\/d\/(.*?)\//);
+        if (idMatch && idMatch[1]) return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+    }
+    return url;
+};
 
 const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading }) => {
   const [isCreating, setIsCreating] = useState(false);
@@ -458,7 +469,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                 {editConfig.objective.images && editConfig.objective.images.map((img, idx) => (
                                                     <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-200">
-                                                        <img src={img.url} className="w-full h-full object-cover" />
+                                                        <img src={getDisplayUrl(img.url)} className="w-full h-full object-cover" />
                                                         <div className={`absolute top-0 left-0 px-2 py-0.5 text-[10px] font-bold text-white ${img.type === 'before' ? 'bg-red-500' : img.type === 'after' ? 'bg-green-500' : 'bg-slate-500'}`}>
                                                             {img.type.toUpperCase()}
                                                         </div>
