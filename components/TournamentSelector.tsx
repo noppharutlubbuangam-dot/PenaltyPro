@@ -1,7 +1,9 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { Tournament, TournamentConfig, ProjectImage, TournamentPrize, Team, Donation } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2, DollarSign, Wallet } from 'lucide-react';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2, DollarSign, Wallet, FileText, Upload } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 import { shareTournament } from '../services/liffService';
 
@@ -190,6 +192,33 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
           });
       } catch (err) {
           notify("Error", "อัปโหลดรูปไม่สำเร็จ", "error");
+      }
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || !e.target.files[0]) return;
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+          notify("ไฟล์ใหญ่เกิน", "ขนาดไฟล์ต้องไม่เกิน 5MB", "warning");
+          return;
+      }
+      try {
+          const base64 = await fileToBase64(file);
+          setEditConfig(prev => ({
+              ...prev,
+              objective: {
+                  ...prev.objective,
+                  isEnabled: true,
+                  title: prev.objective?.title || '',
+                  description: prev.objective?.description || '',
+                  goal: prev.objective?.goal || 0,
+                  images: prev.objective?.images || [],
+                  docUrl: base64
+              }
+          }));
+          notify("สำเร็จ", "อัปโหลดเอกสารเรียบร้อย", "success");
+      } catch (err) {
+          notify("Error", "อัปโหลดเอกสารไม่สำเร็จ", "error");
       }
   };
 
@@ -733,6 +762,26 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                             <input type="number" className="w-full p-2 border rounded-lg text-sm" value={editConfig.objective.goal} onChange={e => setEditConfig({...editConfig, objective: {...editConfig.objective!, goal: parseInt(e.target.value)}})} />
                                         </div>
                                         
+                                        {/* Document Upload */}
+                                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                            <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
+                                                <FileText className="w-4 h-4"/> เอกสารรายละเอียดโครงการ (PDF)
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <label className="cursor-pointer bg-white hover:bg-slate-100 p-2 rounded-lg border border-slate-300 text-xs font-bold text-indigo-600 flex items-center gap-2 shadow-sm transition">
+                                                    <Upload className="w-3 h-3"/> อัปโหลดไฟล์
+                                                    <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleDocUpload} />
+                                                </label>
+                                                {editConfig.objective.docUrl ? (
+                                                    <div className="text-xs text-green-600 flex items-center gap-1 font-bold">
+                                                        <CheckCircle2 className="w-3 h-3"/> มีเอกสารแล้ว
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-xs text-slate-400">ยังไม่มีเอกสาร</div>
+                                                )}
+                                            </div>
+                                        </div>
+
                                         <div className="border-t pt-4">
                                             <label className="block text-xs font-bold text-slate-700 mb-2">รูปภาพโครงการ (Before / After / General)</label>
                                             <div className="flex gap-2 mb-2">
