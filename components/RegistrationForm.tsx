@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, ArrowLeft, CheckCircle, School, User, FileText, Search, Image as ImageIcon, CreditCard, AlertCircle, X, Printer, Loader2, Share2, Plus, Trash2, Calendar, Camera, Copy, Check, ChevronDown, Printer as PrinterIcon } from 'lucide-react';
 import { registerTeam, fileToBase64, updateMyTeam } from '../services/sheetService';

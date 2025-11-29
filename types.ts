@@ -1,5 +1,6 @@
 
 
+
 export const LIFF_ID = '2006490627-Z0WmzYVd';
 
 export enum KickResult {

@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, AppSettings, NewsItem, Tournament, UserProfile, Donation } from '../types';
 import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check } from 'lucide-react';
@@ -802,25 +804,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                                             <label className="block text-xs font-bold text-slate-500 mb-1">ใบสมัคร (PDF/Doc)</label>
                                             <div className="flex items-center gap-2">
                                                 <label className="cursor-pointer bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-100 transition flex-1 truncate text-center">
-                                                    {editForm.newDoc ? editForm.newDoc.name : (editForm.team.docUrl ? 'อัปโหลดใหม่ (มีของเดิม)' : 'เลือกไฟล์')}
+                                                    {editForm.newDoc ? editForm.newDoc.name : (editForm.team.docUrl ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์')}
                                                     <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => e.target.files?.[0] && handleFileChange('doc', e.target.files[0])} />
                                                 </label>
+                                                {editForm.team.docUrl && (
+                                                    <a href={editForm.team.docUrl} target="_blank" className="p-1.5 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100" title="ดูไฟล์เดิม">
+                                                        <ExternalLink className="w-4 h-4" />
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 mb-1">สลิปโอนเงิน (Image)</label>
                                             <div className="flex items-center gap-2">
                                                 <label className="cursor-pointer bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-100 transition flex-1 truncate text-center">
-                                                    {editForm.newSlip ? editForm.newSlip.name : (editForm.team.slipUrl ? 'อัปโหลดใหม่ (มีของเดิม)' : 'เลือกไฟล์')}
+                                                    {editForm.newSlip ? editForm.newSlip.name : (editForm.team.slipUrl ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์')}
                                                     <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleFileChange('slip', e.target.files[0])} />
                                                 </label>
+                                                {editForm.team.slipUrl && (
+                                                    <a href={editForm.team.slipUrl} target="_blank" className="p-1.5 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100" title="ดูรูปเดิม">
+                                                        <ExternalLink className="w-4 h-4" />
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-3 pt-4">
-                                    <button onClick={() => { setIsEditingTeam(false); }} className="flex-1 py-3 border border-slate-300 rounded-xl font-bold text-slate-600 hover:bg-slate-50">ยกเลิก</button>
+                                <div className="flex gap-3 pt-4 border-t mt-4 sticky bottom-0 bg-slate-50 pb-2">
+                                    <button 
+                                        onClick={() => { setIsEditingTeam(false); }} 
+                                        className="flex-1 py-3 border-2 border-slate-300 rounded-xl font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+                                    >
+                                        ยกเลิก
+                                    </button>
                                     <button onClick={handleSaveTeamChanges} disabled={isSavingTeam} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 flex items-center justify-center gap-2 shadow-lg">
                                         {isSavingTeam ? <Loader2 className="w-5 h-5 animate-spin"/> : 'บันทึกการแก้ไข'}
                                     </button>

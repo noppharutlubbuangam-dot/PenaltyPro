@@ -1,4 +1,6 @@
 
+
+
 import { LIFF_ID, Match, NewsItem, RegistrationData, KickResult, Team, Player, Tournament } from '../types';
 
 declare global {
@@ -80,7 +82,16 @@ export const shareTournament = async (tournament: Tournament) => {
     const name = tournament.name || "การแข่งขันฟุตบอล";
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
     const status = tournament.status === 'Active' ? "กำลังแข่งขัน" : "เปิดรับสมัคร";
-    const liffUrl = `https://liff.line.me/${LIFF_ID}`; // Direct to Home
+    const liffUrl = `https://liff.line.me/${LIFF_ID}`; // Direct to Home, stores will use localStorage
+
+    // Parse config for extra details if available
+    let location = "ไม่ระบุ";
+    let prize = "";
+    try {
+        const conf = JSON.parse(tournament.config || '{}');
+        if (conf.locationName) location = conf.locationName;
+        if (conf.prizes && conf.prizes.length > 0) prize = `รางวัลรวม ${conf.prizes.length} รายการ`;
+    } catch(e) {}
 
     const flexMessage = {
         type: "flex",
@@ -91,11 +102,12 @@ export const shareTournament = async (tournament: Tournament) => {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    { "type": "text", "text": "TOURNAMENT", "color": "#FFFFFF", "weight": "bold", "size": "sm", "align": "center", "letterSpacing": "2px" },
-                    { "type": "text", "text": truncate(name, 40), "color": "#FFFFFF", "weight": "bold", "size": "xl", "align": "center", "wrap": true, "margin": "md" }
+                    { "type": "text", "text": "TOURNAMENT", "color": "#FFFFFF", "weight": "bold", "size": "xs", "align": "center", "letterSpacing": "2px" },
+                    { "type": "text", "text": truncate(name, 60), "color": "#FFFFFF", "weight": "bold", "size": "xl", "align": "center", "wrap": true, "margin": "md" },
+                    { "type": "text", "text": type, "color": "#e0e7ff", "size": "sm", "align": "center", "margin": "sm" }
                 ],
                 "backgroundColor": "#4f46e5",
-                "paddingAll": "xxl"
+                "paddingAll": "xl"
             },
             "body": {
                 "type": "box",
@@ -105,19 +117,11 @@ export const shareTournament = async (tournament: Tournament) => {
                         "type": "box",
                         "layout": "vertical",
                         "contents": [
-                            { "type": "text", "text": "ประเภท", "size": "xs", "color": "#aaaaaa" },
-                            { "type": "text", "text": type, "size": "sm", "color": "#333333", "weight": "bold" }
-                        ]
-                    },
-                    { "type": "separator", "margin": "md" },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            { "type": "text", "text": "สถานะ", "size": "xs", "color": "#aaaaaa" },
-                            { "type": "text", "text": status, "size": "sm", "color": "#166534", "weight": "bold" }
-                        ],
-                        "margin": "md"
+                            { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "สถานะ", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": status, "color": "#166534", "size": "xs", "flex": 3, "weight": "bold" }] },
+                            { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "สถานที่", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": truncate(location, 30), "color": "#666666", "size": "xs", "flex": 3 }] },
+                            prize ? { "type": "box", "layout": "baseline", "contents": [{ "type": "text", "text": "รางวัล", "color": "#aaaaaa", "size": "xs", "flex": 1 }, { "type": "text", "text": prize, "color": "#ca8a04", "size": "xs", "flex": 3, "weight": "bold" }] } : null
+                        ].filter(Boolean) as any,
+                        "spacing": "sm"
                     }
                 ],
                 "paddingAll": "lg"
@@ -128,9 +132,10 @@ export const shareTournament = async (tournament: Tournament) => {
                 "contents": [
                     {
                         "type": "button",
-                        "action": { "type": "uri", "label": "เข้าสู่รายการ", "uri": liffUrl },
+                        "action": { "type": "uri", "label": "ดูรายละเอียด / สมัคร", "uri": liffUrl },
                         "style": "primary",
-                        "color": "#4f46e5"
+                        "color": "#4f46e5",
+                        "height": "sm"
                     }
                 ]
             }
