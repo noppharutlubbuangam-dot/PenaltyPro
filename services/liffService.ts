@@ -77,35 +77,78 @@ export const shareTournament = async (tournament: Tournament) => {
     if (!window.liff) { alert("LIFF SDK not loaded"); return; }
     if (!window.liff.isLoggedIn()) { window.liff.login(); return; }
     
-    const name = tournament.name || "รายการแข่งขัน";
+    const name = truncate(tournament.name || "รายการแข่งขัน", 50);
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
     const liffUrl = `https://liff.line.me/${LIFF_ID}`; 
+    let location = "ไม่ระบุสถานที่";
+    let logoUrl = "https://via.placeholder.com/150?text=LOGO"; // Default logo
 
-    // Minimal Alt Text
-    const altText = `${truncate(name, 35)} (${type})`;
+    try {
+        const config = JSON.parse(tournament.config || '{}');
+        if (config.locationName) location = truncate(config.locationName, 30);
+        // We could look up competitionLogo if passed, but currently we rely on config/defaults
+        // If config has specific objective image, maybe use that, otherwise default pattern
+    } catch (e) {}
+
+    // Safe Alt Text (Short, no weird chars)
+    const altText = `${name} (${type})`;
 
     const flexMessage = {
         type: "flex",
-        altText: altText,
+        altText: truncate(altText, 350),
         contents: {
             "type": "bubble",
-            "size": "kilo", // Smaller size
+            "size": "mega",
             "header": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    { "type": "text", "text": truncate(name, 50), "weight": "bold", "size": "md", "color": "#FFFFFF", "wrap": true }
+                    { "type": "text", "text": "TOURNAMENT", "weight": "bold", "color": "#A5B4FC", "size": "xxs", "align": "center", "letterSpacing": "2px" },
+                    { "type": "text", "text": name, "weight": "bold", "size": "lg", "margin": "sm", "color": "#FFFFFF", "wrap": true, "align": "center" }
                 ],
                 "backgroundColor": "#4f46e5",
-                "paddingAll": "md"
+                "paddingAll": "lg"
+            },
+            "hero": {
+                "type": "image",
+                "url": "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=500&auto=format&fit=crop&q=60", // Generic stadium/soccer image
+                "size": "full",
+                "aspectRatio": "20:13",
+                "aspectMode": "cover"
             },
             "body": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
-                    { "type": "text", "text": `ประเภท: ${type}`, "size": "sm", "color": "#333333" }
+                    {
+                        "type": "box",
+                        "layout": "baseline",
+                        "contents": [
+                            { "type": "text", "text": "ประเภท", "color": "#94a3b8", "size": "xs", "flex": 1 },
+                            { "type": "text", "text": type, "color": "#334155", "size": "sm", "flex": 3, "weight": "bold" }
+                        ],
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "baseline",
+                        "contents": [
+                            { "type": "text", "text": "สถานที่", "color": "#94a3b8", "size": "xs", "flex": 1 },
+                            { "type": "text", "text": location, "color": "#334155", "size": "sm", "flex": 3, "wrap": true }
+                        ],
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "baseline",
+                        "contents": [
+                            { "type": "text", "text": "สถานะ", "color": "#94a3b8", "size": "xs", "flex": 1 },
+                            { "type": "text", "text": tournament.status, "color": tournament.status === 'Active' ? "#16a34a" : "#2563eb", "size": "sm", "flex": 3, "weight": "bold" }
+                        ],
+                        "margin": "sm"
+                    }
                 ],
-                "paddingAll": "md"
+                "paddingAll": "lg"
             },
             "footer": {
                 "type": "box",
@@ -113,7 +156,7 @@ export const shareTournament = async (tournament: Tournament) => {
                 "contents": [
                     {
                         "type": "button",
-                        "action": { "type": "uri", "label": "เข้าสู่รายการ", "uri": liffUrl },
+                        "action": { "type": "uri", "label": "ดูรายละเอียด / สมัครแข่ง", "uri": liffUrl },
                         "style": "primary",
                         "color": "#4f46e5",
                         "height": "sm"
@@ -126,8 +169,7 @@ export const shareTournament = async (tournament: Tournament) => {
 
     try {
         if (window.liff.isApiAvailable('shareTargetPicker')) {
-            const result = await window.liff.shareTargetPicker([flexMessage]);
-            // Optional: Handle result
+            await window.liff.shareTargetPicker([flexMessage]);
         } else {
             alert("อุปกรณ์ไม่รองรับการแชร์ (Share Target Picker)");
         }

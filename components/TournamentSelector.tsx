@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Tournament, TournamentConfig, ProjectImage, TournamentPrize } from '../types';
+import { Tournament, TournamentConfig, ProjectImage, TournamentPrize, Team } from '../types';
 import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout, MapPin, CreditCard, Banknote, Star, Share2 } from 'lucide-react';
 import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 import { shareTournament } from '../services/liffService';
@@ -12,6 +12,7 @@ interface TournamentSelectorProps {
   onRefresh: () => void;
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   isLoading?: boolean;
+  teams?: Team[]; // Added prop
 }
 
 // Helper for Drive Images
@@ -62,7 +63,7 @@ const compressImage = async (file: File): Promise<File> => {
     });
 };
 
-const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading }) => {
+const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading, teams = [] }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -250,7 +251,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                 {isLoading ? (
                     // Skeleton Loading
                     Array(3).fill(0).map((_, i) => (
-                        <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-[220px] flex flex-col justify-between animate-pulse">
+                        <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-[280px] flex flex-col justify-between animate-pulse">
                             <div className="flex justify-between">
                                 <div className="h-6 w-20 bg-slate-200 rounded-full"></div>
                                 <div className="h-6 w-16 bg-slate-200 rounded-full"></div>
@@ -259,66 +260,103 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                 <div className="h-8 w-3/4 bg-slate-200 rounded"></div>
                                 <div className="h-4 w-1/2 bg-slate-200 rounded"></div>
                             </div>
+                            <div className="h-2 w-full bg-slate-200 rounded mt-4"></div>
                             <div className="h-10 w-full bg-slate-200 rounded-xl mt-4"></div>
                         </div>
                     ))
                 ) : (
                     <>
-                        {visibleTournaments.map(t => (
-                            <div key={t.id} className="relative group perspective-1000">
-                                <button 
-                                    onClick={() => onSelect(t.id)}
-                                    className="w-full bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30 min-h-[220px]"
-                                >
-                                    <div className="absolute -top-6 -right-6 w-32 h-32 bg-indigo-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
-                                    
-                                    <div className="relative z-10 w-full flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                <span className={`w-2 h-2 rounded-full ${t.status === 'Active' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                                {t.status}
-                                            </span>
-                                            <span className="px-3 py-1 bg-white border border-slate-100 text-indigo-600 rounded-full text-[10px] font-bold shadow-sm">
-                                                {t.type}
-                                            </span>
-                                        </div>
-                                        <h3 className="font-bold text-xl text-slate-800 mb-2 line-clamp-2 pr-2 leading-tight group-hover:text-indigo-700 transition-colors">{t.name}</h3>
-                                        <div className="text-xs text-slate-400 font-mono mb-6 bg-slate-50 inline-block px-2 py-1 rounded w-fit">ID: {t.id.slice(-6)}</div>
+                        {visibleTournaments.map(t => {
+                            // Calculate Stats
+                            const config = t.config ? JSON.parse(t.config) : {};
+                            const maxTeams = config.maxTeams || 0;
+                            // Count approved or pending teams for this tournament
+                            const teamCount = teams.filter(team => team.tournamentId === t.id && team.status !== 'Rejected').length;
+                            const percentage = maxTeams > 0 ? Math.min(100, (teamCount / maxTeams) * 100) : 0;
+                            const deadline = config.registrationDeadline ? new Date(config.registrationDeadline) : null;
+                            const isPastDeadline = deadline && new Date() > deadline;
+
+                            return (
+                                <div key={t.id} className="relative group perspective-1000">
+                                    <button 
+                                        onClick={() => onSelect(t.id)}
+                                        className="w-full bg-white p-5 rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30 min-h-[260px]"
+                                    >
+                                        <div className="absolute -top-6 -right-6 w-32 h-32 bg-indigo-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
                                         
-                                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
-                                            <div className="flex items-center gap-2 text-indigo-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 duration-300">
-                                                เข้าสู่ระบบ <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        <div className="relative z-10 w-full flex-1 flex flex-col">
+                                            {/* Status Badges */}
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    <span className={`w-2 h-2 rounded-full ${t.status === 'Active' ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></span>
+                                                    {t.status}
+                                                </span>
+                                                <span className="px-3 py-1 bg-white border border-slate-100 text-indigo-600 rounded-full text-[10px] font-bold shadow-sm">
+                                                    {t.type}
+                                                </span>
+                                            </div>
+
+                                            {/* Title & Info */}
+                                            <h3 className="font-bold text-lg text-slate-800 mb-2 line-clamp-2 leading-tight group-hover:text-indigo-700 transition-colors h-[3rem]">{t.name}</h3>
+                                            
+                                            {/* Deadline */}
+                                            {deadline && (
+                                                <div className={`text-xs flex items-center gap-1 mb-3 ${isPastDeadline ? 'text-red-500 font-bold' : 'text-slate-500'}`}>
+                                                    <Calendar className="w-3 h-3" />
+                                                    {isPastDeadline ? 'ปิดรับสมัครแล้ว' : `ปิดรับ: ${deadline.toLocaleDateString('th-TH')}`}
+                                                </div>
+                                            )}
+
+                                            {/* Progress Bar (Registration) */}
+                                            <div className="mt-2 mb-4">
+                                                <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                                                    <span>ลงทะเบียนแล้ว</span>
+                                                    <span className="font-bold">{teamCount} {maxTeams > 0 ? `/ ${maxTeams}` : 'ทีม'}</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full rounded-full transition-all duration-1000 ${percentage >= 100 ? 'bg-red-500' : 'bg-indigo-500'}`} 
+                                                        style={{ width: `${maxTeams > 0 ? percentage : (teamCount > 0 ? 100 : 0)}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+                                                <div className="text-xs text-slate-400 font-mono">ID: {t.id.slice(-4)}</div>
+                                                <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 duration-300">
+                                                    จัดการข้อมูล <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </button>
-                                
-                                {/* Share Button */}
-                                <button 
-                                    onClick={(e) => handleShare(e, t)}
-                                    className="absolute bottom-4 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
-                                    title="แชร์รายการนี้"
-                                >
-                                    <Share2 className="w-4 h-4" />
-                                </button>
-
-                                {/* Admin Config Button */}
-                                {isAdmin && (
-                                    <button 
-                                        onClick={(e) => openEdit(e, t)}
-                                        className="absolute top-4 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 p-2 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
-                                        title="ตั้งค่ารายการ"
-                                    >
-                                        <Settings className="w-4 h-4" />
                                     </button>
-                                )}
-                            </div>
-                        ))}
+                                    
+                                    {/* Share Button */}
+                                    <button 
+                                        onClick={(e) => handleShare(e, t)}
+                                        className="absolute bottom-16 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
+                                        title="แชร์รายการนี้"
+                                    >
+                                        <Share2 className="w-4 h-4" />
+                                    </button>
+
+                                    {/* Admin Config Button */}
+                                    {isAdmin && (
+                                        <button 
+                                            onClick={(e) => openEdit(e, t)}
+                                            className="absolute top-4 right-4 bg-white/90 backdrop-blur border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 p-1.5 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
+                                            title="ตั้งค่ารายการ"
+                                        >
+                                            <Settings className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
 
                         {isAdmin && (
                             <button 
                                 onClick={() => setIsCreating(true)}
-                                className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[220px] group cursor-pointer"
+                                className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[260px] group cursor-pointer"
                             >
                                 <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                                     <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-600" />
@@ -371,7 +409,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
             </div>
         )}
 
-        {/* Edit Modal - (Included in full file, truncated here for brevity as it's largely unchanged but using new fileToBase64/compression logic) */}
+        {/* Edit Modal */}
         {isEditing && editingTournament && (
             <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" style={{ fontFamily: "'Kanit', sans-serif" }}>
                 <div className="bg-white rounded-3xl shadow-2xl p-0 w-full max-w-2xl animate-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[90vh]">
