@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Team, Player, AppSettings, NewsItem, Tournament, UserProfile, Donation } from '../types';
-import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward, Minus, Layers } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Users, LogOut, Eye, X, Settings, MapPin, CreditCard, Save, Image, Search, FileText, Bell, Plus, Trash2, Loader2, Grid, Edit3, Paperclip, Download, Upload, Copy, Phone, User, Camera, AlertTriangle, CheckCircle2, UserPlus, ArrowRight, Hash, Palette, Briefcase, ExternalLink, FileCheck, Info, Calendar, Trophy, Lock, Heart, Target, UserCog, Globe, DollarSign, Check, Shuffle, LayoutGrid, List, PlayCircle, StopCircle, SkipForward, Minus, Layers, RotateCcw } from 'lucide-react';
 import { updateTeamStatus, saveSettings, manageNews, fileToBase64, updateTeamData, fetchUsers, updateUserRole, verifyDonation } from '../services/sheetService';
+import confetti from 'canvas-confetti';
 
 interface AdminDashboardProps {
   teams: Team[];
@@ -268,6 +269,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       setRemoveConfirmModal({ isOpen: false, team: null, group: null });
   };
 
+  const resetDraw = () => {
+      if (!confirm("ต้องการรีเซ็ตการจับฉลากทั้งหมดหรือไม่? ข้อมูลในกลุ่มจะถูกล้างและเริ่มใหม่")) return;
+      const allTeams: Team[] = [];
+      Object.values(liveGroups).forEach(groupTeams => {
+          allTeams.push(...groupTeams);
+      });
+      setPoolTeams(prev => [...prev, ...allTeams]);
+      
+      const groups: Record<string, Team[]> = {};
+      Object.keys(liveGroups).forEach(g => groups[g] = []);
+      setLiveGroups(groups);
+      setDrawnCount(0);
+      setLiveDrawStep('idle');
+      setCurrentSpinName("...");
+      setCurrentSpinGroup("");
+      notify("Reset", "รีเซ็ตข้อมูลเรียบร้อย", "info");
+  };
+
   const startLiveDrawSequence = async (isFastMode: boolean = false) => {
       // 1. Validation & Setup
       const targetGroup = getNextTargetGroup();
@@ -313,6 +332,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
       }
 
       setCurrentSpinName(pickedTeam.name);
+      confetti({ particleCount: 100, spread: 60, origin: { y: 0.7 } }); // Celebration!
       
       // 5. Update State
       setLiveGroups(prev => ({
@@ -333,6 +353,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
              setLiveDrawStep('finished');
              setCurrentSpinName("เสร็จสิ้น!");
              setCurrentSpinGroup("-");
+             confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
           }
       } else {
           setLiveDrawStep('idle');
@@ -404,6 +425,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
           setLiveDrawStep('finished');
           setCurrentSpinName("เสร็จสิ้น!");
           setCurrentSpinGroup("-");
+          confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#f43f5e', '#8b5cf6', '#10b981'] });
       }
   };
 
@@ -603,6 +625,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
                       <div className="p-4 bg-slate-800 border-b border-slate-700 font-bold flex flex-col gap-2">
                           <div className="flex justify-between items-center">
                               <span>ทีมในโถ ({poolTeams.length})</span>
+                              {drawnCount > 0 && liveDrawStep !== 'spinning' && (
+                                  <button onClick={resetDraw} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-900/30 px-2 py-1 rounded">
+                                      <RotateCcw className="w-3 h-3"/> รีเซ็ต
+                                  </button>
+                              )}
                           </div>
                           
                           {/* Control Buttons */}
@@ -659,34 +686,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ teams: initialTeams, pl
 
                       {/* GROUPS GRID */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {Object.keys(liveGroups).sort().map(group => (
-                              <div key={group} className={`bg-slate-800 rounded-xl border ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-slate-700'} overflow-hidden transition-all duration-300`}>
-                                  <div className={`p-3 font-bold text-center border-b border-slate-700 flex justify-between items-center ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-300'}`}>
-                                      <span>GROUP {group}</span>
-                                      <span className="text-xs opacity-70">({liveGroups[group].length}/{teamsPerGroup})</span>
-                                  </div>
-                                  <div className="p-2 space-y-2 min-h-[150px]">
-                                      {liveGroups[group].map((team, idx) => (
-                                          <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center justify-between gap-2 animate-in zoom-in duration-300 group">
-                                              <div className="flex items-center gap-2 min-w-0">
-                                                  {team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded object-cover shrink-0" /> : <div className="w-6 h-6 bg-slate-600 rounded flex items-center justify-center text-[10px] font-bold shrink-0">{team.shortName.charAt(0)}</div>}
-                                                  <span className="text-sm font-medium truncate">{team.name}</span>
+                          {Object.keys(liveGroups).sort().map(group => {
+                              const isFull = liveGroups[group].length >= teamsPerGroup;
+                              return (
+                                  <div key={group} className={`bg-slate-800 rounded-xl border ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : isFull ? 'border-green-800' : 'border-slate-700'} overflow-hidden transition-all duration-300`}>
+                                      <div className={`p-3 font-bold text-center border-b border-slate-700 flex justify-between items-center ${currentSpinGroup === group && liveDrawStep === 'spinning' ? 'bg-indigo-600 text-white' : isFull ? 'bg-emerald-700 text-white' : 'bg-slate-900 text-slate-300'}`}>
+                                          <span>GROUP {group}</span>
+                                          <span className="text-xs opacity-70">({liveGroups[group].length}/{teamsPerGroup})</span>
+                                      </div>
+                                      <div className="p-2 space-y-2 min-h-[150px]">
+                                          {liveGroups[group].map((team, idx) => (
+                                              <div key={team.id} className="p-2 bg-slate-700/50 rounded flex items-center justify-between gap-2 animate-in zoom-in duration-300 group">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                      {team.logoUrl ? <img src={team.logoUrl} className="w-6 h-6 rounded object-cover shrink-0" /> : <div className="w-6 h-6 bg-slate-600 rounded flex items-center justify-center text-[10px] font-bold shrink-0">{team.shortName.charAt(0)}</div>}
+                                                      <span className="text-sm font-medium truncate">{team.name}</span>
+                                                  </div>
+                                                  {/* Remove Button - Always visible for ease of use */}
+                                                  <button 
+                                                      onClick={() => requestRemoveTeam(team, group)}
+                                                      className="text-slate-400 hover:text-red-500 p-1 transition"
+                                                      title="ลบออกจากกลุ่ม"
+                                                      disabled={liveDrawStep === 'spinning'}
+                                                  >
+                                                      <X className="w-3 h-3" />
+                                                  </button>
                                               </div>
-                                              {/* Remove Button - Always visible for ease of use */}
-                                              <button 
-                                                  onClick={() => requestRemoveTeam(team, group)}
-                                                  className="text-slate-400 hover:text-red-500 p-1 transition"
-                                                  title="ลบออกจากกลุ่ม"
-                                                  disabled={liveDrawStep === 'spinning'}
-                                              >
-                                                  <X className="w-3 h-3" />
-                                              </button>
-                                          </div>
-                                      ))}
-                                      {liveGroups[group].length === 0 && <div className="text-center text-slate-600 text-xs py-4 opacity-50">รอผล...</div>}
+                                          ))}
+                                          {liveGroups[group].length === 0 && <div className="text-center text-slate-600 text-xs py-4 opacity-50">รอผล...</div>}
+                                      </div>
                                   </div>
-                              </div>
-                          ))}
+                              );
+                          })}
                       </div>
                   </div>
               </div>
