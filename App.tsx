@@ -1,4 +1,8 @@
 
+
+
+
+
 import React, { useState, useEffect } from 'react';
 import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent, TournamentConfig, TournamentPrize, Donation } from './types';
 import MatchSetup from './components/MatchSetup';
@@ -21,7 +25,7 @@ import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, authenticateUser, saveMatchEventsToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3, ArrowLeft, Star, Coins, DollarSign } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3, ArrowLeft, Star, Coins, DollarSign, FileText, Download, Users } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -96,6 +100,7 @@ function App() {
   const [distanceToVenue, setDistanceToVenue] = useState<string | null>(null);
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [isDonationOpen, setIsDonationOpen] = useState(false);
+  const [isDonorListOpen, setIsDonorListOpen] = useState(false); // New State
   const [activeImageMode, setActiveImageMode] = useState<'before' | 'after'>('before');
 
   const activeTeams = currentTournamentId ? availableTeams.filter(t => t.tournamentId === currentTournamentId || (!t.tournamentId && currentTournamentId === 'default')) : [];
@@ -128,12 +133,14 @@ function App() {
       title: tConfig.objective.title,
       description: tConfig.objective.description,
       goal: tConfig.objective.goal,
-      images: tConfig.objective.images || []
+      images: tConfig.objective.images || [],
+      docUrl: tConfig.objective.docUrl // New
   } : {
       title: appConfig.objectiveTitle,
       description: appConfig.objectiveDescription,
       goal: appConfig.fundraisingGoal,
-      images: appConfig.objectiveImageUrl ? [{ id: 'legacy', url: appConfig.objectiveImageUrl, type: 'general' }] : []
+      images: appConfig.objectiveImageUrl ? [{ id: 'legacy', url: appConfig.objectiveImageUrl, type: 'general' }] : [],
+      docUrl: null
   };
 
   const hasComparisonImages = objectiveData.images.some(i => i.type === 'before') && objectiveData.images.some(i => i.type === 'after');
@@ -389,6 +396,39 @@ function App() {
         currentUser={currentUser}
       />
       
+      {/* Donor List Modal */}
+      {isDonorListOpen && (
+          <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setIsDonorListOpen(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                  <div className="p-4 bg-pink-600 text-white flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                          <Heart className="w-5 h-5 fill-white" />
+                          <h3 className="font-bold text-lg">รายนามผู้บริจาค</h3>
+                      </div>
+                      <button onClick={() => setIsDonorListOpen(false)}><XCircle className="w-6 h-6 text-pink-200 hover:text-white" /></button>
+                  </div>
+                  <div className="overflow-y-auto p-4 space-y-2 flex-1">
+                      {activeDonations.filter(d => d.status === 'Verified').length === 0 ? (
+                          <div className="text-center text-slate-400 py-8">ยังไม่มีรายการบริจาค</div>
+                      ) : (
+                          activeDonations.filter(d => d.status === 'Verified').sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(d => (
+                              <div key={d.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <div>
+                                      <p className="font-bold text-slate-800 text-sm">{d.isAnonymous ? 'ผู้ใจบุญ (ไม่ประสงค์ออกนาม)' : d.donorName}</p>
+                                      <p className="text-[10px] text-slate-400">{new Date(d.timestamp).toLocaleDateString('th-TH')}</p>
+                                  </div>
+                                  <span className="font-mono font-bold text-pink-600">+{d.amount.toLocaleString()}</span>
+                              </div>
+                          ))
+                      )}
+                  </div>
+                  <div className="p-4 border-t bg-slate-50 text-center text-xs text-slate-400">
+                      ขอบคุณทุกท่านที่ร่วมสนับสนุนโครงการ
+                  </div>
+              </div>
+          </div>
+      )}
+
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
       {editingKick && activeTournament?.type === 'Penalty' && (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1100] p-4 backdrop-blur-sm" onClick={() => setEditingKick(null)}><div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-slate-800">แก้ไขผลการยิง</h3><button onClick={() => confirmDeleteKick(editingKick.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition" title="ลบรายการนี้"><Trash2 className="w-5 h-5" /></button></div><div className="space-y-4"><div><label className="block text-sm text-slate-500 mb-1">ชื่อผู้เล่น</label><input type="text" className="w-full p-2 border rounded-lg" defaultValue={editingKick.player} id="edit-player-name" /></div><div><label className="block text-sm text-slate-500 mb-1">ผลการยิง</label><select className="w-full p-2 border rounded-lg" defaultValue={editingKick.result} id="edit-kick-result"><option value={KickResult.GOAL}>เข้าประตู (GOAL)</option><option value={KickResult.SAVED}>เซฟได้ (SAVED)</option><option value={KickResult.MISSED}>ยิงพลาด (MISSED)</option></select></div><div className="flex gap-2 pt-4"><button onClick={() => setEditingKick(null)} className="flex-1 py-2 border rounded-lg text-slate-600 hover:bg-slate-50">ยกเลิก</button><button onClick={() => { const name = (document.getElementById('edit-player-name') as HTMLInputElement).value; const res = (document.getElementById('edit-kick-result') as HTMLSelectElement).value as KickResult; handleUpdateOldKick(editingKick.id, res, name); }} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">บันทึก</button></div></div></div></div>)}
 
@@ -575,11 +615,18 @@ function App() {
                               objectiveData.images.length > 0 && <img src={getDisplayUrl(objectiveData.images[0].url)} className="w-full h-48 object-cover" />
                           )}
                           <div className="p-6">
-                              <div className="flex justify-between items-start mb-2">
+                              <div className="flex justify-between items-start mb-2 flex-wrap gap-2">
                                   <h3 className="font-bold text-xl text-slate-800">{objectiveData.title || "โครงการพัฒนาโรงเรียน"}</h3>
-                                  <button onClick={() => setIsDonationOpen(true)} className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-full font-bold text-sm shadow-md transition flex items-center gap-1 active:scale-95">
-                                      <Heart className="w-4 h-4 fill-white" /> ร่วมบริจาค
-                                  </button>
+                                  <div className="flex gap-2">
+                                      {objectiveData.docUrl && (
+                                          <a href={objectiveData.docUrl} target="_blank" className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-full font-bold text-xs shadow-sm transition flex items-center gap-1">
+                                              <Download className="w-3 h-3" /> รายละเอียด
+                                          </a>
+                                      )}
+                                      <button onClick={() => setIsDonationOpen(true)} className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-full font-bold text-sm shadow-md transition flex items-center gap-1 active:scale-95">
+                                          <Heart className="w-4 h-4 fill-white" /> ร่วมบริจาค
+                                      </button>
+                                  </div>
                               </div>
                               <p className="text-slate-500 text-sm mb-4 line-clamp-2">{objectiveData.description}</p>
                               
@@ -598,10 +645,9 @@ function App() {
                                                   <span className="text-slate-400 block text-[10px]">รายรับรวม</span>
                                                   <span className="font-bold text-green-600">+{totalIncome.toLocaleString()}</span>
                                               </div>
-                                              <div>
-                                                  <span className="text-slate-400 block text-[10px]">หักรางวัล</span>
-                                                  <span className="font-bold text-red-500">-{totalPrizeAmount.toLocaleString()}</span>
-                                              </div>
+                                              <button onClick={() => setIsDonorListOpen(true)} className="text-indigo-600 hover:underline flex items-center gap-1">
+                                                  <Users className="w-3 h-3"/> ดูรายชื่อผู้บริจาค
+                                              </button>
                                           </div>
                                           <div className="text-right">
                                               <span className="text-slate-500 block text-[10px]">ยอดสุทธิ</span>
