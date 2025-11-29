@@ -73,25 +73,25 @@ export const shareMatch = async (match: Match, teamAName: string, teamBName: str
   try { await window.liff.shareTargetPicker([flexMessage]); } catch (error: any) { alert(`แชร์ไม่สำเร็จ: ${error.message}`); }
 };
 
-export const shareTournament = async (tournament: Tournament) => {
+export const shareTournament = async (tournament: Tournament, teamCount: number = 0, maxTeams: number = 0) => {
     if (!window.liff) { alert("LIFF SDK not loaded"); return; }
     if (!window.liff.isLoggedIn()) { window.liff.login(); return; }
     
     const name = truncate(tournament.name || "รายการแข่งขัน", 50);
     const type = tournament.type === 'Penalty' ? "ดวลจุดโทษ" : tournament.type;
     const liffUrl = `https://liff.line.me/${LIFF_ID}`; 
-    let location = "ไม่ระบุสถานที่";
-    let logoUrl = "https://via.placeholder.com/150?text=LOGO"; // Default logo
+    
+    // Capacity Text Logic
+    let capacityText = "";
+    if (maxTeams > 0) {
+        capacityText = `สมัครแล้ว: ${teamCount} / ${maxTeams} ทีม`;
+        if (teamCount >= maxTeams) capacityText += " (เต็ม)";
+    } else {
+        capacityText = `สมัครแล้ว: ${teamCount} ทีม (รับไม่จำกัด)`;
+    }
 
-    try {
-        const config = JSON.parse(tournament.config || '{}');
-        if (config.locationName) location = truncate(config.locationName, 30);
-        // We could look up competitionLogo if passed, but currently we rely on config/defaults
-        // If config has specific objective image, maybe use that, otherwise default pattern
-    } catch (e) {}
-
-    // Safe Alt Text (Short, no weird chars)
-    const altText = `${name} (${type})`;
+    // Safe Alt Text
+    const altText = `${name} (${type}) - ${capacityText}`;
 
     const flexMessage = {
         type: "flex",
@@ -111,7 +111,7 @@ export const shareTournament = async (tournament: Tournament) => {
             },
             "hero": {
                 "type": "image",
-                "url": "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=500&auto=format&fit=crop&q=60", // Generic stadium/soccer image
+                "url": "https://images.unsplash.com/photo-1522770179533-24471fcdba45?w=500&auto=format&fit=crop&q=60", 
                 "size": "full",
                 "aspectRatio": "20:13",
                 "aspectMode": "cover"
@@ -133,8 +133,8 @@ export const shareTournament = async (tournament: Tournament) => {
                         "type": "box",
                         "layout": "baseline",
                         "contents": [
-                            { "type": "text", "text": "สถานที่", "color": "#94a3b8", "size": "xs", "flex": 1 },
-                            { "type": "text", "text": location, "color": "#334155", "size": "sm", "flex": 3, "wrap": true }
+                            { "type": "text", "text": "จำนวนทีม", "color": "#94a3b8", "size": "xs", "flex": 1 },
+                            { "type": "text", "text": capacityText, "color": "#334155", "size": "sm", "flex": 3, "wrap": true, "weight": "bold" }
                         ],
                         "margin": "sm"
                     },

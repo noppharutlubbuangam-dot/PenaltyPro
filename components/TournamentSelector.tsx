@@ -81,9 +81,9 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
       else alert(`${title}: ${msg}`);
   };
 
-  const handleShare = (e: React.MouseEvent, tournament: Tournament) => {
+  const handleShare = (e: React.MouseEvent, tournament: Tournament, teamCount: number, maxTeams: number) => {
       e.stopPropagation();
-      shareTournament(tournament);
+      shareTournament(tournament, teamCount, maxTeams);
   };
 
   const handleCreate = async () => {
@@ -332,7 +332,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                     
                                     {/* Share Button */}
                                     <button 
-                                        onClick={(e) => handleShare(e, t)}
+                                        onClick={(e) => handleShare(e, t, teamCount, maxTeams)}
                                         className="absolute bottom-16 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-300 p-2 rounded-full shadow-sm transition z-20 hover:scale-110 duration-200"
                                         title="แชร์รายการนี้"
                                     >
