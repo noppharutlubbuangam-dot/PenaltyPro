@@ -279,16 +279,48 @@ function updateTournament(data) {
   const ss = getSpreadsheet();
   const sheet = ss.getSheetByName("Tournaments");
   const rows = sheet.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.id)) {
-      sheet.getRange(i + 1, 2).setValue(data.name);
-      sheet.getRange(i + 1, 3).setValue(data.type);
-      sheet.getRange(i + 1, 4).setValue(data.status);
-      sheet.getRange(i + 1, 5).setValue(data.config);
-      return successResponse("Updated");
+  const lock = LockService.getScriptLock();
+  
+  if (lock.tryLock(30000)) {
+    try {
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(data.id)) {
+          
+          // Parse config to handle image uploads
+          let configObj = {};
+          try {
+             configObj = JSON.parse(data.config);
+          } catch(e) { configObj = {}; }
+
+          // Handle Objective Images
+          if (configObj.objective && configObj.objective.images && Array.isArray(configObj.objective.images)) {
+             configObj.objective.images = configObj.objective.images.map(img => {
+                if (img.url && img.url.startsWith('data:')) {
+                   // Save to Drive and replace URL
+                   const newUrl = saveFileToDrive(img.url, 'proj_img_' + data.id + '_' + img.id);
+                   return { ...img, url: newUrl };
+                }
+                return img;
+             });
+          }
+
+          // Serialize back
+          const finalConfigStr = JSON.stringify(configObj);
+
+          sheet.getRange(i + 1, 2).setValue(data.name);
+          sheet.getRange(i + 1, 3).setValue(data.type);
+          sheet.getRange(i + 1, 4).setValue(data.status);
+          sheet.getRange(i + 1, 5).setValue(finalConfigStr);
+          
+          return successResponse("Updated");
+        }
+      }
+      return errorResponse("Tournament not found");
+    } finally {
+      lock.releaseLock();
     }
   }
-  return errorResponse("Tournament not found");
+  return errorResponse("Server busy");
 }
 
 function registerTeam(data) {

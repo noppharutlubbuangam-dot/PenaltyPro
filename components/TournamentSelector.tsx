@@ -9,9 +9,10 @@ interface TournamentSelectorProps {
   isAdmin: boolean;
   onRefresh: () => void;
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  isLoading?: boolean;
 }
 
-const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification }) => {
+const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification, isLoading }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -154,58 +155,78 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
             {/* Grid Layout */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-1000 delay-200">
-                {tournaments.map(t => (
-                    <div key={t.id} className="relative group perspective-1000">
-                        <button 
-                            onClick={() => onSelect(t.id)}
-                            className="w-full bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30"
-                        >
-                            <div className="absolute -top-6 -right-6 w-32 h-32 bg-indigo-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
-                            
-                            <div className="relative z-10 w-full">
-                                <div className="flex justify-between items-start mb-4">
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                                        <span className={`w-2 h-2 rounded-full ${t.status === 'Active' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                                        {t.status}
-                                    </span>
-                                    <span className="px-3 py-1 bg-white border border-slate-100 text-indigo-600 rounded-full text-[10px] font-bold shadow-sm">
-                                        {t.type}
-                                    </span>
-                                </div>
-                                <h3 className="font-bold text-xl text-slate-800 mb-2 line-clamp-2 pr-2 leading-tight group-hover:text-indigo-700 transition-colors">{t.name}</h3>
-                                <div className="text-xs text-slate-400 font-mono mb-6 bg-slate-50 inline-block px-2 py-1 rounded">ID: {t.id.slice(-6)}</div>
-                                
-                                <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
-                                    <div className="flex items-center gap-2 text-indigo-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 duration-300">
-                                        เข้าสู่ระบบ <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                    </div>
-                                </div>
+                
+                {isLoading ? (
+                    // Skeleton Loading
+                    Array(3).fill(0).map((_, i) => (
+                        <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-[220px] flex flex-col justify-between animate-pulse">
+                            <div className="flex justify-between">
+                                <div className="h-6 w-20 bg-slate-200 rounded-full"></div>
+                                <div className="h-6 w-16 bg-slate-200 rounded-full"></div>
                             </div>
-                        </button>
-                        
-                        {/* Admin Config Button */}
+                            <div className="space-y-2">
+                                <div className="h-8 w-3/4 bg-slate-200 rounded"></div>
+                                <div className="h-4 w-1/2 bg-slate-200 rounded"></div>
+                            </div>
+                            <div className="h-10 w-full bg-slate-200 rounded-xl mt-4"></div>
+                        </div>
+                    ))
+                ) : (
+                    <>
+                        {tournaments.map(t => (
+                            <div key={t.id} className="relative group perspective-1000">
+                                <button 
+                                    onClick={() => onSelect(t.id)}
+                                    className="w-full bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-2 hover:border-indigo-200 transition-all duration-300 text-left relative overflow-hidden h-full flex flex-col justify-between group-hover:bg-gradient-to-b from-white to-indigo-50/30 min-h-[220px]"
+                                >
+                                    <div className="absolute -top-6 -right-6 w-32 h-32 bg-indigo-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
+                                    
+                                    <div className="relative z-10 w-full flex-1 flex flex-col">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                <span className={`w-2 h-2 rounded-full ${t.status === 'Active' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                                {t.status}
+                                            </span>
+                                            <span className="px-3 py-1 bg-white border border-slate-100 text-indigo-600 rounded-full text-[10px] font-bold shadow-sm">
+                                                {t.type}
+                                            </span>
+                                        </div>
+                                        <h3 className="font-bold text-xl text-slate-800 mb-2 line-clamp-2 pr-2 leading-tight group-hover:text-indigo-700 transition-colors">{t.name}</h3>
+                                        <div className="text-xs text-slate-400 font-mono mb-6 bg-slate-50 inline-block px-2 py-1 rounded w-fit">ID: {t.id.slice(-6)}</div>
+                                        
+                                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
+                                            <div className="flex items-center gap-2 text-indigo-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 duration-300">
+                                                เข้าสู่ระบบ <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </button>
+                                
+                                {/* Admin Config Button */}
+                                {isAdmin && (
+                                    <button 
+                                        onClick={(e) => openEdit(e, t)}
+                                        className="absolute top-4 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 p-2 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
+                                        title="ตั้งค่ารายการ"
+                                    >
+                                        <Settings className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+
                         {isAdmin && (
                             <button 
-                                onClick={(e) => openEdit(e, t)}
-                                className="absolute top-4 right-4 bg-white/80 backdrop-blur border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 p-2 rounded-full shadow-sm transition z-20 hover:rotate-90 duration-300"
-                                title="ตั้งค่ารายการ"
+                                onClick={() => setIsCreating(true)}
+                                className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[220px] group cursor-pointer"
                             >
-                                <Settings className="w-4 h-4" />
+                                <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                                    <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-600" />
+                                </div>
+                                <span className="font-bold text-sm tracking-wide">สร้างรายการใหม่</span>
                             </button>
                         )}
-                    </div>
-                ))}
-
-                {isAdmin && (
-                    <button 
-                        onClick={() => setIsCreating(true)}
-                        className="bg-slate-100 p-6 rounded-3xl border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 min-h-[220px] group cursor-pointer"
-                    >
-                        <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                            <Plus className="w-8 h-8 text-indigo-400 group-hover:text-indigo-600" />
-                        </div>
-                        <span className="font-bold text-sm tracking-wide">สร้างรายการใหม่</span>
-                    </button>
+                    </>
                 )}
             </div>
         </div>
