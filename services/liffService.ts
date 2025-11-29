@@ -78,97 +78,42 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
         return;
     }
     
-    const name = truncate(tournament.name || "รายการแข่งขัน", 60);
+    // Construct Deep Link with tournamentId
     const liffUrl = `https://liff.line.me/${LIFF_ID}?tournamentId=${tournament.id}`;
     
-    const percentage = maxTeams > 0 ? Math.min(100, Math.floor((teamCount / maxTeams) * 100)) : 0;
-    const progressBarColor = percentage >= 100 ? "#ef4444" : "#6366f1";
-    const progressWidth = `${percentage}%`;
-    const statusColor = tournament.status === 'Active' ? "#22c55e" : "#3b82f6";
-    const statusText = tournament.status === 'Active' ? "กำลังรับสมัคร" : "เร็วๆ นี้";
-    const altText = `ขอเชิญร่วมแข่งขัน: ${name}`;
+    // Simple Alt Text
+    const altText = `เชิญสมัคร: ${tournament.name}`;
 
+    // Simple Minimalist Flex Message
     const flexMessage = {
       type: "flex",
       altText: altText,
       contents: {
         type: "bubble",
-        size: "mega",
         body: {
           type: "box",
           layout: "vertical",
           contents: [
             {
-              type: "box",
-              layout: "horizontal",
-              contents: [
-                {
-                  type: "box",
-                  layout: "horizontal",
-                  contents: [
-                    { type: "text", text: statusText, size: "xxs", color: statusColor, weight: "bold" }
-                  ],
-                  backgroundColor: tournament.status === 'Active' ? "#dcfce7" : "#dbeafe",
-                  cornerRadius: "md",
-                  paddingAll: "xs",
-                  flex: 0,
-                  width: "auto"
-                },
-                {
-                  type: "text",
-                  text: tournament.type,
-                  size: "xxs",
-                  color: "#aaaaaa",
-                  align: "end",
-                  gravity: "center",
-                  flex: 1
-                }
-              ]
+              type: "text",
+              text: truncate(tournament.name, 60),
+              weight: "bold",
+              size: "xl",
+              wrap: true
             },
             {
               type: "text",
-              text: name,
-              weight: "bold",
-              size: "xl",
-              margin: "md",
-              wrap: true,
-              color: "#1e293b"
+              text: `ประเภท: ${tournament.type}`,
+              size: "sm",
+              color: "#666666",
+              margin: "md"
             },
             {
-              type: "box",
-              layout: "horizontal",
-              margin: "lg",
-              contents: [
-                { type: "text", text: "ลงทะเบียนแล้ว", size: "xs", color: "#64748b" },
-                { type: "text", text: maxTeams > 0 ? `${teamCount}/${maxTeams}` : `${teamCount} ทีม`, size: "xs", color: "#1e293b", align: "end", weight: "bold" }
-              ]
-            },
-            {
-              type: "box",
-              layout: "vertical",
-              margin: "sm",
-              contents: [
-                {
-                  type: "box",
-                  layout: "vertical",
-                  width: maxTeams > 0 && percentage > 0 ? progressWidth : "0%",
-                  backgroundColor: progressBarColor,
-                  height: "6px",
-                  cornerRadius: "md"
-                }
-              ],
-              backgroundColor: "#f1f5f9",
-              cornerRadius: "md",
-              height: "6px",
-              width: "100%"
-            },
-            {
-                type: "text",
-                text: `ID: ${tournament.id.slice(-4)}`,
-                size: "xxxs",
-                color: "#cbd5e1",
-                margin: "md",
-                align: "end"
+              type: "text",
+              text: `สมัครแล้ว: ${teamCount}${maxTeams > 0 ? ' / ' + maxTeams : ''} ทีม`,
+              size: "sm",
+              color: "#666666",
+              margin: "sm"
             }
           ]
         },
@@ -179,21 +124,15 @@ export const shareTournament = async (tournament: Tournament, teamCount: number 
             {
               type: "button",
               style: "primary",
-              color: "#4f46e5",
+              color: "#2563EB",
               action: {
                 type: "uri",
                 label: "สมัครแข่งขัน",
                 uri: liffUrl
-              },
-              height: "sm"
+              }
             }
           ],
           paddingAll: "lg"
-        },
-        styles: {
-            footer: {
-                separator: true
-            }
         }
       }
     };
