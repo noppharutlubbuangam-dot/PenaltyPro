@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent } from './types';
+import { KickResult, MatchState, Kick, Team, Player, AppSettings, School, NewsItem, Match, UserProfile, Tournament, MatchEvent, TournamentConfig } from './types';
 import MatchSetup from './components/MatchSetup';
 import ScoreVisualizer from './components/ScoreVisualizer';
 import PenaltyInterface from './components/PenaltyInterface';
@@ -15,11 +15,12 @@ import PinDialog from './components/PinDialog';
 import ScheduleList from './components/ScheduleList'; 
 import NewsFeed from './components/NewsFeed'; 
 import TournamentSelector from './components/TournamentSelector';
+import DonationDialog from './components/DonationDialog';
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { fetchDatabase, saveMatchToSheet, authenticateUser, saveMatchEventsToSheet } from './services/sheetService';
 import { initializeLiff } from './services/liffService';
 import { checkSession, logout as authLogout } from './services/authService';
-import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3 } from 'lucide-react';
+import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3, ArrowLeft } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // ... (Constants and helpers remain the same) ...
@@ -90,6 +91,12 @@ function App() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [distanceToVenue, setDistanceToVenue] = useState<string | null>(null);
   const [announcementIndex, setAnnouncementIndex] = useState(0);
+  
+  // Donation Modal
+  const [isDonationOpen, setIsDonationOpen] = useState(false);
+  // Image Comparer State
+  const [activeImageMode, setActiveImageMode] = useState<'before' | 'after'>('before');
+
   const announcements = appConfig.announcement ? appConfig.announcement.split('|').filter(s => s.trim() !== '') : [];
 
   const activeTeams = currentTournamentId ? availableTeams.filter(t => t.tournamentId === currentTournamentId || (!t.tournamentId && currentTournamentId === 'default')) : [];
@@ -97,23 +104,36 @@ function App() {
   const activeMatches = currentTournamentId ? matchesLog.filter(m => m.tournamentId === currentTournamentId || (!m.tournamentId && currentTournamentId === 'default')) : [];
   const activeTournament = tournaments.find(t => t.id === currentTournamentId);
 
-  // Get Deadline from Config
-  const getDeadline = () => {
+  // Tournament Configuration Parsing
+  const getTournamentConfig = (): TournamentConfig => {
       try {
-          if (activeTournament?.config) {
-              const cfg = JSON.parse(activeTournament.config);
-              return cfg.registrationDeadline;
-          }
-      } catch(e) {}
-      return null;
+          return activeTournament?.config ? JSON.parse(activeTournament.config) : {};
+      } catch(e) { return {}; }
   };
-  const registrationDeadline = getDeadline();
+  const tConfig = getTournamentConfig();
+  const registrationDeadline = tConfig.registrationDeadline;
+  
+  // Objective Data (Prioritize Tournament Config, Fallback to Global AppConfig for legacy)
+  const objectiveData = tConfig.objective?.isEnabled ? {
+      title: tConfig.objective.title,
+      description: tConfig.objective.description,
+      goal: tConfig.objective.goal,
+      images: tConfig.objective.images || []
+  } : {
+      title: appConfig.objectiveTitle,
+      description: appConfig.objectiveDescription,
+      goal: appConfig.fundraisingGoal,
+      images: appConfig.objectiveImageUrl ? [{ id: 'legacy', url: appConfig.objectiveImageUrl, type: 'general' }] : []
+  };
+
+  const hasComparisonImages = objectiveData.images.some(i => i.type === 'before') && objectiveData.images.some(i => i.type === 'after');
 
   // User's own teams in this tournament
   const myTeams = currentUser ? activeTeams.filter(t => t.creatorId === currentUser.userId) : [];
 
+  // ... (useEffect Hooks and Handlers remain essentially the same, just keeping the structure) ...
   useEffect(() => {
-    // ... (Existing Init Logic) ...
+    // ... Init logic ...
     const init = async () => {
         await initializeLiff();
         const liffUser = await checkSession(); 
@@ -134,12 +154,11 @@ function App() {
             (error) => console.log("Geolocation error:", error)
         );
     }
-    
-    // Load saved tournament preference
     const savedTId = localStorage.getItem('current_tournament_id');
     if (savedTId) setCurrentTournamentId(savedTId);
   }, []);
 
+  // ... (Other useEffects same) ...
   useEffect(() => {
       if (userLocation && appConfig.locationLat && appConfig.locationLng) {
           const dist = calculateDistance(userLocation.lat, userLocation.lng, appConfig.locationLat, appConfig.locationLng);
@@ -183,9 +202,9 @@ function App() {
               }
           }
       }
-  }, [isLoadingData, availableTeams.length, isAdmin]); 
+  }, [isLoadingData, availableTeams.length, isAdmin]);
 
-  // ... (showNotification, removeToast, loadData) ...
+  // ... (Helper Functions) ...
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, title, message, type }]);
@@ -206,7 +225,6 @@ function App() {
         setNewsItems(data.news || []);
         setTournaments(data.tournaments || []);
         
-        // Auto-select tournament logic
         if (!currentTournamentId) {
             const savedTId = localStorage.getItem('current_tournament_id');
             if (savedTId && data.tournaments.find(t => t.id === savedTId)) {
@@ -226,26 +244,24 @@ function App() {
   };
 
   const handleRegisterClick = () => { 
-      setEditingTeamData(null); // Clear editing state
+      setEditingTeamData(null); 
       if (currentUser) setCurrentView('register'); else setIsUserLoginOpen(true); 
   };
   
   const handleEditMyTeam = (team: Team) => {
-      // Check Deadline
       if (registrationDeadline) {
           const deadline = new Date(registrationDeadline);
-          if (new Date() > deadline && !isAdmin) { // Admins bypass deadline
+          if (new Date() > deadline && !isAdmin) { 
               showNotification("ปิดรับสมัครแล้ว", "ไม่สามารถแก้ไขข้อมูลได้เนื่องจากเลยกำหนด", "warning");
               return;
           }
       }
-      
       const teamPlayers = activePlayers.filter(p => p.teamId === team.id);
       setEditingTeamData({ team, players: teamPlayers });
       setCurrentView('register');
   };
 
-  // ... (handleUserLoginSuccess, etc. same) ...
+  // ... (Match Handlers same) ...
   const handleUserLoginSuccess = (user: UserProfile) => { setCurrentUser(user); if (user.role === 'admin') setIsAdmin(true); if (user.type === 'credentials') localStorage.setItem('penalty_pro_user', JSON.stringify(user)); showNotification("ยินดีต้อนรับ", `สวัสดีคุณ ${user.displayName}`, "success"); };
   const handleLogout = () => { authLogout(); setCurrentUser(null); setIsAdmin(false); showNotification("ออกจากระบบแล้ว"); };
   const startMatchSession = (teamA: Team, teamB: Team, matchId?: string) => { setMatchState({ matchId, teamA, teamB, currentRound: 1, currentTurn: 'A', scoreA: 0, scoreB: 0, kicks: [], events: [], isFinished: false, winner: null, tournamentId: currentTournamentId || 'default' }); setCurrentView('match'); showNotification("เริ่มการแข่งขัน", "เข้าสู่โหมดบันทึกผล", "success"); };
@@ -302,7 +318,7 @@ function App() {
   const resolveTeam = (t: string | Team | null | undefined): Team => { if (!t) return { id: 'unknown', name: 'Unknown Team', shortName: 'N/A', color: '#94a3b8', logoUrl: '' } as Team; if (typeof t === 'object' && 'name' in t) return t as Team; const teamName = typeof t === 'string' ? t : 'Unknown'; return availableTeams.find(team => team.name === teamName) || { id: 'temp', name: teamName, color: '#94a3b8', logoUrl: '', shortName: teamName.substring(0, 3).toUpperCase() } as Team; };
   const approvedTeamsCount = activeTeams.filter(t => t.status === 'Approved').length;
   const estimatedIncome = approvedTeamsCount * (appConfig.registrationFee || 0);
-  const fundraisingProgress = appConfig.fundraisingGoal ? Math.min(100, (estimatedIncome / appConfig.fundraisingGoal) * 100) : 0;
+  const fundraisingProgress = objectiveData.goal ? Math.min(100, (estimatedIncome / objectiveData.goal) * 100) : 0;
   const liveMatches = activeMatches.filter(m => m.livestreamUrl && !m.winner);
   const recentFinishedMatches = activeMatches.filter(m => m.winner).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
   const handleFinishRegularMatch = async (finalState: MatchState) => { setIsSaving(true); try { await saveMatchToSheet(finalState, '', false, currentTournamentId || 'default'); if (finalState.events && finalState.events.length > 0) { await saveMatchEventsToSheet(finalState.events); } showNotification("บันทึกผลเรียบร้อย", "จบการแข่งขันแล้ว", "success"); loadData(); setCurrentView('home'); } catch (e) { console.error(e); showNotification("ผิดพลาด", "บันทึกไม่สำเร็จ", "error"); } finally { setIsSaving(false); } };
@@ -324,7 +340,6 @@ function App() {
       );
   }
 
-  // Pass initialData to RegistrationForm if editing
   if (currentView === 'register') {
       return (
           <RegistrationForm 
@@ -347,6 +362,7 @@ function App() {
       <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); if(currentView !== 'tournament') setCurrentView('admin'); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
       <PinDialog isOpen={isPinOpen} onClose={() => { setIsPinOpen(false); setPendingMatchSetup(null); }} onSuccess={handlePinSuccess} correctPin={appConfig.adminPin || "1234"} title="กรุณากรอกรหัสเริ่มแข่ง" />
       <UserLoginDialog isOpen={isUserLoginOpen} onClose={() => setIsUserLoginOpen(false)} onLoginSuccess={handleUserLoginSuccess} />
+      <DonationDialog isOpen={isDonationOpen} onClose={() => setIsDonationOpen(false)} config={appConfig} tournamentName={activeTournament?.name || ''} />
       
       {/* ... (Modals remain same) ... */}
       {confirmModal && confirmModal.isOpen && (<div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setConfirmModal(null)}><div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}><div className={`flex items-center gap-3 mb-4 ${confirmModal.isDangerous ? 'text-red-600' : 'text-slate-700'}`}><AlertTriangle className="w-6 h-6" /><h3 className="font-bold text-lg">{confirmModal.title}</h3></div><p className="text-slate-600 mb-6">{confirmModal.message}</p><div className="flex gap-3"><button onClick={() => setConfirmModal(null)} className="flex-1 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-slate-600">ยกเลิก</button><button onClick={confirmModal.onConfirm} className={`flex-1 py-2 rounded-lg font-bold text-white ${confirmModal.isDangerous ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>ยืนยัน</button></div></div></div>)}
@@ -398,7 +414,6 @@ function App() {
 
           {/* Banner & Hero */}
           <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 pb-12 relative overflow-hidden transition-all duration-300">
-              {/* ... (Hero content same) ... */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
               <div className="relative z-10 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center text-center mb-6">
@@ -435,7 +450,7 @@ function App() {
 
           <div className="max-w-4xl mx-auto px-4 -mt-8 relative z-20 space-y-6">
               
-              {/* My Teams Section (New) */}
+              {/* My Teams Section */}
               {currentUser && myTeams.length > 0 && (
                   <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-4 animate-in slide-in-from-bottom-2">
                       <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><User className="w-5 h-5 text-indigo-600" /> ทีมของคุณ</h3>
@@ -458,41 +473,74 @@ function App() {
                   </div>
               )}
 
-              {/* ... (Other cards remain same) ... */}
-              {/* Fundraising & Objective Card */}
-              {appConfig.objectiveTitle && (
+              {/* Fundraising & Objective Card (New Structure) */}
+              {objectiveData.title && (
                   <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-                      <div className="flex flex-col md:flex-row">
-                          {appConfig.objectiveImageUrl && (
-                              <div className="w-full md:w-1/3 h-48 md:h-auto bg-slate-100 relative">
-                                  <img src={appConfig.objectiveImageUrl} className="w-full h-full object-cover" />
-                                  <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1">
+                      <div className="flex flex-col">
+                          {objectiveData.images.length > 0 && (
+                              <div className="w-full bg-slate-100 relative h-64 overflow-hidden">
+                                  {hasComparisonImages ? (
+                                      <div className="relative w-full h-full">
+                                          {/* Simple Toggle View for Comparison */}
+                                          <img 
+                                            src={objectiveData.images.find(i => i.type === activeImageMode)?.url} 
+                                            className="w-full h-full object-cover animate-in fade-in duration-500"
+                                          />
+                                          <div className="absolute top-2 left-2 flex gap-2">
+                                              <button 
+                                                onClick={() => setActiveImageMode('before')} 
+                                                className={`px-3 py-1 rounded-full text-xs font-bold shadow-md transition ${activeImageMode === 'before' ? 'bg-red-500 text-white' : 'bg-white/80 text-slate-600'}`}
+                                              >Before</button>
+                                              <button 
+                                                onClick={() => setActiveImageMode('after')} 
+                                                className={`px-3 py-1 rounded-full text-xs font-bold shadow-md transition ${activeImageMode === 'after' ? 'bg-green-500 text-white' : 'bg-white/80 text-slate-600'}`}
+                                              >After</button>
+                                          </div>
+                                      </div>
+                                  ) : (
+                                      // General Image Slider or Single
+                                      <img src={objectiveData.images[0].url} className="w-full h-full object-cover" />
+                                  )}
+                                  
+                                  <div className="absolute top-2 right-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1">
                                       <Heart className="w-3 h-3 fill-white" /> วัตถุประสงค์
                                   </div>
                               </div>
                           )}
-                          <div className="p-6 flex-1 flex flex-col justify-center">
-                              <h3 className="text-lg font-bold text-slate-800 mb-1">{appConfig.objectiveTitle}</h3>
-                              <p className="text-sm text-slate-500 mb-4 line-clamp-3">{appConfig.objectiveDescription}</p>
+                          <div className="p-6">
+                              <h3 className="text-xl font-bold text-slate-800 mb-2">{objectiveData.title}</h3>
+                              <p className="text-sm text-slate-500 mb-4 whitespace-pre-line">{objectiveData.description}</p>
                               
-                              {appConfig.fundraisingGoal && appConfig.fundraisingGoal > 0 && (
-                                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                      <div className="flex justify-between items-end mb-2">
-                                          <div>
-                                              <p className="text-xs text-slate-400 mb-1">ยอดสนับสนุนปัจจุบัน</p>
-                                              <p className="text-xl font-bold text-indigo-600">฿{estimatedIncome.toLocaleString()}</p>
+                              <div className="flex flex-col md:flex-row gap-4 items-end">
+                                  <div className="flex-1 w-full">
+                                      {objectiveData.goal && objectiveData.goal > 0 && (
+                                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                              <div className="flex justify-between items-end mb-2">
+                                                  <div>
+                                                      <p className="text-xs text-slate-400 mb-1">ยอดสนับสนุนจากค่าสมัคร</p>
+                                                      <p className="text-xl font-bold text-indigo-600">฿{estimatedIncome.toLocaleString()}</p>
+                                                  </div>
+                                                  <div className="text-right">
+                                                      <p className="text-xs text-slate-400 mb-1">เป้าหมาย</p>
+                                                      <p className="text-sm font-bold text-slate-600">฿{objectiveData.goal.toLocaleString()}</p>
+                                                  </div>
+                                              </div>
+                                              <div className="w-full bg-slate-200 rounded-full h-2.5 mb-1 overflow-hidden">
+                                                  <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-1000 ease-out" style={{ width: `${fundraisingProgress}%` }}></div>
+                                              </div>
+                                              <p className="text-[10px] text-slate-400 text-right">{fundraisingProgress.toFixed(1)}%</p>
                                           </div>
-                                          <div className="text-right">
-                                              <p className="text-xs text-slate-400 mb-1">เป้าหมาย</p>
-                                              <p className="text-sm font-bold text-slate-600">฿{appConfig.fundraisingGoal.toLocaleString()}</p>
-                                          </div>
-                                      </div>
-                                      <div className="w-full bg-slate-200 rounded-full h-2.5 mb-1 overflow-hidden">
-                                          <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-1000 ease-out" style={{ width: `${fundraisingProgress}%` }}></div>
-                                      </div>
-                                      <p className="text-[10px] text-slate-400 text-right">{fundraisingProgress.toFixed(1)}%</p>
+                                      )}
                                   </div>
-                              )}
+                                  <div className="w-full md:w-auto">
+                                      <button 
+                                        onClick={() => setIsDonationOpen(true)}
+                                        className="w-full bg-pink-600 hover:bg-pink-700 text-white py-3 px-6 rounded-xl font-bold shadow-md shadow-pink-200 transition flex items-center justify-center gap-2"
+                                      >
+                                          <Heart className="w-5 h-5 fill-white" /> ร่วมบริจาค
+                                      </button>
+                                  </div>
+                              </div>
                           </div>
                       </div>
                   </div>

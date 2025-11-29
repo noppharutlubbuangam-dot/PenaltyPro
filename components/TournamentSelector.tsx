@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Tournament, TournamentConfig } from '../types';
-import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle } from 'lucide-react';
-import { createTournament, updateTournament } from '../services/sheetService';
+import { Tournament, TournamentConfig, ProjectImage } from '../types';
+import { Trophy, Plus, ArrowRight, Loader2, Calendar, Target, CheckCircle2, Users, Settings, Edit2, X, Save, ArrowLeft, FileCheck, Clock, Shield, AlertTriangle, Heart, Image as ImageIcon, Trash2, Layout } from 'lucide-react';
+import { createTournament, updateTournament, fileToBase64 } from '../services/sheetService';
 
 interface TournamentSelectorProps {
   tournaments: Tournament[];
   onSelect: (id: string) => void;
   isAdmin: boolean;
   onRefresh: () => void;
-  // เพิ่ม showNotification prop
   showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, onSelect, isAdmin, onRefresh, showNotification }) => {
-  // ... (States remain same) ...
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
@@ -21,7 +19,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
   const [newTourneyType, setNewTourneyType] = useState('Penalty');
   const [editConfig, setEditConfig] = useState<TournamentConfig>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editStep, setEditStep] = useState<'form' | 'summary'>('form');
+  const [editStep, setEditStep] = useState<'general' | 'rules' | 'objective' | 'summary'>('general');
 
   const notify = (title: string, msg: string, type: 'success' | 'error' | 'info' | 'warning') => {
       if (showNotification) showNotification(title, msg, type);
@@ -49,19 +47,12 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
       }
   };
 
-  const handleReview = () => {
-      if (!editingTournament?.name) {
-          notify("ข้อมูลไม่ครบ", "กรุณาระบุชื่อรายการ", "warning");
-          return;
-      }
-      setEditStep('summary');
-  };
-
   const handleUpdate = async () => {
       if (!editingTournament) return;
       setIsSubmitting(true);
       try {
           const finalConfig = { ...editConfig };
+          // Ensure defaults
           if (editingTournament.type !== 'Penalty') {
               if (finalConfig.halfTimeDuration === undefined) finalConfig.halfTimeDuration = 20;
               if (finalConfig.playersPerTeam === undefined) finalConfig.playersPerTeam = 7;
@@ -101,14 +92,53 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
       } catch(e) {
           setEditConfig({});
       }
-      setEditStep('form');
+      setEditStep('general');
       setIsEditing(true);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after' | 'general') => {
+      if (!e.target.files || !e.target.files[0]) return;
+      const file = e.target.files[0];
+      try {
+          const base64 = await fileToBase64(file);
+          setEditConfig(prev => {
+              const currentImages = prev.objective?.images || [];
+              const newImage: ProjectImage = {
+                  id: Date.now().toString(),
+                  url: base64,
+                  type: type
+              };
+              return {
+                  ...prev,
+                  objective: {
+                      ...prev.objective,
+                      isEnabled: true,
+                      title: prev.objective?.title || '',
+                      description: prev.objective?.description || '',
+                      goal: prev.objective?.goal || 0,
+                      images: [...currentImages, newImage]
+                  }
+              };
+          });
+      } catch (err) {
+          notify("Error", "อัปโหลดรูปไม่สำเร็จ", "error");
+      }
+  };
+
+  const removeImage = (imgId: string) => {
+      setEditConfig(prev => ({
+          ...prev,
+          objective: {
+              ...prev.objective!,
+              images: prev.objective?.images.filter(img => img.id !== imgId) || []
+          }
+      }));
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center justify-center font-sans">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center justify-center font-sans" style={{ fontFamily: "'Kanit', sans-serif" }}>
         <div className="max-w-4xl w-full">
-            {/* Header Section with Animation */}
+            {/* Header Section */}
             <div className="text-center mb-12 animate-in slide-in-from-top-10 duration-700">
                 <div className="inline-flex p-5 bg-white rounded-full shadow-xl mb-6 ring-4 ring-indigo-50">
                     <Trophy className="w-16 h-16 text-yellow-500 drop-shadow-md" />
@@ -182,7 +212,7 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
 
         {/* Create Modal */}
         {isCreating && (
-            <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" style={{ fontFamily: "'Kanit', sans-serif" }}>
                 <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm animate-in zoom-in duration-300 border border-white/20 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
                     <h3 className="font-black text-2xl text-slate-800 mb-6">สร้างทัวร์นาเมนต์ใหม่</h3>
@@ -220,28 +250,46 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
             </div>
         )}
 
-        {/* Edit Modal with Steps */}
+        {/* Edit Modal */}
         {isEditing && editingTournament && (
-            <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-                <div className="bg-white rounded-3xl shadow-2xl p-0 w-full max-w-md animate-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="fixed inset-0 z-[1500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4" style={{ fontFamily: "'Kanit', sans-serif" }}>
+                <div className="bg-white rounded-3xl shadow-2xl p-0 w-full max-w-2xl animate-in zoom-in duration-300 relative overflow-hidden flex flex-col max-h-[90vh]">
+                    {/* Modal Header */}
                     <div className="bg-slate-900 p-6 text-white flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-white/10 rounded-lg">
-                                {editStep === 'summary' ? <FileCheck className="w-6 h-6 text-green-400" /> : <Settings className="w-6 h-6 text-indigo-300" />}
+                                <Settings className="w-6 h-6 text-indigo-300" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-lg">{editStep === 'summary' ? 'ตรวจสอบและยืนยัน' : 'ตั้งค่าทัวร์นาเมนต์'}</h3>
-                                <p className="text-xs text-slate-400">แก้ไขข้อมูลและกติกาการแข่งขัน</p>
+                                <h3 className="font-bold text-lg">ตั้งค่าทัวร์นาเมนต์</h3>
+                                <p className="text-xs text-slate-400">แก้ไขข้อมูล, กติกา และวัตถุประสงค์</p>
                             </div>
                         </div>
                         <button onClick={() => setIsEditing(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition"><X className="w-5 h-5"/></button>
                     </div>
+
+                    {/* Navigation Tabs */}
+                    <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto shrink-0">
+                        <button onClick={() => setEditStep('general')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'general' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <Layout className="w-4 h-4"/> ข้อมูลทั่วไป
+                        </button>
+                        <button onClick={() => setEditStep('rules')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'rules' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <Shield className="w-4 h-4"/> กติกา
+                        </button>
+                        <button onClick={() => setEditStep('objective')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'objective' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <Heart className="w-4 h-4"/> โครงการ
+                        </button>
+                        <button onClick={() => setEditStep('summary')} className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 whitespace-nowrap ${editStep === 'summary' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <FileCheck className="w-4 h-4"/> ยืนยัน
+                        </button>
+                    </div>
                     
-                    {editStep === 'form' ? (
-                        /* STEP 1: FORM */
-                        <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50">
+                    {/* Content Area */}
+                    <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+                        
+                        {editStep === 'general' && (
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                                <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-2 border-b pb-2">ข้อมูลทั่วไป</h4>
+                                <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-2 border-b pb-2">Basic Info</h4>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-700 mb-1">ชื่อรายการ</label>
                                     <input 
@@ -278,11 +326,10 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                     </div>
                                 </div>
                             </div>
+                        )}
 
-                            {/* Config JSON Fields */}
+                        {editStep === 'rules' && (
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                                <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-2 border-b pb-2 flex items-center gap-2"><Shield className="w-4 h-4"/> กติกาการแข่งขัน</h4>
-                                
                                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                                     <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> วันปิดรับสมัคร</label>
                                     <input 
@@ -291,7 +338,6 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                         onChange={e => setEditConfig({...editConfig, registrationDeadline: e.target.value})} 
                                         className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
                                     />
-                                    <p className="text-[10px] text-orange-500 mt-1">* หากเลยกำหนด ทีมจะไม่สามารถแก้ไขข้อมูลได้</p>
                                 </div>
 
                                 {editingTournament.type !== 'Penalty' ? (
@@ -325,6 +371,15 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                                 className="w-full p-3 border border-slate-200 rounded-xl text-sm"
                                             />
                                         </div>
+                                        <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={editConfig.extraTime || false}
+                                                onChange={e => setEditConfig({...editConfig, extraTime: e.target.checked})}
+                                                className="w-5 h-5 rounded border-slate-300 text-indigo-600"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700">มีการต่อเวลาพิเศษ (Extra Time)</span>
+                                        </label>
                                     </>
                                 ) : (
                                     <div className="text-center p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
@@ -332,100 +387,99 @@ const TournamentSelector: React.FC<TournamentSelectorProps> = ({ tournaments, on
                                         <p className="text-xs text-slate-400">โหมดจุดโทษใช้กติกามาตรฐาน FIFA<br/>ไม่มีการตั้งค่าเวลาเพิ่มเติม</p>
                                     </div>
                                 )}
-                                
-                                {editingTournament.type !== 'Penalty' && (
-                                    <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
-                                        <div className="relative flex items-center">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={editConfig.extraTime || false}
-                                                onChange={e => setEditConfig({...editConfig, extraTime: e.target.checked})}
-                                                className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                        </div>
-                                        <span className="text-sm font-bold text-slate-700">มีการต่อเวลาพิเศษ (Extra Time)</span>
+                            </div>
+                        )}
+
+                        {editStep === 'objective' && (
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="font-bold text-sm text-slate-400 uppercase tracking-wider">Project & Fundraising</h4>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" className="sr-only peer" checked={editConfig.objective?.isEnabled || false} onChange={e => setEditConfig(prev => ({...prev, objective: {...(prev.objective || {title:'', description:'', goal:0, images:[]}), isEnabled: e.target.checked}}))} />
+                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                        <span className="ml-2 text-xs font-medium text-gray-900">เปิดใช้งาน</span>
                                     </label>
+                                </div>
+
+                                {editConfig.objective?.isEnabled && (
+                                    <div className="space-y-4 animate-in fade-in">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 mb-1">ชื่อโครงการ</label>
+                                            <input type="text" className="w-full p-2 border rounded-lg text-sm" placeholder="เช่น สร้างสนามเด็กเล่น..." value={editConfig.objective.title} onChange={e => setEditConfig({...editConfig, objective: {...editConfig.objective!, title: e.target.value}})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 mb-1">รายละเอียด</label>
+                                            <textarea className="w-full p-2 border rounded-lg text-sm h-24" placeholder="รายละเอียดโครงการ..." value={editConfig.objective.description} onChange={e => setEditConfig({...editConfig, objective: {...editConfig.objective!, description: e.target.value}})}></textarea>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 mb-1">เป้าหมายระดมทุน (บาท)</label>
+                                            <input type="number" className="w-full p-2 border rounded-lg text-sm" value={editConfig.objective.goal} onChange={e => setEditConfig({...editConfig, objective: {...editConfig.objective!, goal: parseInt(e.target.value)}})} />
+                                        </div>
+                                        
+                                        <div className="border-t pt-4">
+                                            <label className="block text-xs font-bold text-slate-700 mb-2">รูปภาพโครงการ (Before / After / General)</label>
+                                            <div className="flex gap-2 mb-2">
+                                                <label className="flex-1 cursor-pointer bg-slate-100 hover:bg-slate-200 p-2 rounded-lg text-center text-xs text-slate-600 border border-slate-300 border-dashed">
+                                                    + เพิ่มรูป (ทั่วไป)
+                                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, 'general')} />
+                                                </label>
+                                                <label className="flex-1 cursor-pointer bg-red-50 hover:bg-red-100 p-2 rounded-lg text-center text-xs text-red-600 border border-red-200 border-dashed">
+                                                    + รูป Before
+                                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, 'before')} />
+                                                </label>
+                                                <label className="flex-1 cursor-pointer bg-green-50 hover:bg-green-100 p-2 rounded-lg text-center text-xs text-green-600 border border-green-200 border-dashed">
+                                                    + รูป After
+                                                    <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, 'after')} />
+                                                </label>
+                                            </div>
+                                            
+                                            {/* Image List */}
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                {editConfig.objective.images && editConfig.objective.images.map((img, idx) => (
+                                                    <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-200">
+                                                        <img src={img.url} className="w-full h-full object-cover" />
+                                                        <div className={`absolute top-0 left-0 px-2 py-0.5 text-[10px] font-bold text-white ${img.type === 'before' ? 'bg-red-500' : img.type === 'after' ? 'bg-green-500' : 'bg-slate-500'}`}>
+                                                            {img.type.toUpperCase()}
+                                                        </div>
+                                                        <button onClick={() => removeImage(img.id)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition">
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
-                        </div>
-                    ) : (
-                        /* STEP 2: SUMMARY VIEW */
-                        <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-slate-50">
-                            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 shadow-sm">
-                                <h4 className="font-bold text-indigo-800 text-sm mb-3 uppercase tracking-wider">ข้อมูลทั่วไป</h4>
-                                <div className="space-y-3 text-sm text-slate-700">
-                                    <div className="flex justify-between border-b border-indigo-100/50 pb-2">
-                                        <span className="text-slate-500">ชื่อรายการ:</span>
-                                        <span className="font-bold text-indigo-900">{editingTournament.name}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-indigo-100/50 pb-2">
-                                        <span className="text-slate-500">สถานะ:</span>
-                                        <span className={`font-bold px-2 py-0.5 rounded text-xs ${editingTournament.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>{editingTournament.status}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">ประเภท:</span>
-                                        <span className="font-bold bg-white px-2 py-0.5 rounded shadow-sm text-xs">{editingTournament.type}</span>
-                                    </div>
-                                </div>
-                            </div>
+                        )}
 
-                            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                                <h4 className="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2"><Shield className="w-4 h-4 text-indigo-500"/> กติกาการแข่งขัน</h4>
-                                <div className="space-y-3 text-sm">
-                                    {editConfig.registrationDeadline && (
-                                        <div className="flex justify-between border-b border-slate-100 pb-2 bg-red-50 p-2 rounded-lg">
-                                            <span className="text-red-500 font-bold text-xs flex items-center gap-1"><Clock className="w-3 h-3"/> ปิดรับสมัคร:</span>
-                                            <span className="font-black text-red-600">{new Date(editConfig.registrationDeadline).toLocaleDateString('th-TH', { dateStyle: 'long'})}</span>
-                                        </div>
-                                    )}
-                                    {editingTournament.type === 'Penalty' ? (
-                                        <p className="text-xs text-slate-400 italic text-center py-4 bg-slate-50 rounded-lg">ใช้กติกามาตรฐาน FIFA Penalty Shootout</p>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-slate-50 p-3 rounded-xl text-center">
-                                                <div className="text-[10px] text-slate-400 uppercase">เวลาแข่งขัน</div>
-                                                <div className="font-black text-indigo-600 text-xl">{editConfig.halfTimeDuration || 20}<span className="text-xs font-normal text-slate-400 ml-1">นาที</span></div>
-                                            </div>
-                                            <div className="bg-slate-50 p-3 rounded-xl text-center">
-                                                <div className="text-[10px] text-slate-400 uppercase">ผู้เล่น</div>
-                                                <div className="font-black text-indigo-600 text-xl">{editConfig.playersPerTeam || 7}<span className="text-xs font-normal text-slate-400 ml-1">คน</span></div>
-                                            </div>
-                                            <div className="bg-slate-50 p-3 rounded-xl text-center">
-                                                <div className="text-[10px] text-slate-400 uppercase">เปลี่ยนตัว</div>
-                                                <div className="font-bold text-slate-700">{editConfig.maxSubs === 0 ? "ไม่จำกัด" : `${editConfig.maxSubs} คน`}</div>
-                                            </div>
-                                            <div className="bg-slate-50 p-3 rounded-xl text-center">
-                                                <div className="text-[10px] text-slate-400 uppercase">ต่อเวลา</div>
-                                                <div className={`font-bold ${editConfig.extraTime ? 'text-green-600' : 'text-slate-400'}`}>{editConfig.extraTime ? "มี" : "ไม่มี"}</div>
-                                            </div>
-                                        </div>
-                                    )}
+                        {editStep === 'summary' && (
+                            <div className="space-y-4">
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 shadow-sm">
+                                    <h4 className="font-bold text-indigo-800 text-sm mb-3 uppercase tracking-wider">สรุปข้อมูล</h4>
+                                    <ul className="space-y-2 text-sm text-slate-700">
+                                        <li className="flex justify-between"><span>ชื่อ:</span> <span className="font-bold">{editingTournament.name}</span></li>
+                                        <li className="flex justify-between"><span>ประเภท:</span> <span className="font-bold">{editingTournament.type}</span></li>
+                                        <li className="flex justify-between"><span>ปิดรับสมัคร:</span> <span className="font-bold">{editConfig.registrationDeadline ? new Date(editConfig.registrationDeadline).toLocaleDateString() : '-'}</span></li>
+                                        {editConfig.objective?.isEnabled && (
+                                            <li className="flex justify-between border-t pt-2 mt-2">
+                                                <span className="flex items-center gap-1 text-pink-600 font-bold"><Heart className="w-3 h-3"/> โครงการ:</span> 
+                                                <span className="font-bold">{editConfig.objective.title}</span>
+                                            </li>
+                                        )}
+                                    </ul>
                                 </div>
+                                <p className="text-center text-xs text-slate-400 bg-yellow-50 text-yellow-700 p-2 rounded-lg border border-yellow-100 flex items-center justify-center gap-1">
+                                    <AlertTriangle className="w-3 h-3"/> กรุณาตรวจสอบความถูกต้องก่อนบันทึก
+                                </p>
                             </div>
-                            <p className="text-center text-xs text-slate-400 bg-yellow-50 text-yellow-700 p-2 rounded-lg border border-yellow-100 flex items-center justify-center gap-1">
-                                <AlertTriangle className="w-3 h-3"/> กรุณาตรวจสอบความถูกต้องก่อนบันทึก
-                            </p>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     <div className="p-4 border-t bg-white flex gap-3 shrink-0">
-                        {editStep === 'form' ? (
-                            <>
-                                <button onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 font-bold transition">ยกเลิก</button>
-                                <button onClick={handleReview} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition transform active:scale-95">
-                                    ตรวจสอบ <ArrowRight className="w-4 h-4"/>
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button onClick={() => setEditStep('form')} className="flex-1 py-3 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 font-bold flex items-center justify-center gap-2 transition">
-                                    <ArrowLeft className="w-4 h-4"/> กลับไปแก้ไข
-                                </button>
-                                <button onClick={handleUpdate} disabled={isSubmitting} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center justify-center gap-2 shadow-lg shadow-green-200 transition transform active:scale-95">
-                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Save className="w-4 h-4"/> ยืนยันบันทึก</>}
-                                </button>
-                            </>
-                        )}
+                        <button onClick={handleUpdate} disabled={isSubmitting} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center justify-center gap-2 shadow-lg shadow-green-200 transition transform active:scale-95">
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Save className="w-4 h-4"/> ยืนยันบันทึก</>}
+                        </button>
                     </div>
                 </div>
             </div>

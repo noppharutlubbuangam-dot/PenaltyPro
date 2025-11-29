@@ -42,12 +42,27 @@ export interface School {
   province: string;
 }
 
+export interface ProjectImage {
+  id: string;
+  url: string;
+  type: 'before' | 'after' | 'general';
+  caption?: string;
+}
+
 export interface TournamentConfig {
   halfTimeDuration?: number; // Minutes
   playersPerTeam?: number; // 7 or 11
   maxSubs?: number; // 0 = Unlimited
   extraTime?: boolean;
   registrationDeadline?: string; // ISO Date String
+  // Objective Specifics
+  objective?: {
+    isEnabled: boolean;
+    title: string;
+    description: string;
+    goal: number;
+    images: ProjectImage[];
+  };
 }
 
 export interface Tournament {
