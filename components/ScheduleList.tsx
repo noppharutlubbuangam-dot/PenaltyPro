@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Match, Team, Player, AppSettings, KickResult } from '../types';
 import { ArrowLeft, Calendar, MapPin, Clock, Trophy, Plus, X, Save, Loader2, Search, ChevronDown, Check, Share2, Edit2, Trash2, AlertTriangle, User, ListPlus, PlusCircle, Users, ArrowRight, PlayCircle, ClipboardCheck, RotateCcw, Flag, Video, Image, Youtube, Facebook, BarChart2, ImageIcon, Download, Camera, Filter, Sparkles, MessageSquare, Cpu, FileText, PenTool, LayoutTemplate } from 'lucide-react';
@@ -145,16 +144,21 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ matches, teams, players = [
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [isSavingSummary, setIsSavingSummary] = useState(false);
 
+  // FIX: Deep Linking Logic
+  const hasProcessedDeepLink = useRef(false);
+
   useEffect(() => {
-    if (initialMatchId) {
+    // Only process deep link ONCE on mount/data load
+    if (initialMatchId && matches.length > 0 && !hasProcessedDeepLink.current) {
         const found = matches.find(m => m.id === initialMatchId);
         if (found) {
             setSelectedMatch(found);
             setDetailTab('overview');
+            hasProcessedDeepLink.current = true;
         }
-    } else {
-        setSelectedMatch(null);
     }
+    // Do NOT reset selectedMatch to null in the else block here
+    // This allows manual selection to persist
   }, [initialMatchId, matches]);
 
   // Validate AI Model Selection
