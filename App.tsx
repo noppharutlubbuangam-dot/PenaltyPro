@@ -22,7 +22,7 @@ import { checkSession, logout as authLogout } from './services/authService';
 import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3, Lock, Home, CheckCircle2, XCircle, ShieldAlert, MapPin, Loader2, Undo2, Edit2, Trash2, AlertTriangle, Bell, CalendarDays, WifiOff, ListChecks, ChevronRight, Share2, Megaphone, Video, Play, LogOut, User, LogIn, Heart, Navigation, Target, ChevronLeft, ArrowLeftRight, Edit3 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-// ... (Constants and helpers same as before) ...
+// ... (Constants and helpers remain the same) ...
 const DEFAULT_SETTINGS: AppSettings = {
   competitionName: "การแข่งขันยิงจุดโทษระดับประถมศึกษา",
   competitionLogo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_the_Ministry_of_Education_of_Thailand.svg/1200px-Emblem_of_the_Ministry_of_Education_of_Thailand.svg.png",
@@ -128,11 +128,64 @@ function App() {
     };
     loadData();
     init();
-    // ...
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
+            (error) => console.log("Geolocation error:", error)
+        );
+    }
+    
+    // Load saved tournament preference
+    const savedTId = localStorage.getItem('current_tournament_id');
+    if (savedTId) setCurrentTournamentId(savedTId);
   }, []);
 
-  // ... (Other useEffects same) ...
+  useEffect(() => {
+      if (userLocation && appConfig.locationLat && appConfig.locationLng) {
+          const dist = calculateDistance(userLocation.lat, userLocation.lng, appConfig.locationLat, appConfig.locationLng);
+          setDistanceToVenue(dist);
+      }
+  }, [userLocation, appConfig.locationLat, appConfig.locationLng]);
 
+  useEffect(() => {
+      if (announcements.length > 1) {
+          const interval = setInterval(() => setAnnouncementIndex(prev => (prev + 1) % announcements.length), 5000);
+          return () => clearInterval(interval);
+      }
+  }, [announcements.length]);
+
+  useEffect(() => {
+      if (!isLoadingData && availableTeams.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          const view = params.get('view');
+          const id = params.get('id');
+          const teamId = params.get('teamId');
+
+          if (view === 'match_detail' && id) {
+              setInitialMatchId(id);
+              setCurrentView('schedule');
+          } else if (view === 'news' && id) {
+              setInitialNewsId(id);
+              setCurrentView('home'); 
+          } else if (view === 'schedule') {
+              setCurrentView('schedule');
+          } else if (view === 'standings') {
+              setCurrentView('standings');
+          } else if (view === 'tournament') {
+              setCurrentView('tournament');
+          } else if (view === 'admin' && teamId) {
+              setInitialTeamId(teamId);
+              if (!isAdmin) {
+                  setIsLoginOpen(true);
+                  setCurrentView('admin');
+              } else {
+                  setCurrentView('admin');
+              }
+          }
+      }
+  }, [isLoadingData, availableTeams.length, isAdmin]); 
+
+  // ... (showNotification, removeToast, loadData) ...
   const showNotification = (title: string, message: string = '', type: ToastType = 'success') => {
     const id = Date.now().toString();
     setToasts(prev => [...prev, { id, title, message, type }]);
@@ -152,12 +205,24 @@ function App() {
         setSchools(data.schools || []);
         setNewsItems(data.news || []);
         setTournaments(data.tournaments || []);
+        
+        // Auto-select tournament logic
         if (!currentTournamentId) {
             const savedTId = localStorage.getItem('current_tournament_id');
-            if (savedTId && data.tournaments.find(t => t.id === savedTId)) setCurrentTournamentId(savedTId); else if (data.tournaments.length === 1) setCurrentTournamentId(data.tournaments[0].id);
+            if (savedTId && data.tournaments.find(t => t.id === savedTId)) {
+                setCurrentTournamentId(savedTId);
+            } else if (data.tournaments.length === 1) {
+                setCurrentTournamentId(data.tournaments[0].id);
+            }
         }
       }
-    } catch (e: any) { console.warn("Database Error", e); setConnectionError(e.message); showNotification("เชื่อมต่อไม่ได้", e.message, 'error'); } finally { setIsLoadingData(false); }
+    } catch (e: any) {
+      console.warn("Database Error", e);
+      setConnectionError(e.message);
+      showNotification("เชื่อมต่อไม่ได้", e.message, 'error');
+    } finally {
+      setIsLoadingData(false);
+    }
   };
 
   const handleRegisterClick = () => { 
@@ -246,7 +311,13 @@ function App() {
   if (!currentTournamentId) {
       return (
           <div className="bg-slate-50 min-h-screen font-sans" style={{ fontFamily: "'Kanit', sans-serif" }}>
-              <TournamentSelector tournaments={tournaments} onSelect={(id) => { setCurrentTournamentId(id); localStorage.setItem('current_tournament_id', id); }} isAdmin={isAdmin} onRefresh={loadData} />
+              <TournamentSelector 
+                  tournaments={tournaments} 
+                  onSelect={(id) => { setCurrentTournamentId(id); localStorage.setItem('current_tournament_id', id); }} 
+                  isAdmin={isAdmin} 
+                  onRefresh={loadData}
+                  showNotification={showNotification}
+              />
               {!isAdmin && tournaments.length === 0 && (<div className="fixed bottom-4 right-4"><button onClick={() => setIsLoginOpen(true)} className="bg-white/50 p-2 rounded-full hover:bg-white transition text-slate-400"><Lock className="w-4 h-4"/></button></div>)}
               <LoginDialog isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={() => { setIsAdmin(true); showNotification('เข้าสู่ระบบผู้ดูแลแล้ว'); }} />
           </div>
