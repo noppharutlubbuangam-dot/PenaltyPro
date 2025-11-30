@@ -24,8 +24,8 @@ import { RefreshCw, Clipboard, Trophy, Settings, UserPlus, LayoutList, BarChart3
 import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
-  competitionName: "การแข่งขันยิงจุดโทษระดับประถมศึกษา",
-  competitionLogo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Emblem_of_the_Ministry_of_Education_of_Thailand.svg/1200px-Emblem_of_the_Ministry_of_Education_of_Thailand.svg.png",
+  competitionName: "Penalty Pro Arena",
+  competitionLogo: "https://raw.githubusercontent.com/noppharutlubbuangam-dot/PenaltyPro/refs/heads/main/logo/cup.gif",
   bankName: "ธนาคาร",
   bankAccount: "-",
   accountName: "-",
@@ -535,7 +535,7 @@ function App() {
               <div className="relative z-10 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center text-center mb-6">
                       <div className="bg-white/10 p-4 rounded-full mb-4 backdrop-blur-sm border border-white/20">
-                          <img src={effectiveSettings.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/100?text=LOGO'}/>
+                          <img src={effectiveSettings.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://raw.githubusercontent.com/noppharutlubbuangam-dot/PenaltyPro/refs/heads/main/logo/cup.gif'}/>
                       </div>
                       <h2 className="text-2xl font-bold mb-2">{activeTournament ? activeTournament.name : appConfig.competitionName}</h2>
                       <div className="flex items-center gap-2 flex-wrap justify-center">
