@@ -25,7 +25,7 @@ import confetti from 'canvas-confetti';
 
 const DEFAULT_SETTINGS: AppSettings = {
   competitionName: "Penalty Pro Arena",
-  competitionLogo: "https://raw.githubusercontent.com/noppharutlubbuangam-dot/PenaltyPro/refs/heads/main/logo/cup.gif",
+  competitionLogo: "https://raw.githubusercontent.com/noppharutlubbuangam-dot/vichakan/refs/heads/main/cup.gif",
   bankName: "ธนาคาร",
   bankAccount: "-",
   accountName: "-",
@@ -535,7 +535,7 @@ function App() {
               <div className="relative z-10 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center text-center mb-6">
                       <div className="bg-white/10 p-4 rounded-full mb-4 backdrop-blur-sm border border-white/20">
-                          <img src={effectiveSettings.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://raw.githubusercontent.com/noppharutlubbuangam-dot/PenaltyPro/refs/heads/main/logo/cup.gif'}/>
+                          <img src={effectiveSettings.competitionLogo} className="w-20 h-20 object-contain" onError={(e) => e.currentTarget.src = 'https://raw.githubusercontent.com/noppharutlubbuangam-dot/vichakan/refs/heads/main/cup.gif'}/>
                       </div>
                       <h2 className="text-2xl font-bold mb-2">{activeTournament ? activeTournament.name : appConfig.competitionName}</h2>
                       <div className="flex items-center gap-2 flex-wrap justify-center">
