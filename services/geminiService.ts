@@ -1,9 +1,9 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { generateGeminiContent } from './sheetService';
 import { KickResult, Kick, Team } from '../types';
 
-// Initialize the Gemini API client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// NOTE: We now proxy the request through Google Apps Script (Code.gs)
+// to hide the API Key from the client side and use Script Properties.
 
 export const generateCommentary = async (
   player: string,
@@ -11,14 +11,11 @@ export const generateCommentary = async (
   result: KickResult
 ): Promise<string> => {
   try {
-    const prompt = `พากย์บอลจุดโทษสั้นๆ 1 ประโยค สไตล์ตื่นเต้น เร้าใจ: นักเตะชื่อ ${player} ทีม ${team} ยิงผลลัพธ์คือ ${result === 'GOAL' ? 'เข้าประตู' : result === 'SAVED' ? 'โดนผู้รักษาประตูเซฟ' : 'ยิงพลาดออกไปเอง'}`;
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text?.trim() || "";
+    // Keep prompt very short for quick response
+    const prompt = `พากย์บอลสั้นๆ 1 ประโยค: ${player} (${team}) ${result === 'GOAL' ? 'ยิงเข้า' : 'พลาด'}`;
+    // Explicitly pass the model to avoid default fallback issues on backend
+    const text = await generateGeminiContent(prompt, 'gemini-1.5-flash');
+    return text || "";
   } catch (error) {
     console.error("Error generating commentary:", error);
     return "";
@@ -32,12 +29,13 @@ export const generateMatchSummary = async (
   scoreB: number,
   winner: string | null,
   kicks: Kick[],
-  model: string = 'gemini-2.5-flash'
+  model: string = 'gemini-1.5-flash' // Changed default to 1.5-flash for speed/stability
 ): Promise<string> => {
   try {
     // 1. Extract Scorers & Heroes (Clean Names)
     const cleanName = (name: any) => {
         if (!name) return '';
+        // Ensure it's a string before calling replace
         const strName = String(name);
         return strName.replace(/[0-9#]/g, '').split('(')[0].trim();
     };
@@ -50,61 +48,30 @@ export const generateMatchSummary = async (
     const winnerName = winner === 'A' ? teamA : winner === 'B' ? teamB : winner || 'เสมอ';
 
     const prompt = `
-      บทบาท: นักข่าวฟุตบอลสายฮาและเร้าใจ
-      งาน: เขียนข่าวสรุปผลการดวลจุดโทษ
-      คู่แข่งขัน: ${teamA} vs ${teamB}
-      ผลการแข่งขัน: ${scoreA}-${scoreB} (ผู้ชนะ: ${winnerName})
-      
-      ข้อมูลเพิ่มเติม:
-      - ผู้ยิงเข้าฝั่ง A: ${scorersA.join(', ') || '-'}
-      - ผู้ยิงเข้าฝั่ง B: ${scorersB.join(', ') || '-'}
-      - ผู้รักษาประตูเซฟได้: ${savedKicks.length} ครั้ง (${savedKicks.join(', ')})
+      บทบาท: นักพากย์ฟุตบอลไทย
+      งาน: สรุปผลแข่งสั้นๆ
+      คู่: ${teamA} vs ${teamB}
+      ผล: ${scoreA}-${scoreB} (${winnerName} ชนะ)
+      คนยิงเข้า: ${[...scorersA, ...scorersB].filter(n => n).join(', ') || '-'}
+      คนเซฟ: ${savedKicks.filter(n => n).join(', ') || '-'}
 
       คำสั่ง:
-      ขอสรุปข่าวสั้นๆ 3-4 บรรทัด ใส่ Emoji เยอะๆ ให้น่าอ่านสำหรับวัยรุ่นและผู้ปกครอง
-      เน้นการชมเชยทั้งสองทีม และยกย่องผู้ชนะ
+      ขอสรุปข่าว 3 บรรทัดจบ:
+      1. พาดหัว
+      2. รายละเอียดสั้นๆ (ใส่ชื่อคนยิง/คนเซฟ)
+      3. ประโยคปิดท้ายมันส์ๆ
     `;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
-
-    return response.text || "ระบบ AI กำลังประมวลผล...";
+    // Call Proxy with model
+    const text = await generateGeminiContent(prompt, model);
+    return text || "ระบบ AI กำลังประมวลผล...";
   } catch (error) {
     console.error("Error generating summary:", error);
-    // Fallback to local logic if API fails is handled in the UI component usually, 
-    // but here we just return error message or empty string to trigger fallback there.
     throw error;
   }
 };
 
-export const analyzeMatchup = async (teamA: Team, teamB: Team): Promise<string> => {
-    try {
-        const prompt = `
-            วิเคราะห์ก่อนเกมสั้นๆ สนุกๆ (Pre-match analysis):
-            ทีม A: ${teamA.name} (ฉายา/ตัวย่อ: ${teamA.shortName})
-            ทีม B: ${teamB.name} (ฉายา/ตัวย่อ: ${teamB.shortName})
-            
-            จังหวัด: ${teamA.province} เจอ ${teamB.province}
-
-            ให้วิเคราะห์เปรียบเทียบแบบขำๆ หรือจริงจังก็ได้ โดยดูจากชื่อทีมและจังหวัด
-            ทำนายผลผู้ชนะแบบเดาๆ (ใส่ความเห็นส่วนตัวของ AI)
-            ความยาวไม่เกิน 3 บรรทัด
-        `;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-
-        return response.text || "";
-    } catch (error) {
-        return "";
-    }
-}
-
-// Keep the local fallback for when API is unavailable or quota exceeded
+// Fallback System: Local Template Generator
 export const generateLocalSummary = (
   teamA: Team,
   teamB: Team,
@@ -126,15 +93,25 @@ export const generateLocalSummary = (
   const winnerKicks = kicks.filter(k => (k.teamId === (isWinnerA ? 'A' : 'B') || k.teamId === winnerTeam.name) && k.result === KickResult.GOAL);
   const winnerScorers = winnerKicks.map(k => cleanName(k.player)).filter(n => n).join(', ');
   
+  // Extract Keeper (Savior) if any
   const savedKicks = kicks.filter(k => k.result === KickResult.SAVED && (k.teamId === (isWinnerA ? 'B' : 'A') || k.teamId === loserTeam.name));
   const hasSaves = savedKicks.length > 0;
 
   const patterns = [
+    // Pattern 1: Formal / Manager Quote
     `สรุปผลการแข่งขัน: ${winnerTeam.name} เฉือนชนะ ${loserTeam.name} ด้วยสกอร์ ${winScore}-${loseScore} ในการดวลจุดโทษตัดสิน! \n\nโดย ${winnerTeam.name} ได้ประตูจาก ${winnerScorers || 'ความสามารถเฉพาะตัวของนักกีฬา'} \n\nทางด้านผู้จัดการทีม ${winnerTeam.managerName || 'ของทีม'} กล่าวชื่นชมความมุ่งมั่นของน้องๆ ทุกคน`,
+    
+    // Pattern 2: Excited / Director Mention
     `สุดมันส์! ${winnerTeam.name} คว้าชัยเหนือ ${loserTeam.name} ${winScore}-${loseScore} 🔥\n\nเกมการแข่งขันเต็มไปด้วยความกดดัน แต่สุดท้ายเป็น ${winnerTeam.name} ที่แม่นกว่า ยิงเข้าโดย ${winnerScorers || 'นักเตะคนเก่ง'} \n\nผอ. ${winnerTeam.directorName || winnerTeam.name} ยิ้มแก้มปริ พร้อมสนับสนุนทีมต่อไป!`,
+    
+    // Pattern 3: Short / Coach Focus
+    `✨ ผลบอลจบ: ${winnerTeam.name} ${winScore} - ${loseScore} ${loserTeam.name} (จุดโทษ)\n\nโค้ช${winnerTeam.coachName || ''} วางแผนมาดี พาทีมคว้าชัยชนะในนัดนี้ ผู้ทำประตูสำคัญได้แก่ ${winnerScorers || 'ทุกคนในทีม'} \n\n#${winnerTeam.shortName} #${loserTeam.shortName} #PenaltyPro`,
+    
+    // Pattern 4: Action / Hero Focus
     `${winnerTeam.name} แม่นโทษ! เอาชนะ ${loserTeam.name} ไปได้ ${winScore}-${loseScore}\n\n${hasSaves ? 'ผู้รักษาประตูโชว์ซูเปอร์เซฟช่วยทีมไว้ได้' : 'เป็นการดวลที่สูสี'} และปิดท้ายด้วยการยิงของ ${winnerScorers || 'ทีมงานคุณภาพ'} พาทีมเข้ารอบต่อไป!`
   ];
 
+  // Randomly select a pattern
   const randomIndex = Math.floor(Math.random() * patterns.length);
   return patterns[randomIndex];
 };

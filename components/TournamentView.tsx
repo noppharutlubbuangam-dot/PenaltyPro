@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Team, Match } from '../types';
-import { Trophy, Edit2, Check, ArrowRight, UserX, ShieldAlert, Sparkles, GripVertical, PlayCircle, AlertCircle, Lock, Eraser, MapPin, Clock, Calendar, RefreshCw, Minimize2, Maximize2, MessageSquare, Loader2 } from 'lucide-react';
+import { Trophy, Edit2, Check, ArrowRight, UserX, ShieldAlert, Sparkles, GripVertical, PlayCircle, AlertCircle, Lock, Eraser, MapPin, Clock, Calendar, RefreshCw, Minimize2, Maximize2 } from 'lucide-react';
 import { scheduleMatch, saveMatchToSheet } from '../services/sheetService';
-import { analyzeMatchup } from '../services/geminiService';
 
 interface TournamentViewProps {
   teams: Team[];
@@ -23,7 +21,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
   const [isLargeBracket, setIsLargeBracket] = useState(false);
   
   const [walkoverModal, setWalkoverModal] = useState<{match: Match, label: string} | null>(null);
-  const [analysisModal, setAnalysisModal] = useState<{isOpen: boolean, content: string, isLoading: boolean}>({isOpen: false, content: '', isLoading: false});
 
   useEffect(() => {
       if (teams.length > 16) {
@@ -149,22 +146,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
      onRefresh();
   };
 
-  const handleAnalyze = async (match: Match) => {
-      const tA_Name = typeof match.teamA === 'string' ? match.teamA : match.teamA.name;
-      const tB_Name = typeof match.teamB === 'string' ? match.teamB : match.teamB.name;
-      const tA = teams.find(t => t.name === tA_Name);
-      const tB = teams.find(t => t.name === tB_Name);
-      
-      if (!tA || !tB) {
-          if (showNotification) showNotification("ข้อมูลไม่ครบ", "ไม่สามารถวิเคราะห์ได้เนื่องจากข้อมูลทีมไม่ครบ", "error");
-          return;
-      }
-
-      setAnalysisModal({ isOpen: true, content: '', isLoading: true });
-      const result = await analyzeMatchup(tA, tB);
-      setAnalysisModal({ isOpen: true, content: result || "ไม่สามารถวิเคราะห์ได้ในขณะนี้", isLoading: false });
-  };
-
   const approvedTeams = teams.filter(t => t.status === 'Approved');
 
   const round32_A = Array(8).fill(null).map((_, i) => ({ label: `R32-${i+1}`, title: `R32 คู่ที่ ${i+1}` }));
@@ -229,26 +210,29 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
 
              <div className={`flex flex-col gap-8 ${isLargeBracket ? 'min-w-[1400px]' : 'min-w-[1100px]'}`}>
                  
-                 <div className="bg-blue-50/50 p-4 md:p-6 rounded-3xl border border-blue-100 shadow-inner relative">
-                     {/* Lines Container - Hidden complexity for now, simple absolute positioning per column */}
-                     
+                 <div className="bg-blue-50/50 p-4 md:p-6 rounded-3xl border border-blue-100 shadow-inner">
                      <div className="mb-6 flex items-center gap-2 text-blue-800 font-bold uppercase tracking-wider border-b border-blue-200 pb-2">
                         <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs shadow-sm">Line A</span> สายบน
                      </div>
-                     <div className="flex justify-start gap-12 md:gap-16 items-center">
+                     <div className="flex justify-start gap-4 md:gap-8 items-center">
                         {isLargeBracket && (
-                            <BracketColumn title="รอบ 32" color="border-slate-300">
-                                {isLoading ? <BracketSkeleton count={8} /> : round32_A.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
-                            </BracketColumn>
+                            <>
+                                <BracketColumn title="รอบ 32" color="border-slate-300">
+                                    {isLoading ? <BracketSkeleton count={8} /> : round32_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
+                                </BracketColumn>
+                                <ArrowRight className="text-slate-300 w-4" />
+                            </>
                         )}
                         <BracketColumn title="รอบ 16" color="border-slate-300">
-                             {isLoading ? <BracketSkeleton count={4} /> : round16_A.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                             {isLoading ? <BracketSkeleton count={4} /> : round16_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
+                        <ArrowRight className="text-blue-200 w-6" />
                         <BracketColumn title="รอบ 8" color="border-indigo-300">
-                             {isLoading ? <BracketSkeleton count={2} /> : quarters_A.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                             {isLoading ? <BracketSkeleton count={2} /> : quarters_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
-                        <BracketColumn title="รอบรองฯ" color="border-orange-300" isLast>
-                             {isLoading ? <BracketSkeleton count={1} /> : semis_A.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                         <ArrowRight className="text-indigo-200 w-6" />
+                        <BracketColumn title="รอบรองฯ" color="border-orange-300">
+                             {isLoading ? <BracketSkeleton count={1} /> : semis_A.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                      </div>
                  </div>
@@ -258,7 +242,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
                         <div className="h-8 w-0.5 bg-slate-300"></div>
                         <div className="bg-gradient-to-b from-yellow-50 to-yellow-100 p-6 rounded-xl border-2 border-yellow-400 shadow-xl relative transform scale-110">
                              <h3 className="text-center font-black text-yellow-700 text-lg mb-2 uppercase tracking-widest flex items-center justify-center gap-2"><Trophy className="w-5 h-5" /> Final</h3>
-                             {isLoading ? <BracketSkeleton count={1} /> : final.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} isFinal onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                             {isLoading ? <BracketSkeleton count={1} /> : final.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} isFinal showNotification={showNotification} />)}
                         </div>
                         <div className="h-8 w-0.5 bg-slate-300"></div>
                      </div>
@@ -268,20 +252,25 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
                      <div className="mb-6 flex items-center gap-2 text-red-800 font-bold uppercase tracking-wider border-b border-red-200 pb-2">
                         <span className="bg-red-600 text-white px-3 py-1 rounded-full text-xs shadow-sm">Line B</span> สายล่าง
                      </div>
-                     <div className="flex justify-start gap-12 md:gap-16 items-center">
+                     <div className="flex justify-start gap-4 md:gap-8 items-center">
                         {isLargeBracket && (
-                            <BracketColumn title="รอบ 32" color="border-slate-300">
-                                {isLoading ? <BracketSkeleton count={8} /> : round32_B.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
-                            </BracketColumn>
+                            <>
+                                <BracketColumn title="รอบ 32" color="border-slate-300">
+                                    {isLoading ? <BracketSkeleton count={8} /> : round32_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
+                                </BracketColumn>
+                                <ArrowRight className="text-slate-300 w-4" />
+                            </>
                         )}
                         <BracketColumn title="รอบ 16" color="border-slate-300">
-                             {isLoading ? <BracketSkeleton count={4} /> : round16_B.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                             {isLoading ? <BracketSkeleton count={4} /> : round16_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
+                        <ArrowRight className="text-red-200 w-6" />
                         <BracketColumn title="รอบ 8" color="border-indigo-300">
-                             {isLoading ? <BracketSkeleton count={2} /> : quarters_B.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                             {isLoading ? <BracketSkeleton count={2} /> : quarters_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
-                        <BracketColumn title="รอบรองฯ" color="border-orange-300" isLast>
-                             {isLoading ? <BracketSkeleton count={1} /> : semis_B.map((slot, i) => <BracketNode key={slot.label} index={i} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} onAnalyze={handleAnalyze} showNotification={showNotification} />)}
+                         <ArrowRight className="text-indigo-200 w-6" />
+                        <BracketColumn title="รอบรองฯ" color="border-orange-300">
+                             {isLoading ? <BracketSkeleton count={1} /> : semis_B.map(slot => <BracketNode key={slot.label} slot={slot} match={getScheduledMatch(slot.label)} isEditing={editMode} isAdmin={isAdmin} onDrop={handleDrop} onPlay={onSelectMatch} fullTeams={teams} onWalkover={(m) => setWalkoverModal({match: m, label: slot.label})} onUpdateDetails={handleMatchDetailsUpdate} showNotification={showNotification} />)}
                         </BracketColumn>
                      </div>
                  </div>
@@ -290,7 +279,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
           </div>
       </div>
       
-      {/* WALKOVER MODAL */}
       {walkoverModal && (
           <div className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setWalkoverModal(null)}>
               <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
@@ -328,36 +316,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({ teams, matches, onSelec
               </div>
           </div>
       )}
-
-      {/* AI ANALYSIS MODAL */}
-      {analysisModal.isOpen && (
-          <div className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setAnalysisModal({isOpen: false, content: '', isLoading: false})}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 text-white flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                          <Sparkles className="w-5 h-5 text-yellow-300" />
-                          <h3 className="font-bold">AI วิเคราะห์เกม</h3>
-                      </div>
-                      <button onClick={() => setAnalysisModal({isOpen: false, content: '', isLoading: false})}><div className="bg-white/20 p-1 rounded-full hover:bg-white/40"><Edit2 className="w-4 h-4 opacity-0" /><Check className="w-4 h-4"/></div></button>
-                  </div>
-                  <div className="p-6 text-center">
-                      {analysisModal.isLoading ? (
-                          <div className="py-8">
-                              <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4"/>
-                              <p className="text-slate-500">กำลังวิเคราะห์ข้อมูลคู่แข่งขัน...</p>
-                          </div>
-                      ) : (
-                          <div className="prose prose-sm text-slate-600 text-left whitespace-pre-line leading-relaxed">
-                              {analysisModal.content}
-                          </div>
-                      )}
-                  </div>
-                  <div className="p-4 bg-slate-50 text-center border-t border-slate-100">
-                      <button onClick={() => setAnalysisModal({isOpen: false, content: '', isLoading: false})} className="text-slate-500 text-sm hover:text-slate-800">ปิดหน้าต่าง</button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 };
@@ -374,9 +332,9 @@ const BracketSkeleton: React.FC<{count: number}> = ({count}) => (
     </>
 );
 
-const BracketColumn: React.FC<{title: string, children: React.ReactNode, color: string, isLast?: boolean}> = ({ title, children, color, isLast }) => (
-    <div className={`flex flex-col gap-4 min-w-[260px] relative ${!isLast ? 'mr-8' : ''}`}>
-        <h4 className={`font-bold text-slate-400 uppercase text-xs tracking-widest mb-2 pl-6 border-l-4 ${color}`}>{title}</h4>
+const BracketColumn: React.FC<{title: string, children: React.ReactNode, color: string}> = ({ title, children, color }) => (
+    <div className={`flex flex-col gap-4 min-w-[260px] border-l-4 ${color} pl-6 py-2`}>
+        <h4 className="font-bold text-slate-400 uppercase text-xs tracking-widest mb-2">{title}</h4>
         <div className="flex flex-col justify-around flex-1 gap-6">
             {children}
         </div>
@@ -384,7 +342,6 @@ const BracketColumn: React.FC<{title: string, children: React.ReactNode, color: 
 );
 
 interface BracketNodeProps {
-    index: number;
     slot: { label: string, title: string };
     match?: Match;
     isEditing: boolean;
@@ -395,11 +352,10 @@ interface BracketNodeProps {
     onWalkover: (match: Match) => void;
     onUpdateDetails: (match: Match, updates: Partial<Match>) => void;
     isFinal?: boolean;
-    onAnalyze: (match: Match) => void;
     showNotification?: (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-const BracketNode: React.FC<BracketNodeProps> = ({ index, slot, match, isEditing, isAdmin, onDrop, onPlay, fullTeams, onWalkover, onUpdateDetails, isFinal, onAnalyze, showNotification }) => {
+const BracketNode: React.FC<BracketNodeProps> = ({ slot, match, isEditing, isAdmin, onDrop, onPlay, fullTeams, onWalkover, onUpdateDetails, isFinal, showNotification }) => {
     const [isDragOverA, setIsDragOverA] = useState(false);
     const [isDragOverB, setIsDragOverB] = useState(false);
     const teamA_Name = typeof match?.teamA === 'object' ? match.teamA.name : match?.teamA;
@@ -422,37 +378,9 @@ const BracketNode: React.FC<BracketNodeProps> = ({ index, slot, match, isEditing
         if (isAdmin && teamName) onDrop(teamName, slot.label, slotKey);
     };
 
-    // Calculate line styles
-    // If index is even (0, 2, 4), it's the "Top" match of a pair -> line goes down
-    // If index is odd (1, 3, 5), it's the "Bottom" match of a pair -> line goes up
-    const isTop = index % 2 === 0;
-    
     return (
-        <div className={`relative flex flex-col rounded-xl border ${isFinal ? 'border-yellow-200 shadow-md bg-white' : 'border-slate-200 shadow-md bg-white'} overflow-hidden min-w-[240px] z-10`}>
-             
-             {/* Connector Lines (Only for non-finals) */}
-             {!isFinal && (
-                 <>
-                    {/* Horizontal Line out to the right */}
-                    <div className="absolute right-[-20px] top-1/2 w-[20px] h-[2px] bg-slate-300 z-0"></div>
-                    {/* Vertical Line Connector */}
-                    <div 
-                        className={`absolute right-[-22px] w-[2px] bg-slate-300 z-0 ${isTop ? 'top-1/2 h-[calc(50%+1rem)]' : 'bottom-1/2 h-[calc(50%+1rem)]'}`}
-                    ></div>
-                 </>
-             )}
-
-             <div className="bg-slate-50 px-3 py-1.5 text-[10px] text-slate-400 font-bold border-b flex justify-between items-center">
-                 <span>{slot.title}</span>
-                 <div className="flex gap-1">
-                    {match && tA && tB && !match.winner && (
-                        <button onClick={() => onAnalyze(match)} className="text-purple-500 hover:text-purple-700" title="AI วิเคราะห์">
-                            <Sparkles className="w-3 h-3" />
-                        </button>
-                    )}
-                    {match && match.winner && <span className="text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> จบแล้ว</span>}
-                 </div>
-             </div>
+        <div className={`relative flex flex-col rounded-xl border ${isFinal ? 'border-yellow-200 shadow-md bg-white' : 'border-slate-200 shadow-md bg-white'} overflow-hidden min-w-[240px]`}>
+             <div className="bg-slate-50 px-3 py-1.5 text-[10px] text-slate-400 font-bold border-b flex justify-between items-center"><span>{slot.title}</span>{match && match.winner && <span className="text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> จบแล้ว</span>}</div>
              <div className="divide-y divide-slate-100">
                  <div className={`p-3 flex justify-between items-center transition-all duration-200 ${tA ? tA.style : 'bg-slate-50/50'} ${isDragOverA ? 'bg-green-100 ring-2 ring-inset ring-green-400' : ''}`} onDragOver={(e) => { e.preventDefault(); setIsDragOverA(true); }} onDragLeave={() => setIsDragOverA(false)} onDrop={(e) => handleDropEvent(e, 'A')}>
                      {tA ? <div className="flex items-center gap-2 overflow-hidden">{tA.logo && <img src={tA.logo} className="w-6 h-6 object-contain bg-white rounded-full border border-slate-100 p-0.5" />}<span className="font-bold text-sm truncate max-w-[140px]">{tA.name}</span></div> : <span className="text-xs text-slate-300 italic select-none">รอคู่แข่ง A</span>}{match && match.winner && <span className={`text-sm font-bold px-2 py-0.5 rounded ${match.winner === 'A' ? 'bg-green-100 text-green-700' : 'text-slate-300'}`}>{match.scoreA}</span>}
